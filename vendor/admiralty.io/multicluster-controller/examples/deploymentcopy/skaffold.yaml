@@ -1,0 +1,15 @@
+apiVersion: skaffold/v1alpha2
+kind: Config
+build:
+  tagPolicy:
+    sha256: {}
+  artifacts:
+  - imageName: quay.io/admiralty/multicluster-controller-example-deploymentcopy
+    workspace: ../../
+    docker:
+      dockerfilePath: examples/Dockerfile
+      buildArgs:
+        target: admiralty.io/multicluster-controller/examples/deploymentcopy/cmd/manager
+deploy:
+  kustomize:
+    kustomizePath: kustomize/

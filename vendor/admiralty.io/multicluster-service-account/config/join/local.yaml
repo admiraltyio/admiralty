@@ -1,0 +1,8 @@
+apiVersion: multicluster.admiralty.io/v1alpha1
+kind: ServiceAccountImport
+metadata:
+  name: REMOTE_CLUSTER
+spec:
+  clusterName: REMOTE_CLUSTER
+  namespace: REMOTE_NAMESPACE
+  name: service-account-import-controller-remote

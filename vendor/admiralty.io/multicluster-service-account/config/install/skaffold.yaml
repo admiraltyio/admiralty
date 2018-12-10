@@ -1,0 +1,19 @@
+apiVersion: skaffold/v1alpha2
+kind: Config
+build:
+  tagPolicy:
+    envTemplate:
+      template: "{{.IMAGE_NAME}}:{{.RELEASE}}"
+  artifacts:
+  - imageName: quay.io/admiralty/service-account-import-controller
+    docker:
+      dockerfilePath: config/Dockerfile
+      buildArgs:
+        target: cmd/service-account-import-controller
+  - imageName: quay.io/admiralty/service-account-import-admission-controller
+    docker:
+      dockerfilePath: config/Dockerfile
+      buildArgs:
+        target: cmd/service-account-import-admission-controller
+deploy:
+  kustomize: {}

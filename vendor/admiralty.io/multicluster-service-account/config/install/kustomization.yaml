@@ -1,0 +1,12 @@
+namespace: multicluster-service-account
+resources:
+- namespace.yaml
+- automount.yaml
+- importer.yaml
+- remote.yaml
+- ../crds/multicluster_v1alpha1_serviceaccountimport.yaml
+imageTags:
+- name: quay.io/admiralty/service-account-import-admission-controller
+  newTag: 0.1.0
+- name: quay.io/admiralty/service-account-import-controller
+  newTag: 0.1.0

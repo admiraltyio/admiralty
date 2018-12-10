@@ -1,0 +1,19 @@
+apiVersion: skaffold/v1alpha2
+kind: Config
+build:
+  tagPolicy:
+    envTemplate:
+      template: "{{.IMAGE_NAME}}:{{.RELEASE}}"
+  artifacts:
+  - imageName: quay.io/admiralty/multicluster-service-account-example-generic-client
+    docker:
+      dockerfilePath: config/Dockerfile
+      buildArgs:
+        target: examples/generic-client
+  - imageName: quay.io/admiralty/multicluster-service-account-example-multicluster-client
+    docker:
+      dockerfilePath: config/Dockerfile
+      buildArgs:
+        target: examples/multicluster-client
+deploy:
+  kustomize: {}

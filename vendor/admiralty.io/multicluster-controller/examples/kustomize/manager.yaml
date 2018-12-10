@@ -1,0 +1,57 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: system
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: manager-service
+  labels:
+    control-plane: manager
+spec:
+  selector:
+    control-plane: manager
+  ports:
+  - port: 443
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: manager
+  labels:
+    control-plane: manager
+spec:
+  selector:
+    matchLabels:
+      control-plane: manager
+  serviceName: manager-service
+  template:
+    metadata:
+      labels:
+        control-plane: manager
+    spec:
+      containers:
+      - image: "" # kustomize patch
+        imagePullPolicy: Always
+        name: manager
+        resources:
+          limits:
+            cpu: 100m
+            memory: 30Mi
+          requests:
+            cpu: 100m
+            memory: 20Mi
+        volumeMounts:
+        - name: kubeconfig
+          mountPath: /root/.kube
+          readOnly: true
+        env:
+        - name: KUBECONFIG
+          value: /root/.kube/config
+      terminationGracePeriodSeconds: 10
+      volumes:
+      - name: kubeconfig
+        secret:
+          secretName: kubeconfig
+      

@@ -1,0 +1,3 @@
+version: "1"
+domain: admiralty.io
+repo: admiralty.io/multicluster-service-account
