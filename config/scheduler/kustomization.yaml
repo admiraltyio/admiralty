@@ -1,0 +1,13 @@
+namespace: multicluster-scheduler
+resources:
+- namespace.yaml
+- deployment.yaml
+- rbac.yaml
+- ../crds/multicluster_v1alpha1_multiclusterdeploymentobservation.yaml
+- ../crds/multicluster_v1alpha1_nodepoolobservation.yaml
+- ../crds/multicluster_v1alpha1_nodeobservation.yaml
+- ../crds/multicluster_v1alpha1_podobservation.yaml
+- ../crds/multicluster_v1alpha1_deploymentdecision.yaml
+imageTags:
+- name: quay.io/admiralty/multicluster-scheduler-basic
+  newTag: 0.1.0

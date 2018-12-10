@@ -1,0 +1,30 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: multicluster-scheduler
+  labels:
+    app: multicluster-scheduler
+spec:
+  selector:
+    matchLabels:
+      app: multicluster-scheduler
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: multicluster-scheduler
+    spec:
+      containers:
+      - image: quay.io/admiralty/multicluster-scheduler-basic
+        imagePullPolicy: Always
+        name: controller
+        resources:
+          limits:
+            cpu: 100m
+            memory: 30Mi
+          requests:
+            cpu: 100m
+            memory: 20Mi
+      serviceAccountName: multicluster-scheduler
+      terminationGracePeriodSeconds: 10

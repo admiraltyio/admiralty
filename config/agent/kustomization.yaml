@@ -1,0 +1,10 @@
+namespace: multicluster-scheduler-agent
+resources:
+- namespace.yaml
+- deployment.yaml
+- rbac.yaml
+- ../crds/multicluster_v1alpha1_multiclusterdeployment.yaml
+- ../crds/multicluster_v1alpha1_nodepool.yaml
+imageTags:
+- name: quay.io/admiralty/multicluster-scheduler-agent
+  newTag: 0.1.0

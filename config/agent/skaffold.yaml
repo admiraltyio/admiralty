@@ -1,0 +1,20 @@
+apiVersion: skaffold/v1alpha2
+kind: Config
+build:
+  tagPolicy:
+    envTemplate:
+      template: "{{.IMAGE_NAME}}:{{.RELEASE}}"
+  artifacts:
+  - imageName: quay.io/admiralty/multicluster-scheduler-agent
+    docker:
+      dockerfilePath: config/Dockerfile
+      buildArgs:
+        target: cmd/agent
+deploy:
+  kustomize:
+    kustomizePath: cmd/agent/multicluster-service-account
+profiles:
+- name: admiralty
+  deploy:
+    kustomize:
+      kustomizePath: cmd/agent/multicluster-service-account
