@@ -1,6 +1,0 @@
-namespace: multicluster-controller-example-helloworld-system
-namePrefix: multicluster-controller-example-helloworld-
-bases:
-- ../../kustomize/
-patches:
-- manager_image_patch.yaml

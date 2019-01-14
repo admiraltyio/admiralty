@@ -1,8 +1,0 @@
-namespace: mcc-example-deploymentcopy-system
-namePrefix: mcc-example-deploymentcopy-
-bases:
-- ../../kustomize/
-resources:
-- crd.yaml
-patches:
-- manager_image_patch.yaml

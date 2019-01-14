@@ -1,7 +1,0 @@
-resources:
-- manager.yaml
-secretGenerator:
-- name: kubeconfig
-  commands:
-    config: cat ~/.kube/config
-  type: Opaque

@@ -11,21 +11,26 @@ package envy makes working with ENV variables in Go trivial.
 package envy
 
 import (
+	"errors"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"strconv"
 	"strings"
 	"sync"
 
 	"github.com/joho/godotenv"
+	"github.com/rogpeppe/go-internal/modfile"
 )
 
 var gil = &sync.RWMutex{}
 var env = map[string]string{}
+
+// GO111MODULE is ENV for turning mods on/off
+const GO111MODULE = "GO111MODULE"
 
 func init() {
 	Load()
@@ -36,22 +41,6 @@ func init() {
 func loadEnv() {
 	gil.Lock()
 	defer gil.Unlock()
-	// Detect the Go version on the user system, not the one that was used to compile the binary
-	v := ""
-	out, err := exec.Command("go", "version").Output()
-	if err == nil {
-		// This will break when Go 2 lands
-		v = strings.Split(string(out), " ")[2][4:]
-	} else {
-		v = runtime.Version()[4:]
-	}
-
-	goRuntimeVersion, _ := strconv.ParseFloat(runtime.Version()[4:], 64)
-
-	goVersion, err := strconv.ParseFloat(v, 64)
-	if err != nil {
-		goVersion = goRuntimeVersion
-	}
 
 	if os.Getenv("GO_ENV") == "" {
 		// if the flag "test.v" is *defined*, we're running as a unit test. Note that we don't care
@@ -65,7 +54,7 @@ func loadEnv() {
 	}
 
 	// set the GOPATH if using >= 1.8 and the GOPATH isn't set
-	if goVersion >= 8 && os.Getenv("GOPATH") == "" {
+	if os.Getenv("GOPATH") == "" {
 		out, err := exec.Command("go", "env", "GOPATH").Output()
 		if err == nil {
 			gp := strings.TrimSpace(string(out))
@@ -77,6 +66,10 @@ func loadEnv() {
 		pair := strings.Split(e, "=")
 		env[pair[0]] = os.Getenv(pair[0])
 	}
+}
+
+func Mods() bool {
+	return Get(GO111MODULE, "off") == "on"
 }
 
 // Reload the ENV variables. Useful if
@@ -198,6 +191,10 @@ func GoPath() string {
 	return Get("GOPATH", "")
 }
 
+func GoBin() string {
+	return Get("GO_BIN", "go")
+}
+
 // GoPaths returns all possible GOPATHS that are set.
 func GoPaths() []string {
 	gp := Get("GOPATH", "")
@@ -222,7 +219,29 @@ func importPath(path string) string {
 	return filepath.ToSlash(rel)
 }
 
+// CurrentModule will attempt to return the module name from `go.mod` if
+// modules are enabled.
+// If modules are not enabled it will fallback to using CurrentPackage instead.
+func CurrentModule() (string, error) {
+	if !Mods() {
+		return CurrentPackage(), nil
+	}
+	moddata, err := ioutil.ReadFile("go.mod")
+	if err != nil {
+		return "", errors.New("go.mod cannot be read or does not exist while go module is enabled")
+	}
+	packagePath := modfile.ModulePath(moddata)
+	if packagePath == "" {
+		return "", errors.New("go.mod is malformed")
+	}
+	return packagePath, nil
+}
+
+// CurrentPackage attempts to figure out the current package name from the PWD
+// Use CurrentModule for a more accurate package name.
 func CurrentPackage() string {
+	if Mods() {
+	}
 	pwd, _ := os.Getwd()
 	return importPath(pwd)
 }

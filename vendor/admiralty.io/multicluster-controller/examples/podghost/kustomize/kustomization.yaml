@@ -1,8 +1,0 @@
-namespace: multicluster-controller-example-podghost-system
-namePrefix: multicluster-controller-example-podghost-
-bases:
-- ../../kustomize/
-resources:
-- crd.yaml
-patches:
-- manager_image_patch.yaml
