@@ -1,0 +1,4 @@
+namespace: foo
+resources:
+- namespace.yaml
+- rbac.yaml

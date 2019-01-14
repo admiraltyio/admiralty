@@ -1,14 +1,12 @@
 apiVersion: skaffold/v1alpha2
 kind: Config
 build:
-  tagPolicy:
-    envTemplate:
-      template: "{{.IMAGE_NAME}}:{{.RELEASE}}"
   artifacts:
   - imageName: quay.io/admiralty/multicluster-scheduler-basic
+    workspace: _out
     docker:
-      dockerfilePath: config/Dockerfile
       buildArgs:
         target: cmd/scheduler
 deploy:
-  kustomize: {}
+  kustomize:
+    kustomizePath: config/scheduler

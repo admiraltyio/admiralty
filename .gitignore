@@ -25,3 +25,10 @@ bin
 
 # Mac OS X
 .DS_Store
+
+.vscode/
+
+# build artifacts
+_out
+# generated
+release/kustomization.yaml

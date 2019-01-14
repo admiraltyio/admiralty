@@ -1,0 +1,6 @@
+bases:
+- ../../../config/agent/
+patches:
+- deployment_patch.yaml
+resources:
+- serviceaccountimport.yaml
