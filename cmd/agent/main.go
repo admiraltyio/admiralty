@@ -22,12 +22,14 @@ import (
 	"admiralty.io/multicluster-controller/pkg/cluster"
 	"admiralty.io/multicluster-controller/pkg/manager"
 	"admiralty.io/multicluster-scheduler/pkg/apis/multicluster/v1alpha1"
+	"admiralty.io/multicluster-scheduler/pkg/controllers/feedback"
 	"admiralty.io/multicluster-scheduler/pkg/controllers/nodepool"
 	"admiralty.io/multicluster-scheduler/pkg/controllers/receive"
 	"admiralty.io/multicluster-scheduler/pkg/controllers/send"
 	"admiralty.io/multicluster-service-account/pkg/config"
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/kubernetes"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	"k8s.io/sample-controller/pkg/signals"
 )
@@ -53,6 +55,11 @@ func main() {
 	}
 	log.Printf("Agent API server URL: %s\n", cfg.Host)
 	agent := cluster.New(agentName, cfg, cluster.Options{})
+
+	agentClientset, err := kubernetes.NewForConfig(cfg)
+	if err != nil {
+		log.Fatalf("cannot create agent client set: %v", err)
+	}
 
 	cfg, ns, err := config.NamedServiceAccountImportConfigAndNamespace(agentName)
 	if err != nil {
@@ -81,6 +88,12 @@ func main() {
 	co, err := receive.NewController(agent, scheduler)
 	if err != nil {
 		log.Fatalf("cannot create receive controller: %v", err)
+	}
+	m.AddController(co)
+
+	co, err = feedback.NewController(agent, scheduler, agentClientset)
+	if err != nil {
+		log.Fatalf("cannot create feedback controller: %v", err)
 	}
 	m.AddController(co)
 
