@@ -17,47 +17,46 @@ limitations under the License.
 package v1alpha1
 
 import (
-	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// MulticlusterDeploymentStatus defines the observed state of MulticlusterDeployment
-type MulticlusterDeploymentStatus struct {
-	// +optional
-	Replicas int32 `json:"replicas,omitempty"`
+// PodDecisionSpec defines the desired state of PodDecision
+type PodDecisionSpec struct {
+	Template corev1.PodTemplateSpec `json:"template"`
+}
 
-	// +optional
-	LabelSelector string `json:"labelSelector,omitempty"`
+// PodDecisionStatus defines the observed state of PodDecision
+type PodDecisionStatus struct {
 }
 
 // +genclient
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// MulticlusterDeployment is the Schema for the multiclusterdeployments API
+// PodDecision is the Schema for the poddecisions API
 // +k8s:openapi-gen=true
-// +kubebuilder:categories=multicluster
-// +kubebuilder:subresource:scale:specpath=.spec.replicas,statuspath=.status.replicas,selectorpath=.status.labelSelector
-type MulticlusterDeployment struct {
+// +kubebuilder:categories=decisions
+type PodDecision struct {
 	metav1.TypeMeta `json:",inline"`
 	// +optional
-	metav1.ObjectMeta `json:"metadata,omitempty"`
+	metav1.ObjectMeta `json:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
 
 	// +optional
-	Spec appsv1.DeploymentSpec `json:"spec,omitempty"`
+	Spec PodDecisionSpec `json:"spec,omitempty" protobuf:"bytes,2,opt,name=spec"`
 	// +optional
-	Status MulticlusterDeploymentStatus `json:"status,omitempty"`
+	Status PodDecisionStatus `json:"status,omitempty" protobuf:"bytes,3,opt,name=status"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// MulticlusterDeploymentList contains a list of MulticlusterDeployment
-type MulticlusterDeploymentList struct {
+// PodDecisionList contains a list of PodDecision
+type PodDecisionList struct {
 	metav1.TypeMeta `json:",inline"`
 	// +optional
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []MulticlusterDeployment `json:"items"`
+	Items           []PodDecision `json:"items"`
 }
 
 func init() {
-	SchemeBuilder.Register(&MulticlusterDeployment{}, &MulticlusterDeploymentList{})
+	SchemeBuilder.Register(&PodDecision{}, &PodDecisionList{})
 }

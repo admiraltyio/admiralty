@@ -19,7 +19,6 @@ package send
 import (
 	"context"
 	"fmt"
-	"log"
 	"reflect"
 
 	"admiralty.io/multicluster-controller/pkg/cluster"
@@ -60,14 +59,14 @@ func NewController(agent *cluster.Cluster, scheduler *cluster.Cluster, federatio
 		return nil, fmt.Errorf("adding APIs to agent cluster's scheme: %v", err)
 	}
 	if err := co.WatchResourceReconcileObject(agent, liveType, controller.WatchOptions{}); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("setting up live %T watch in agent cluster: %v", liveType, err)
 	}
 
 	if err := apis.AddToScheme(scheduler.GetScheme()); err != nil {
 		return nil, fmt.Errorf("adding APIs to scheduler cluster's scheme: %v", err)
 	}
 	if err := co.WatchResourceReconcileController(scheduler, observationType, controller.WatchOptions{}); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("setting up %T watch in scheduler cluster: %v", observationType, err)
 	}
 
 	return co, nil
@@ -89,43 +88,54 @@ func (r *reconciler) Reconcile(req reconcile.Request) (reconcile.Result, error) 
 		return reconcile.Result{}, nil
 	}
 
-	o := r.liveType.DeepCopyObject()
-	if err := r.agent.Get(context.TODO(), req.NamespacedName, o); err != nil {
-		if errors.IsNotFound(err) {
-			// TODO...: multicluster garbage collector
-			// Until then...
-			return reconcile.Result{}, r.deleteObservation(r.federationNamespacedName(req))
-		}
-		return reconcile.Result{}, err
-	}
-	setClusterName(o, req.Context)
+	obsNamespacedName := r.federationNamespacedName(req)
 
-	oo := r.observationType.DeepCopyObject()
-	if err := r.scheduler.Get(context.TODO(), r.federationNamespacedName(req), oo); err != nil {
-		if errors.IsNotFound(err) {
-			doo, err := r.makeObservation(o, req)
-			if err != nil {
-				return reconcile.Result{}, err
-			}
-			log.Printf("create %v\n", r.federationNamespacedName(req))
-			return reconcile.Result{}, r.scheduler.Create(context.TODO(), doo)
+	live := r.liveType.DeepCopyObject()
+	if err := r.agent.Get(context.TODO(), req.NamespacedName, live); err != nil {
+		if !errors.IsNotFound(err) {
+			return reconcile.Result{}, fmt.Errorf("cannot get live %T %s in namespace %s in agent cluster: %v",
+				live, req.Name, req.Namespace, err)
 		}
-		return reconcile.Result{}, err
+		// TODO...: multicluster garbage collector
+		// Until then...
+		return reconcile.Result{}, r.deleteObservation(obsNamespacedName)
 	}
+	setClusterName(live, req.Context)
 
-	ok, err := liveStateEqual(oo, o)
-	if err != nil {
-		return reconcile.Result{}, err
-	}
-	if ok {
+	obs := r.observationType.DeepCopyObject()
+	if err := r.scheduler.Get(context.TODO(), obsNamespacedName, obs); err != nil {
+		if !errors.IsNotFound(err) {
+			return reconcile.Result{}, fmt.Errorf("cannot get %T %s in namespace %s in scheduler cluster: %v",
+				obs, obsNamespacedName.Name, obsNamespacedName.Namespace, err)
+		}
+		obs, err := r.makeObservation(live, obsNamespacedName)
+		if err != nil {
+			return reconcile.Result{}, fmt.Errorf("cannot make observation from live %T %s in namespace %s in agent cluster: %v",
+				live, req.Name, req.Namespace, err)
+		}
+		if err := r.scheduler.Create(context.TODO(), obs); err != nil {
+			return reconcile.Result{}, fmt.Errorf("cannot create %T %s in namespace %s in scheduler cluster: %v",
+				obs, obsNamespacedName.Name, obsNamespacedName.Namespace, err)
+		}
 		return reconcile.Result{}, nil
 	}
 
-	if err := setLiveState(oo, o); err != nil {
-		return reconcile.Result{}, err
+	ok, err := liveStateEqual(obs, live)
+	if err != nil {
+		return reconcile.Result{}, fmt.Errorf("cannot compare %T to live %T: %v", obs, live, err)
 	}
-	log.Printf("update %v\n", r.federationNamespacedName(req))
-	return reconcile.Result{}, r.scheduler.Update(context.TODO(), oo)
+	if !ok {
+		if err := setLiveState(obs, live); err != nil {
+			return reconcile.Result{}, fmt.Errorf("cannot set live state of %T from %T: %v", obs, live, err)
+		}
+		if err := r.scheduler.Update(context.TODO(), obs); err != nil {
+			return reconcile.Result{}, fmt.Errorf("cannot update %T %s in namespace %s in scheduler cluster: %v",
+				obs, obsNamespacedName.Name, obsNamespacedName.Namespace, err)
+		}
+		return reconcile.Result{}, nil
+	}
+
+	return reconcile.Result{}, nil
 }
 
 func (r *reconciler) federationNamespacedName(req reconcile.Request) types.NamespacedName {
@@ -143,56 +153,56 @@ func (r *reconciler) federationNamespacedName(req reconcile.Request) types.Names
 	}
 }
 
+// deleteObservation gets an observation before deleting.
+// controller-runtime doesn't seem to offer the possibility to delete by namespaced name.
 func (r *reconciler) deleteObservation(nn types.NamespacedName) error {
 	obs := r.observationType.DeepCopyObject()
 	if err := r.scheduler.Get(context.TODO(), nn, obs); err != nil {
-		if errors.IsNotFound(err) {
-			// all good
-			return nil
+		if !errors.IsNotFound(err) {
+			return fmt.Errorf("cannot get (to delete) %T %s in namespace %s in scheduler cluster: %v",
+				obs, nn.Name, nn.Namespace, err)
 		}
-		return err
+		// all good then
+		return nil
 	}
-	log.Printf("delete %v\n", nn)
 	if err := r.scheduler.Delete(context.TODO(), obs); err != nil {
-		return err
+		return fmt.Errorf("cannot delete %T %s in namespace %s in scheduler cluster: %v",
+			obs, nn.Name, nn.Namespace, err)
 	}
 	return nil
 }
 
-func (r *reconciler) makeObservation(obj runtime.Object, req reconcile.Request) (runtime.Object, error) {
+func (r *reconciler) makeObservation(live runtime.Object, obsNamespacedName types.NamespacedName) (runtime.Object, error) {
 	var obs runtime.Object
-	switch obj := obj.(type) {
+	switch live := live.(type) {
 	case *v1.Pod:
 		obs = &v1alpha1.PodObservation{}
 	case *v1.Node:
 		obs = &v1alpha1.NodeObservation{}
 	case *v1alpha1.NodePool:
 		obs = &v1alpha1.NodePoolObservation{}
-	case *v1alpha1.MulticlusterDeployment:
-		obs = &v1alpha1.MulticlusterDeploymentObservation{}
 	default:
-		return nil, fmt.Errorf("type %T cannot be observed", obj)
+		return nil, fmt.Errorf("type %T cannot be observed", live)
 	}
 
-	if err := setLiveState(obs, obj); err != nil {
-		return nil, err
+	if err := setLiveState(obs, live); err != nil {
+		return nil, fmt.Errorf("cannot set live state: %v", err)
 	}
 
-	objMeta := obj.(metav1.Object)
-	ref := reference.NewMulticlusterOwnerReference(objMeta, obj.GetObjectKind().GroupVersionKind(), req.Context)
+	liveMeta := live.(metav1.Object)
+	ref := reference.NewMulticlusterOwnerReference(liveMeta, live.GetObjectKind().GroupVersionKind(), r.agentContext)
 	obsMeta := obs.(metav1.Object)
 	reference.SetMulticlusterControllerReference(obsMeta, ref)
 
-	nn := r.federationNamespacedName(req)
-	obsMeta.SetNamespace(nn.Namespace)
-	obsMeta.SetName(nn.Name)
+	obsMeta.SetNamespace(obsNamespacedName.Namespace)
+	obsMeta.SetName(obsNamespacedName.Name)
 
 	return obs, nil
 }
 
-func setClusterName(o runtime.Object, clusterName string) {
-	oMeta := o.(metav1.Object)
-	oMeta.SetClusterName(clusterName)
+func setClusterName(live runtime.Object, clusterName string) {
+	meta := live.(metav1.Object)
+	meta.SetClusterName(clusterName)
 }
 
 func liveStateEqual(obs runtime.Object, live runtime.Object) (bool, error) {
@@ -202,8 +212,6 @@ func liveStateEqual(obs runtime.Object, live runtime.Object) (bool, error) {
 	case *v1alpha1.NodeObservation:
 		return reflect.DeepEqual(live, obs.Status.LiveState), nil
 	case *v1alpha1.NodePoolObservation:
-		return reflect.DeepEqual(live, obs.Status.LiveState), nil
-	case *v1alpha1.MulticlusterDeploymentObservation:
 		return reflect.DeepEqual(live, obs.Status.LiveState), nil
 	default:
 		return false, fmt.Errorf("type %T is not an observation", obs)
@@ -232,13 +240,6 @@ func setLiveState(obs runtime.Object, live runtime.Object) error {
 			return fmt.Errorf("type %T is not type %T's live form", live, obs)
 		}
 		obs.Status = v1alpha1.NodePoolObservationStatus{LiveState: live}
-		return nil
-	case *v1alpha1.MulticlusterDeploymentObservation:
-		live, ok := live.(*v1alpha1.MulticlusterDeployment)
-		if !ok {
-			return fmt.Errorf("type %T is not type %T's live form", live, obs)
-		}
-		obs.Status = v1alpha1.MulticlusterDeploymentObservationStatus{LiveState: live}
 		return nil
 	default:
 		return fmt.Errorf("type %T is not an observation", obs)

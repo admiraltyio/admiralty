@@ -11,33 +11,7 @@ rules:
 - apiGroups:
   - "multicluster.admiralty.io"
   resources:
-  - multiclusterdeployments
-  verbs:
-  - get
-  - list
-  - watch
-  - create
-  - update
-  - patch
-  - delete
-# TODO: less verbs?
-- apiGroups:
-  - "multicluster.admiralty.io"
-  resources:
   - nodepools
-  verbs:
-  - get
-  - list
-  - watch
-  - create
-  - update
-  - patch
-  - delete
-# TODO: less verbs?
-- apiGroups:
-  - "apps"
-  resources:
-  - deployments
   verbs:
   - get
   - list
@@ -55,7 +29,17 @@ rules:
   - get
   - list
   - watch
+  - create
+  - update
+  - patch
+  - delete
 # TODO: less verbs?
+- apiGroups:
+  - ""
+  resources:
+  - pods/exec
+  verbs:
+  - create
 - apiGroups:
   - ""
   resources:

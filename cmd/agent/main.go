@@ -63,16 +63,15 @@ func main() {
 	scheduler := cluster.New("scheduler", cfg, cluster.Options{CacheOptions: cluster.CacheOptions{Namespace: ns}})
 
 	observations := map[runtime.Object]runtime.Object{
-		&v1.Pod{}:                          &v1alpha1.PodObservation{},
-		&v1.Node{}:                         &v1alpha1.NodeObservation{},
-		&v1alpha1.NodePool{}:               &v1alpha1.NodePoolObservation{},
-		&v1alpha1.MulticlusterDeployment{}: &v1alpha1.MulticlusterDeploymentObservation{},
+		&v1.Pod{}:            &v1alpha1.PodObservation{},
+		&v1.Node{}:           &v1alpha1.NodeObservation{},
+		&v1alpha1.NodePool{}: &v1alpha1.NodePoolObservation{},
 	}
 
 	m := manager.New()
 
-	for l, g := range observations {
-		co, err := send.NewController(agent, scheduler, ns, l, g)
+	for liveType, obsType := range observations {
+		co, err := send.NewController(agent, scheduler, ns, liveType, obsType)
 		if err != nil {
 			log.Fatalf("cannot create send controller: %v", err)
 		}

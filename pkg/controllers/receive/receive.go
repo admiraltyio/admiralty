@@ -19,8 +19,6 @@ package receive
 import (
 	"context"
 	"fmt"
-	"log"
-	"reflect"
 
 	"admiralty.io/multicluster-controller/pkg/cluster"
 	"admiralty.io/multicluster-controller/pkg/controller"
@@ -28,7 +26,7 @@ import (
 	"admiralty.io/multicluster-controller/pkg/reference"
 	"admiralty.io/multicluster-scheduler/pkg/apis"
 	"admiralty.io/multicluster-scheduler/pkg/apis/multicluster/v1alpha1"
-	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -53,12 +51,12 @@ func NewController(agent *cluster.Cluster, scheduler *cluster.Cluster) (*control
 	if err := apis.AddToScheme(scheduler.GetScheme()); err != nil {
 		return nil, fmt.Errorf("adding APIs to scheduler cluster's scheme: %v", err)
 	}
-	if err := co.WatchResourceReconcileObject(scheduler, &v1alpha1.DeploymentDecision{}, controller.WatchOptions{}); err != nil {
-		return nil, err
+	if err := co.WatchResourceReconcileObject(scheduler, &v1alpha1.PodDecision{}, controller.WatchOptions{}); err != nil {
+		return nil, fmt.Errorf("setting up delegate pod decision watch on scheduler cluster: %v", err)
 	}
 
-	if err := co.WatchResourceReconcileController(agent, &appsv1.Deployment{}, controller.WatchOptions{}); err != nil {
-		return nil, err
+	if err := co.WatchResourceReconcileController(agent, &corev1.Pod{}, controller.WatchOptions{}); err != nil {
+		return nil, fmt.Errorf("setting up delegate pod watch on agent cluster: %v", err)
 	}
 
 	return co, nil
@@ -71,69 +69,72 @@ type reconciler struct {
 }
 
 func (r *reconciler) Reconcile(req reconcile.Request) (reconcile.Result, error) {
-	odd := &v1alpha1.DeploymentDecision{}
-	if err := r.scheduler.Get(context.TODO(), req.NamespacedName, odd); err != nil {
-		if errors.IsNotFound(err) {
-			return reconcile.Result{}, nil
+	podDec := &v1alpha1.PodDecision{}
+	if err := r.scheduler.Get(context.TODO(), req.NamespacedName, podDec); err != nil {
+		if !errors.IsNotFound(err) {
+			return reconcile.Result{}, fmt.Errorf("cannot get delegate pod decision %s in namespace %s in scheduler cluster: %v", req.Name, req.Namespace, err)
 		}
-		return reconcile.Result{}, err
+		return reconcile.Result{}, nil
 	}
 
-	if odd.Spec.Template.ClusterName != r.agentContext {
+	podDecTmpl := &podDec.Spec.Template
+	if podDecTmpl.ClusterName != r.agentContext {
 		// request for other cluster, do nothing
 		// TODO: filter upstream (with Watch predicate)
 		return reconcile.Result{}, nil
 	}
 
 	found := true
-	od := &appsv1.Deployment{}
+	pod := &corev1.Pod{}
 	if err := r.agent.Get(context.TODO(), types.NamespacedName{
-		Namespace: odd.Spec.Template.Namespace,
-		Name:      odd.Spec.Template.Name,
-	}, od); err != nil {
+		Namespace: podDecTmpl.Namespace,
+		Name:      podDecTmpl.Name,
+	}, pod); err != nil {
 		if !errors.IsNotFound(err) {
-			return reconcile.Result{}, err
+			return reconcile.Result{}, fmt.Errorf("cannot get delegate pod %s in namespace %s in agent cluster: %v", podDecTmpl.Name, podDecTmpl.Namespace, err)
 		}
 		found = false
-		// TODO: remove condition when deletion done from namespace and name
-		if odd.DeletionTimestamp == nil {
-			dd := &appsv1.Deployment{}
-			dd.ObjectMeta = odd.Spec.Template.ObjectMeta
-			dd.Spec = odd.Spec.Template.Spec
 
-			ref := reference.NewMulticlusterOwnerReference(odd, odd.GetObjectKind().GroupVersionKind(), req.Context)
-			reference.SetMulticlusterControllerReference(dd, ref)
+		if podDec.DeletionTimestamp == nil {
+			pod := &corev1.Pod{}
+			pod.ObjectMeta = podDecTmpl.ObjectMeta
+			pod.Spec = podDecTmpl.Spec
 
-			log.Printf("create %s/%s", dd.Namespace, dd.Name)
-			return reconcile.Result{}, r.agent.Create(context.TODO(), dd)
+			ref := reference.NewMulticlusterOwnerReference(podDec, podDec.GetObjectKind().GroupVersionKind(), req.Context)
+			reference.SetMulticlusterControllerReference(pod, ref)
+
+			if err := r.agent.Create(context.TODO(), pod); err != nil {
+				return reconcile.Result{}, fmt.Errorf("cannot create delegate pod %s in namespace %s in agent cluster: %v", pod.Name, pod.Namespace, err)
+			}
+
+			podDec.Finalizers = append(podDec.Finalizers, "multiclusterForegroundDeletion")
+			if err := r.scheduler.Update(context.TODO(), podDec); err != nil {
+				return reconcile.Result{}, fmt.Errorf("cannot add finalizer to delegate pod decision %s in namespace %s in scheduler cluster: %v", podDec.Name, podDec.Namespace, err)
+			}
+			return reconcile.Result{}, nil
 		}
 	}
 
-	// TODO: delete from namespace and name before vs. after client.Get()
-	// For some reason client.Delete() requires a runtime.Object, so we could make one that just holds the required info for deletion.
-	if odd.DeletionTimestamp != nil {
+	if podDec.DeletionTimestamp != nil {
 		var j int
-		for i, f := range odd.Finalizers {
+		for i, f := range podDec.Finalizers {
 			if f == "multiclusterForegroundDeletion" {
 				j = i
 			}
 		}
 		if found {
-			log.Printf("delete %s/%s", od.Namespace, od.Name)
-			if err := r.agent.Delete(context.TODO(), od); err != nil && !errors.IsNotFound(err) {
-				return reconcile.Result{}, err
+			if err := r.agent.Delete(context.TODO(), pod); err != nil && !errors.IsNotFound(err) {
+				return reconcile.Result{}, fmt.Errorf("cannot delete delegate pod %s in namespace %s in agent cluster: %v", pod.Name, pod.Namespace, err)
 			}
 		}
-		odd.Finalizers = append(odd.Finalizers[:j], odd.Finalizers[j+1:]...)
-		log.Printf("remove finalizer from %s/%s", odd.Namespace, odd.Name)
-		return reconcile.Result{}, r.scheduler.Update(context.TODO(), odd)
-	}
-
-	if reflect.DeepEqual(od.Spec, odd.Spec.Template.Spec) {
+		podDec.Finalizers = append(podDec.Finalizers[:j], podDec.Finalizers[j+1:]...)
+		if err := r.scheduler.Update(context.TODO(), podDec); err != nil {
+			return reconcile.Result{}, fmt.Errorf("cannot remove finalizer from delegate pod decision %s in namespace %s in scheduler cluster: %v", podDec.Name, podDec.Namespace, err)
+		}
 		return reconcile.Result{}, nil
 	}
 
-	od.Spec = odd.Spec.Template.Spec
-	log.Printf("update %s/%s", od.Namespace, od.Name)
-	return reconcile.Result{}, r.agent.Update(context.TODO(), od)
+	// TODO: smart delegate pod update (only the allowed fields: container and initContainer images, etc.)
+
+	return reconcile.Result{}, nil
 }

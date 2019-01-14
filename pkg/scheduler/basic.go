@@ -17,11 +17,11 @@ limitations under the License.
 package scheduler
 
 import (
+	"fmt"
 	"sort"
 
 	"admiralty.io/multicluster-scheduler/pkg/apis/multicluster/v1alpha1"
 	"admiralty.io/multicluster-scheduler/pkg/controllers/nodepool"
-	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 )
 
@@ -56,45 +56,24 @@ func (s *Scheduler) SetPod(p *corev1.Pod) {
 	s.pods[nodeKey] = append(s.pods[nodeKey], p)
 }
 
-func (s *Scheduler) Schedule(mcd *v1alpha1.MulticlusterDeployment) ([]*appsv1.Deployment, error) {
-	ptr := mcd.Spec.Replicas
-	var replicas int32
-	if ptr == nil {
-		replicas = 1
-	} else {
-		replicas = *ptr
-	}
-
-	nClusters := int32(len(s.nodePools)) // s.nodePools is a map of node pool slices by cluster name
-	ds := make([]*appsv1.Deployment, 0, nClusters)
+func (s *Scheduler) Schedule(pod *corev1.Pod) (string, error) {
+	nClusters := len(s.nodePools) // s.nodePools is a map of node pool slices by cluster name
 	if nClusters == 0 {
-		return ds, nil
+		return "", fmt.Errorf("no cluster to schedule to")
 	}
 
-	quotient := replicas / nClusters
-	remainder := replicas % nClusters
-
-	// sort cluster names to schedule deterministically in case of imbalance
+	// sort cluster names to schedule deterministically
 	clusterNames := make([]string, 0, nClusters)
 	for clusterName := range s.nodePools {
 		clusterNames = append(clusterNames, clusterName)
 	}
 	sort.Sort(sort.StringSlice(clusterNames))
-	for _, clusterName := range clusterNames {
-		d := &appsv1.Deployment{}
 
-		d.Labels = mcd.Labels
-		d.Annotations = mcd.Annotations
-		d.ClusterName = clusterName
-		d.Namespace = mcd.Namespace
-		d.Name = mcd.Name
-
-		d.Spec = mcd.Spec
-		d.Spec.Replicas = &quotient
-
-		ds = append(ds, d)
+	// map each cluster name to the next cluster name alphabetically
+	nextClusterName := make(map[string]string, nClusters)
+	for i, clusterName := range clusterNames {
+		nextClusterName[clusterName] = clusterNames[(i+1)%nClusters]
 	}
-	max := quotient + remainder
-	ds[0].Spec.Replicas = &max
-	return ds, nil
+
+	return nextClusterName[pod.ClusterName], nil
 }

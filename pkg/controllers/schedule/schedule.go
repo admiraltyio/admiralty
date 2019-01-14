@@ -19,17 +19,18 @@ package schedule
 import (
 	"context"
 	"fmt"
-	"log"
 
 	"admiralty.io/multicluster-controller/pkg/cluster"
 	"admiralty.io/multicluster-controller/pkg/controller"
 	"admiralty.io/multicluster-controller/pkg/reconcile"
 	"admiralty.io/multicluster-scheduler/pkg/apis"
 	"admiralty.io/multicluster-scheduler/pkg/apis/multicluster/v1alpha1"
+	"admiralty.io/multicluster-scheduler/pkg/common"
+	"github.com/ghodss/yaml"
 	"github.com/go-test/deep"
-	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -46,11 +47,11 @@ func NewController(local *cluster.Cluster, s Scheduler) (*controller.Controller,
 	if err := apis.AddToScheme(local.GetScheme()); err != nil {
 		return nil, fmt.Errorf("adding APIs to local cluster's scheme: %v", err)
 	}
-	if err := co.WatchResourceReconcileObject(local, &v1alpha1.MulticlusterDeploymentObservation{}, controller.WatchOptions{}); err != nil {
-		return nil, err
-	}
-	if err := co.WatchResourceReconcileController(local, &v1alpha1.DeploymentDecision{}, controller.WatchOptions{}); err != nil {
-		return nil, err
+	if err := co.WatchResourceReconcileObject(local, &v1alpha1.PodObservation{}, controller.WatchOptions{}); err != nil {
+		return nil, fmt.Errorf("setting up proxy pod observation watch: %v", err)
+	} // TODO: filter on annotation (proxy pod observations only)
+	if err := co.WatchResourceReconcileController(local, &v1alpha1.PodDecision{}, controller.WatchOptions{}); err != nil {
+		return nil, fmt.Errorf("setting up delegate pod decision watch: %v", err)
 	}
 
 	return co, nil
@@ -63,113 +64,184 @@ type reconciler struct {
 }
 
 func (r *reconciler) Reconcile(req reconcile.Request) (reconcile.Result, error) {
-	omcdo := &v1alpha1.MulticlusterDeploymentObservation{}
-	if err := r.client.Get(context.TODO(), req.NamespacedName, omcdo); err != nil {
-		if errors.IsNotFound(err) {
-			// MulticlusterDeploymentObservation was deleted
-			// DeploymentDecisions will be garbage-collected
-			// after the corresponding agents have deleted the deployments
-			// and removed the finalizers.
-			return reconcile.Result{}, nil
+	proxyPodObs := &v1alpha1.PodObservation{}
+	if err := r.client.Get(context.TODO(), req.NamespacedName, proxyPodObs); err != nil {
+		if !errors.IsNotFound(err) {
+			return reconcile.Result{}, fmt.Errorf("cannot get proxy pod observation %s in namespace %s: %v", req.Name, req.Namespace, err)
 		}
-		return reconcile.Result{}, fmt.Errorf("cannot get MulticlusterDeploymentObservation: %v", err)
+		// PodObservation was deleted:
+		// PodDecision will be garbage-collected after the corresponding agent has deleted the delegate Pod
+		// and removed the finalizer from the PodDecision.
+		return reconcile.Result{}, nil
 	}
 
-	opol := &v1alpha1.PodObservationList{}
-	if err := r.client.List(context.TODO(), &client.ListOptions{}, opol); err != nil {
-		return reconcile.Result{}, fmt.Errorf("cannot list PodObservationList: %v", err)
+	proxyPod := proxyPodObs.Status.LiveState
+	if _, ok := proxyPod.Annotations[common.AnnotationKeyElect]; !ok {
+		// not a proxy pod
+		// TODO: when pod observations are filtered, this shouldn't happen
+		return reconcile.Result{}, nil
 	}
-	for _, pg := range opol.Items {
-		r.scheduler.SetPod(pg.Status.LiveState)
-	}
-
-	onol := &v1alpha1.NodeObservationList{}
-	if err := r.client.List(context.TODO(), &client.ListOptions{}, onol); err != nil {
-		return reconcile.Result{}, fmt.Errorf("cannot list NodeObservationList: %v", err)
-	}
-	for _, ng := range onol.Items {
-		r.scheduler.SetNode(ng.Status.LiveState)
-	}
-
-	nopol := &v1alpha1.NodePoolObservationList{}
-	if err := r.client.List(context.TODO(), &client.ListOptions{}, nopol); err != nil {
-		return reconcile.Result{}, fmt.Errorf("cannot list NodePoolObservationList: %v", err)
-	}
-	for _, npg := range nopol.Items {
-		r.scheduler.SetNodePool(npg.Status.LiveState)
-	}
-
-	oddl := &v1alpha1.DeploymentDecisionList{}
-	if err := r.client.List(context.TODO(), client.MatchingLabels(map[string]string{
-		"multicluster-deployment-observation-name": omcdo.Name, // TODO? use selector instead
-	}), oddl); err != nil {
-		return reconcile.Result{}, fmt.Errorf("cannot list DeploymentDecisionList: %v", err)
-	}
-	oddm := make(map[string]v1alpha1.DeploymentDecision)
-	for _, odd := range oddl.Items {
-		oddm[odd.Name] = odd
-	}
-
-	dl, err := r.scheduler.Schedule(omcdo.Status.LiveState)
+	delegatePod, err := r.makeDelegatePod(proxyPodObs)
 	if err != nil {
-		return reconcile.Result{}, fmt.Errorf("cannot schedule: %v", err)
+		return reconcile.Result{}, fmt.Errorf("cannot make delegate pod from proxy pod observation %s in namespace %s: %v", req.Name, req.Namespace, err)
 	}
 
-	for _, d := range dl {
-		k := fmt.Sprintf("%s-%s", omcdo.Name, d.ClusterName)
-		if odd, ok := oddm[k]; ok {
-			if needUpdate(&odd, d) {
-				odd.Spec.Template.ObjectMeta = *d.ObjectMeta.DeepCopy()
-				odd.Spec.Template.Spec = *d.Spec.DeepCopy()
-				log.Printf("update %s/%s", odd.Namespace, odd.Name)
-				if err := r.client.Update(context.TODO(), &odd); err != nil {
-					return reconcile.Result{}, fmt.Errorf("cannot update deployment decision: %v", err)
-				}
-			}
-			delete(oddm, k)
-		} else {
-			ddd := &v1alpha1.DeploymentDecision{}
-			ddd.Namespace = omcdo.Namespace
-			ddd.Name = k
-			ddd.Labels = map[string]string{"multicluster-deployment-observation-name": omcdo.Name} // TODO? use selector instead
-			ddd.Finalizers = []string{"multiclusterForegroundDeletion"}
-			ddd.Spec.Template.ObjectMeta = *d.ObjectMeta.DeepCopy()
-			ddd.Spec.Template.Spec = *d.Spec.DeepCopy()
-			if err := controllerutil.SetControllerReference(omcdo, ddd, r.scheme); err != nil {
-				return reconcile.Result{}, fmt.Errorf("cannot SetControllerReference: %v", err)
-			}
-			log.Printf("create %s/%s", ddd.Namespace, ddd.Name)
-			if err := r.client.Create(context.TODO(), ddd); err != nil {
-				return reconcile.Result{}, fmt.Errorf("cannot create deployment decision: %v", err)
-			}
+	delegatePodDec := &v1alpha1.PodDecision{}
+	if err := r.client.Get(context.TODO(), req.NamespacedName, delegatePodDec); err != nil {
+		if !errors.IsNotFound(err) {
+			return reconcile.Result{}, fmt.Errorf("cannot get delegate pod decision %s in namespace %s: %v", req.Name, req.Namespace, err)
 		}
+		return reconcile.Result{}, r.createDelegatePodDecision(delegatePod, proxyPodObs)
 	}
 
-	for _, odd := range oddm {
-		log.Printf("delete %s/%s", odd.Namespace, odd.Name)
-		if err := r.client.Delete(context.TODO(), &odd); err != nil {
-			return reconcile.Result{}, fmt.Errorf("cannot delete deployment decision: %v", err)
-		}
+	if needUpdate(delegatePodDec, delegatePod) {
+		return reconcile.Result{}, r.updateDelegatePodDecision(delegatePodDec, delegatePod)
 	}
 
 	return reconcile.Result{}, nil
 }
 
-func needUpdate(odd *v1alpha1.DeploymentDecision, d *appsv1.Deployment) bool {
-	if diff := deep.Equal(odd.Spec.Template.ObjectMeta, d.ObjectMeta); diff != nil {
-		log.Println(diff)
+func (r *reconciler) makeDelegatePod(proxyPodObs *v1alpha1.PodObservation) (*corev1.Pod, error) {
+	proxyPod := proxyPodObs.Status.LiveState
+	srcPodManifest, ok := proxyPod.Annotations[common.AnnotationKeySourcePodManifest]
+	if !ok {
+		return nil, fmt.Errorf("no source pod manifest on proxy pod")
+	}
+	srcPod := &corev1.Pod{}
+	if err := yaml.Unmarshal([]byte(srcPodManifest), srcPod); err != nil {
+		return nil, fmt.Errorf("cannot unmarshal source pod manifest: %v", err)
+	}
+
+	annotations := make(map[string]string)
+	for k, v := range srcPod.Annotations {
+		if k != common.AnnotationKeyElect { // we don't want to mc-schedule the delegate pod
+			annotations[k] = v
+		}
+	}
+	annotations[common.AnnotationKeyProxyPodClusterName] = proxyPod.ClusterName
+	annotations[common.AnnotationKeyProxyPodNamespace] = proxyPod.Namespace
+	annotations[common.AnnotationKeyProxyPodName] = proxyPod.Name
+
+	delegatePod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        proxyPodObs.Name,
+			Namespace:   proxyPod.Namespace, // already defaults to "default" (vs. could be empty in srcPod)
+			ClusterName: proxyPod.ClusterName,
+			Annotations: annotations},
+		Spec: *srcPod.Spec.DeepCopy()}
+
+	removeServiceAccount(delegatePod)
+	// TODO? add compatible fields instead of removing incompatible ones
+	// (for forward compatibility and we've certainly forgotten incompatible fields...)
+	// TODO... maybe make this configurable, sort of like Federation v2 Overrides
+
+	if err := r.getObservations(); err != nil {
+		return nil, fmt.Errorf("cannot get observations: %v", err)
+	}
+
+	clusterName, err := r.scheduler.Schedule(delegatePod)
+	if err != nil {
+		return nil, fmt.Errorf("cannot schedule: %v", err)
+	}
+	delegatePod.ClusterName = clusterName
+
+	return delegatePod, nil
+}
+
+func removeServiceAccount(pod *corev1.Pod) {
+	var saSecretName string
+	for i, c := range pod.Spec.Containers {
+		j := -1
+		for i, m := range c.VolumeMounts {
+			if m.MountPath == "/var/run/secrets/kubernetes.io/serviceaccount" {
+				saSecretName = m.Name
+				j = i
+				break
+			}
+		}
+		if j > -1 {
+			c.VolumeMounts = append(c.VolumeMounts[:j], c.VolumeMounts[j+1:]...)
+			pod.Spec.Containers[i] = c
+		}
+	}
+	j := -1
+	for i, v := range pod.Spec.Volumes {
+		if v.Name == saSecretName {
+			j = i
+			break
+		}
+	}
+	if j > -1 {
+		pod.Spec.Volumes = append(pod.Spec.Volumes[:j], pod.Spec.Volumes[j+1:]...)
+	}
+}
+
+func (r *reconciler) getObservations() error {
+	podObsL := &v1alpha1.PodObservationList{}
+	if err := r.client.List(context.TODO(), &client.ListOptions{}, podObsL); err != nil {
+		return fmt.Errorf("cannot list pod observations: %v", err)
+	}
+	for _, podObs := range podObsL.Items {
+		r.scheduler.SetPod(podObs.Status.LiveState)
+	}
+
+	nodeObsL := &v1alpha1.NodeObservationList{}
+	if err := r.client.List(context.TODO(), &client.ListOptions{}, nodeObsL); err != nil {
+		return fmt.Errorf("cannot list node observations: %v", err)
+	}
+	for _, nodeObs := range nodeObsL.Items {
+		r.scheduler.SetNode(nodeObs.Status.LiveState)
+	}
+
+	npObsL := &v1alpha1.NodePoolObservationList{}
+	if err := r.client.List(context.TODO(), &client.ListOptions{}, npObsL); err != nil {
+		return fmt.Errorf("cannot list node pool observations: %v", err)
+	}
+	for _, npObs := range npObsL.Items {
+		r.scheduler.SetNodePool(npObs.Status.LiveState)
+	}
+
+	return nil
+}
+
+func (r *reconciler) createDelegatePodDecision(delegatePod *corev1.Pod, proxyPodObs *v1alpha1.PodObservation) error {
+	delegatePodDec := &v1alpha1.PodDecision{}
+	delegatePodDec.Namespace = proxyPodObs.Namespace
+	delegatePodDec.Name = proxyPodObs.Name
+	delegatePodDec.Spec.Template.ObjectMeta = *delegatePod.ObjectMeta.DeepCopy()
+	delegatePodDec.Spec.Template.Spec = *delegatePod.Spec.DeepCopy()
+	if err := controllerutil.SetControllerReference(proxyPodObs, delegatePodDec, r.scheme); err != nil {
+		return fmt.Errorf("cannot set controller reference on delegate pod decision %s in namespace %s for owner %s in namespace %s: %v",
+			delegatePodDec.Name, delegatePodDec.Namespace, proxyPodObs.Name, proxyPodObs.Namespace, err)
+	}
+	if err := r.client.Create(context.TODO(), delegatePodDec); err != nil {
+		return fmt.Errorf("cannot create delegate pod decision %s in namespace %s: %v", delegatePodDec.Name, delegatePodDec.Namespace, err)
+	}
+	return nil
+}
+
+func needUpdate(delegatePodDec *v1alpha1.PodDecision, delegatePod *corev1.Pod) bool {
+	if diff := deep.Equal(delegatePodDec.Spec.Template.ObjectMeta, delegatePod.ObjectMeta); diff != nil {
 		return true
 	}
-	if diff := deep.Equal(odd.Spec.Template.Spec, d.Spec); diff != nil {
-		log.Println(diff)
+	if diff := deep.Equal(delegatePodDec.Spec.Template.Spec, delegatePod.Spec); diff != nil {
 		return true
 	}
 	return false
+}
+
+func (r *reconciler) updateDelegatePodDecision(delegatePodDec *v1alpha1.PodDecision, delegatePod *corev1.Pod) error {
+	delegatePodDec.Spec.Template.ObjectMeta = *delegatePod.ObjectMeta.DeepCopy()
+	delegatePodDec.Spec.Template.Spec = *delegatePod.Spec.DeepCopy()
+	if err := r.client.Update(context.TODO(), delegatePodDec); err != nil {
+		return fmt.Errorf("cannot update delegate pod decision %s in namespace %s: %v", delegatePodDec.Name, delegatePodDec.Namespace, err)
+	}
+	return nil
 }
 
 type Scheduler interface {
 	SetPod(p *corev1.Pod)
 	SetNode(n *corev1.Node)
 	SetNodePool(np *v1alpha1.NodePool)
-	Schedule(mcd *v1alpha1.MulticlusterDeployment) ([]*appsv1.Deployment, error)
+	Schedule(p *corev1.Pod) (string, error)
 }
