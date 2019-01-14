@@ -10,6 +10,8 @@ spec:
   names:
     kind: NodePool
     plural: nodepools
+    shortNames:
+    - np
   scope: Cluster
   validation:
     openAPIV3Schema:
@@ -40,10 +42,11 @@ spec:
           type: object
         status:
           type: object
+      type: object
   version: v1alpha1
 status:
   acceptedNames:
     kind: ""
     plural: ""
-  conditions: []
-  storedVersions: []
+  conditions: null
+  storedVersions: null

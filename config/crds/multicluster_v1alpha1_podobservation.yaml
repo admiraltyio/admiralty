@@ -12,6 +12,8 @@ spec:
     - observations
     kind: PodObservation
     plural: podobservations
+    shortNames:
+    - podobs
   scope: Namespaced
   validation:
     openAPIV3Schema:
@@ -29,10 +31,11 @@ spec:
             liveState:
               type: object
           type: object
+      type: object
   version: v1alpha1
 status:
   acceptedNames:
     kind: ""
     plural: ""
-  conditions: []
-  storedVersions: []
+  conditions: null
+  storedVersions: null

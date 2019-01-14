@@ -12,6 +12,9 @@ spec:
     - observations
     kind: NodePoolObservation
     plural: nodepoolobservations
+    shortNames:
+    - npobs
+    - nodepoolobs
   scope: Namespaced
   validation:
     openAPIV3Schema:
@@ -56,10 +59,11 @@ spec:
                   type: object
               type: object
           type: object
+      type: object
   version: v1alpha1
 status:
   acceptedNames:
     kind: ""
     plural: ""
-  conditions: []
-  storedVersions: []
+  conditions: null
+  storedVersions: null
