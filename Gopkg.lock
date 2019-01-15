@@ -253,12 +253,13 @@
   version = "v1.0.4"
 
 [[projects]]
-  branch = "master"
-  digest = "1:fc2b04b0069d6b10bdef96d278fe20c345794009685ed3c8c7f1a6dc023eefec"
+  digest = "1:464aef731a5f82ded547c62e249a2e9ec59fbbc9ddab53cda7b9857852630a61"
   name = "github.com/mattbaird/jsonpatch"
   packages = ["."]
   pruneopts = "UT"
-  revision = "81af80346b1a01caae0cbc27fd3c1ba5b11e189f"
+  revision = "7c0e3b262f30165a8ec3d0b4c6059fd92703bfb2"
+  source = "https://github.com/appscode/jsonpatch.git"
+  version = "1.0.0"
 
 [[projects]]
   digest = "1:ff5ebae34cfbf047d505ee150de27e60570e8c394b3b8fdbb720ff6ac71985fc"

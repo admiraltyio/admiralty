@@ -12,3 +12,9 @@ required = [
   name = "gopkg.in/fsnotify.v1"
   source = "https://github.com/fsnotify/fsnotify.git"
   version="v1.4.7"
+
+# https://github.com/mattbaird/jsonpatch/issues/7
+# until https://github.com/kubernetes-sigs/controller-runtime/pull/289 is released
+[[override]]
+  name = "github.com/mattbaird/jsonpatch"
+  source = "https://github.com/appscode/jsonpatch.git"
