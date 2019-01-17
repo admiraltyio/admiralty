@@ -19,10 +19,12 @@ package schedule
 import (
 	"context"
 	"fmt"
+	"log"
 
 	"admiralty.io/multicluster-controller/pkg/cluster"
 	"admiralty.io/multicluster-controller/pkg/controller"
 	"admiralty.io/multicluster-controller/pkg/reconcile"
+	"admiralty.io/multicluster-controller/pkg/reference"
 	"admiralty.io/multicluster-scheduler/pkg/apis"
 	"admiralty.io/multicluster-scheduler/pkg/apis/multicluster/v1alpha1"
 	"admiralty.io/multicluster-scheduler/pkg/common"
@@ -42,7 +44,12 @@ func NewController(local *cluster.Cluster, s Scheduler) (*controller.Controller,
 		return nil, fmt.Errorf("getting delegating client for local cluster: %v", err)
 	}
 
-	co := controller.New(&reconciler{client: client, scheme: local.GetScheme(), scheduler: s}, controller.Options{})
+	co := controller.New(&reconciler{
+		client:           client,
+		scheme:           local.GetScheme(),
+		scheduler:        s,
+		pendingDecisions: make(map[string]*v1alpha1.PodDecision),
+	}, controller.Options{})
 
 	if err := apis.AddToScheme(local.GetScheme()); err != nil {
 		return nil, fmt.Errorf("adding APIs to local cluster's scheme: %v", err)
@@ -58,9 +65,10 @@ func NewController(local *cluster.Cluster, s Scheduler) (*controller.Controller,
 }
 
 type reconciler struct {
-	client    client.Client
-	scheme    *runtime.Scheme
-	scheduler Scheduler
+	client           client.Client
+	scheme           *runtime.Scheme
+	scheduler        Scheduler
+	pendingDecisions map[string]*v1alpha1.PodDecision // Note: this makes the reconciler NOT compatible with MaxConccurentReconciles > 1
 }
 
 func (r *reconciler) Reconcile(req reconcile.Request) (reconcile.Result, error) {
@@ -78,9 +86,17 @@ func (r *reconciler) Reconcile(req reconcile.Request) (reconcile.Result, error) 
 	proxyPod := proxyPodObs.Status.LiveState
 	if _, ok := proxyPod.Annotations[common.AnnotationKeyElect]; !ok {
 		// not a proxy pod
-		// TODO: when pod observations are filtered, this shouldn't happen
+
+		// but it could be a delegate pod, in which case we want to remove the corresponding pod decision from the pending map
+		ref := reference.GetMulticlusterControllerOf(proxyPod)
+		if ref != nil && ref.Kind == "PodDecision" {
+			log.Printf("deleting pending pod decision %s", ref.Name)
+			delete(r.pendingDecisions, ref.Name)
+		}
+
 		return reconcile.Result{}, nil
 	}
+
 	delegatePod, err := r.makeDelegatePod(proxyPodObs)
 	if err != nil {
 		return reconcile.Result{}, fmt.Errorf("cannot make delegate pod from proxy pod observation %s in namespace %s: %v", req.Name, req.Namespace, err)
@@ -94,6 +110,8 @@ func (r *reconciler) Reconcile(req reconcile.Request) (reconcile.Result, error) 
 		return reconcile.Result{}, r.createDelegatePodDecision(delegatePod, proxyPodObs)
 	}
 
+	// no rescheduling
+	delegatePod.ClusterName = delegatePodDec.Spec.Template.ClusterName
 	if needUpdate(delegatePodDec, delegatePod) {
 		return reconcile.Result{}, r.updateDelegatePodDecision(delegatePodDec, delegatePod)
 	}
@@ -135,15 +153,22 @@ func (r *reconciler) makeDelegatePod(proxyPodObs *v1alpha1.PodObservation) (*cor
 	// (for forward compatibility and we've certainly forgotten incompatible fields...)
 	// TODO... maybe make this configurable, sort of like Federation v2 Overrides
 
+	r.scheduler.Reset()
 	if err := r.getObservations(); err != nil {
 		return nil, fmt.Errorf("cannot get observations: %v", err)
 	}
 
-	clusterName, err := r.scheduler.Schedule(delegatePod)
-	if err != nil {
-		return nil, fmt.Errorf("cannot schedule: %v", err)
+	if clusterName, ok := annotations[common.AnnotationKeyClusterName]; ok {
+		delegatePod.ClusterName = clusterName
+	} else {
+		// TODO: pod observations pending cluster if not enough resources and node pools not elastic
+		// rather than send back to original cluster
+		clusterName, err := r.scheduler.Schedule(delegatePod)
+		if err != nil {
+			return nil, fmt.Errorf("cannot schedule: %v", err)
+		}
+		delegatePod.ClusterName = clusterName
 	}
-	delegatePod.ClusterName = clusterName
 
 	return delegatePod, nil
 }
@@ -182,7 +207,19 @@ func (r *reconciler) getObservations() error {
 		return fmt.Errorf("cannot list pod observations: %v", err)
 	}
 	for _, podObs := range podObsL.Items {
-		r.scheduler.SetPod(podObs.Status.LiveState)
+		phase := podObs.Status.LiveState.Status.Phase
+		if phase == corev1.PodPending || phase == corev1.PodRunning {
+			r.scheduler.SetPod(podObs.Status.LiveState)
+		}
+	}
+
+	// get pending pod decisions so we can count the requests (cluster targeted but no pod obs yet)
+	// otherwise a bunch of pods would be scheduled to one cluster before it would appear to be busy
+	for _, podDec := range r.pendingDecisions {
+		r.scheduler.SetPod(&corev1.Pod{
+			ObjectMeta: podDec.Spec.Template.ObjectMeta,
+			Spec:       podDec.Spec.Template.Spec,
+		})
 	}
 
 	nodeObsL := &v1alpha1.NodeObservationList{}
@@ -217,6 +254,8 @@ func (r *reconciler) createDelegatePodDecision(delegatePod *corev1.Pod, proxyPod
 	if err := r.client.Create(context.TODO(), delegatePodDec); err != nil {
 		return fmt.Errorf("cannot create delegate pod decision %s in namespace %s: %v", delegatePodDec.Name, delegatePodDec.Namespace, err)
 	}
+	log.Printf("adding pending pod decision %s", delegatePodDec.Name)
+	r.pendingDecisions[delegatePodDec.Name] = delegatePodDec
 	return nil
 }
 
@@ -240,6 +279,7 @@ func (r *reconciler) updateDelegatePodDecision(delegatePodDec *v1alpha1.PodDecis
 }
 
 type Scheduler interface {
+	Reset()
 	SetPod(p *corev1.Pod)
 	SetNode(n *corev1.Node)
 	SetNodePool(np *v1alpha1.NodePool)

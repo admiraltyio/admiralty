@@ -6,7 +6,7 @@ MCSA_URL="$RELEASE_URL/install.yaml"
 kubectl --context cluster1 apply -f "$MCSA_URL"
 kubectl --context cluster2 apply -f "$MCSA_URL"
 # TODO: don't assume the right kubemcsa is installed
-sleep 5 # TODO: fix race condition: kubemcsa assumes pod admission controller is ready (automount webhook)
+sleep 15 # TODO: fix race condition: kubemcsa assumes pod admission controller is ready (automount webhook)
 kubemcsa bootstrap cluster1 cluster1
 kubemcsa bootstrap cluster2 cluster1
 
@@ -24,5 +24,8 @@ kubectl config use-context cluster1 && skaffold run -f test/e2e/agent1/skaffold.
 kubectl config use-context cluster2 && skaffold run -f test/e2e/agent2/skaffold.yaml
 # TODO: skaffold deploy rather than run, because images have already been built for cluster1 (need to pass tagged image names)
 
-argo --context cluster1 submit --serviceaccount argo-workflow --watch config/samples/argo-workflows/hello-world.yaml
-argo --context cluster1 submit --serviceaccount argo-workflow --watch config/samples/argo-workflows/coinflip.yaml
+# switch back to cluster1 for user commands afterward
+# TODO save current context at beginning and return to it
+kubectl config use-context cluster1
+
+argo --context cluster1 submit --serviceaccount argo-workflow --watch config/samples/argo-workflows/blog-scenario-a-multicluster.yaml

@@ -1,6 +1,6 @@
 set -euo pipefail
 
-if (kubectl --context cluster2 get pod | grep hello-world)
+if [ $(kubectl --context cluster2 get pod | wc -l) -gt 1 ]
 then
 	echo "SUCCESS"
 	exit 0

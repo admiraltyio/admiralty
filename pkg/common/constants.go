@@ -19,9 +19,10 @@ package common
 var (
 	AnnotationKeyPrefix = "multicluster.admiralty.io/"
 
-	AnnotationKeyElect = AnnotationKeyPrefix + "elect"
+	AnnotationKeyElect       = AnnotationKeyPrefix + "elect"
+	AnnotationKeyClusterName = AnnotationKeyPrefix + "clustername"
 
-	AnnotationKeySourcePodManifest = AnnotationKeyPrefix + "sourcepod.manifest"
+	AnnotationKeySourcePodManifest = AnnotationKeyPrefix + "sourcepod-manifest"
 
 	AnnotationKeyPrefixProxyPod = AnnotationKeyPrefix + "proxypod-"
 
