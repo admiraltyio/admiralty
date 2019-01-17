@@ -1,5 +1,5 @@
 bases:
-- ../../scheduler
+- ../../config/scheduler
 imageTags:
 - name: quay.io/admiralty/multicluster-scheduler-basic
   newTag: RELEASE

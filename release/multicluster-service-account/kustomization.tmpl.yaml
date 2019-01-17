@@ -1,5 +1,5 @@
 bases:
-- ../../agent/multicluster-service-account
+- ../../config/agent/multicluster-service-account
 imageTags:
 - name: quay.io/admiralty/multicluster-scheduler-agent
   newTag: RELEASE

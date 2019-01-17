@@ -6,18 +6,18 @@ build:
       template: "{{.IMAGE_NAME}}:{{.RELEASE}}"
   artifacts:
   - imageName: quay.io/admiralty/multicluster-scheduler-agent
+    workspace: _out
     docker:
-      dockerfilePath: config/Dockerfile
       buildArgs:
         target: cmd/agent
   - imageName: quay.io/admiralty/multicluster-scheduler-pod-admission-controller
+    workspace: _out
     docker:
-      dockerfilePath: config/Dockerfile
       buildArgs:
         target: cmd/pod-admission-controller
   - imageName: quay.io/admiralty/multicluster-scheduler-basic
+    workspace: _out
     docker:
-      dockerfilePath: config/Dockerfile
       buildArgs:
         target: cmd/scheduler
 deploy:
