@@ -1,0 +1,19 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: singlecluster-parallel-
+spec:
+  entrypoint: singlecluster-parallel
+  templates:
+  - name: singlecluster-parallel
+    steps:
+    - - name: sleep
+        template: sleep
+        withItems: [0, 1, 2, 3, 4, 5, 6, 7, 9, 10]
+  - name: sleep
+    container:
+      image: busybox
+      command: [sleep, 10]
+      resources:
+        requests:
+          cpu: 100m # Note: Argo sidecar adds another 100m

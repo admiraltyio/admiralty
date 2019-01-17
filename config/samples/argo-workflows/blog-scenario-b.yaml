@@ -1,0 +1,36 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  generateName: multicluster-dag-
+spec:
+  entrypoint: multicluster-dag
+  templates:
+  - name: multicluster-dag
+    dag:
+      tasks:
+      - name: A
+        template: sleep
+      - name: B
+        template: sleep-remote
+        arguments:
+          parameters:
+          - name: clustername
+            value: cluster2
+      - name: C
+        dependencies: [A, B]
+        template: sleep
+  - name: sleep
+    container:
+      image: busybox
+      command: [sleep, 10]
+  - name: sleep-remote
+    inputs:
+      parameters:
+      - name: clustername
+    container:
+      image: busybox
+      command: [sleep, 10]
+    metadata:
+      annotations:
+        multicluster.admiralty.io/elect: ""
+        multicluster.admiralty.io/clustername: "{{inputs.parameters.clustername}}"

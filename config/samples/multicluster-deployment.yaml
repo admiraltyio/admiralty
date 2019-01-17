@@ -8,13 +8,17 @@ spec:
       app: nginx
   template:
     metadata:
-      annotations:
-        multicluster.admiralty.io/elect: "true"
       labels:
         app: nginx
+      annotations:
+        multicluster.admiralty.io/elect: ""
     spec:
       containers:
       - name: nginx
         image: nginx
+        resources:
+          requests:
+            cpu: 100m
+            memory: 32Mi
         ports:
         - containerPort: 80
