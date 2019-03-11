@@ -1,31 +1,30 @@
 set -euo pipefail
 
-# Install MCSA and bootstrap cluster1 and cluster2 to import from cluster1 (which will host the control plane)
-RELEASE_URL=https://github.com/admiraltyio/multicluster-service-account/releases/download/v0.2.1
-MCSA_URL="$RELEASE_URL/install.yaml"
-kubectl --context cluster1 apply -f "$MCSA_URL"
-kubectl --context cluster2 apply -f "$MCSA_URL"
-# TODO: don't assume the right kubemcsa is installed
-sleep 15 # TODO: fix race condition: kubemcsa assumes pod admission controller is ready (automount webhook)
-kubemcsa bootstrap cluster1 cluster1
-kubemcsa bootstrap cluster2 cluster1
+source test/e2e/aliases.sh
 
-# Install Argo in cluster1
-kubectl --context cluster1 create ns argo
-kubectl --context cluster1 apply -n argo -f https://raw.githubusercontent.com/argoproj/argo/v2.2.1/manifests/install.yaml
-kubectl --context cluster1 apply -f config/samples/argo-workflows/_service-account.yaml
-# the workflow service account must exist in the other cluster
-kubectl --context cluster2 apply -f config/samples/argo-workflows/_service-account.yaml
+install_bootstrap_multicluster_service_account() {
+	# Install MCSA and bootstrap cluster1 and cluster2 to import from cluster1 (which will host the control plane)
+	RELEASE_URL=https://github.com/admiraltyio/multicluster-service-account/releases/download/v0.3.0
+	MCSA_URL="$RELEASE_URL/install.yaml"
+	k1 apply -f "$MCSA_URL"
+	k2 apply -f "$MCSA_URL"
+	# TODO: don't assume the right kubemcsa is installed
+	kubemcsa bootstrap cluster1 cluster1
+	kubemcsa bootstrap cluster2 cluster1
+}
 
-kubectl config use-context cluster1 && skaffold run -f test/e2e/scheduler/skaffold.yaml
-kustomize build test/e2e/federation | kubectl --context cluster1 apply -f -
-kubectl config use-context cluster1 && skaffold run -f test/e2e/agent1/skaffold.yaml
+install_multicluster_scheduler() {
+	c1 && skaffold run -f test/e2e/scheduler/skaffold.yaml
+	# kustomize build test/e2e/federation | k1 apply -f -
+	c1 && skaffold run -f test/e2e/agent1/skaffold.yaml
 
-kubectl config use-context cluster2 && skaffold run -f test/e2e/agent2/skaffold.yaml
-# TODO: skaffold deploy rather than run, because images have already been built for cluster1 (need to pass tagged image names)
+	c2 && skaffold run -f test/e2e/agent2/skaffold.yaml
+	# TODO: skaffold deploy rather than run, because images have already been built for cluster1 (need to pass tagged image names)
 
-# switch back to cluster1 for user commands afterward
-# TODO save current context at beginning and return to it
-kubectl config use-context cluster1
+	# switch back to cluster1 for user commands afterward
+	# TODO: save current context at beginning and return to it
+	c1
+}
 
-argo --context cluster1 submit --serviceaccount argo-workflow --watch config/samples/argo-workflows/blog-scenario-a-multicluster.yaml
+install_bootstrap_multicluster_service_account
+install_multicluster_scheduler

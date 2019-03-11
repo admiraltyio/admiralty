@@ -70,7 +70,7 @@ If you're already running [multicluster-service-account](https://github.com/admi
 Download the multicluster-service-account manifest and install it in each member cluster:
 
 ```bash
-MCSA_RELEASE_URL=https://github.com/admiraltyio/multicluster-service-account/releases/download/v0.2.1
+MCSA_RELEASE_URL=https://github.com/admiraltyio/multicluster-service-account/releases/download/v0.3.0
 for CLUSTER_NAME in "${MEMBER_CLUSTER_NAMES[@]}"; do
     kubectl --context "$CLUSTER_NAME" apply -f "$MCSA_RELEASE_URL/install.yaml"
 done

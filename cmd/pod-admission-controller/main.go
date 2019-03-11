@@ -18,20 +18,12 @@ package main
 
 import (
 	"log"
-	"os"
 
 	"admiralty.io/multicluster-scheduler/pkg/webhooks/proxypod"
 	"admiralty.io/multicluster-service-account/pkg/config"
-	admissionregistrationv1beta1 "k8s.io/api/admissionregistration/v1beta1"
-	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/sample-controller/pkg/signals"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
-	"sigs.k8s.io/controller-runtime/pkg/webhook"
-	"sigs.k8s.io/controller-runtime/pkg/webhook/admission/builder"
 )
-
-var webhookName = "proxypod.multicluster.admiralty.io"
 
 func main() {
 	cfg, ns, err := config.ConfigAndNamespace()
@@ -44,44 +36,9 @@ func main() {
 		log.Fatalf("cannot create manager: %v", err)
 	}
 
-	w, err := builder.NewWebhookBuilder().
-		Name(webhookName).
-		Mutating().
-		Operations(admissionregistrationv1beta1.Create). // TODO: update (but careful not too proxy the proxy)
-		WithManager(m).
-		ForType(&corev1.Pod{}).
-		Handlers(&proxypod.Handler{}).
-		Build()
+	_, err = proxypod.NewServer(m, ns)
 	if err != nil {
-		log.Fatalf("cannot build webhook: %v", err)
-	}
-
-	deployName := os.Getenv("DEPLOYMENT_NAME")
-
-	s, err := webhook.NewServer(deployName, m, webhook.ServerOptions{
-		Port:    9876, // TODO debug why cannot default to 443
-		CertDir: "/tmp/cert",
-		BootstrapOptions: &webhook.BootstrapOptions{
-			Secret: &types.NamespacedName{
-				Namespace: ns,
-				Name:      deployName + "-cert",
-			},
-			Service: &webhook.Service{
-				Namespace: ns,
-				Name:      deployName,
-				// Selectors should select the pods that runs this webhook server.
-				Selectors: map[string]string{
-					"app": deployName,
-				},
-			},
-		},
-	})
-	if err != nil {
-		log.Fatalf("cannot create server: %v", err)
-	}
-
-	if err := s.Register(w); err != nil {
-		log.Fatalf("cannot register webhook with server: %v", err)
+		log.Fatalf("cannot create proxypod server: %v", err)
 	}
 
 	if err := m.Start(signals.SetupSignalHandler()); err != nil {
