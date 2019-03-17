@@ -10,6 +10,8 @@ spec:
   names:
     categories:
     - observations
+    - observation
+    - obs
     kind: NodePoolObservation
     plural: nodepoolobservations
     shortNames:

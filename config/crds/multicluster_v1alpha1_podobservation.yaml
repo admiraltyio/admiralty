@@ -10,6 +10,8 @@ spec:
   names:
     categories:
     - observations
+    - observation
+    - obs
     kind: PodObservation
     plural: podobservations
     shortNames:
