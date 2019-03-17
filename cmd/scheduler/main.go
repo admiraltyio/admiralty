@@ -21,6 +21,7 @@ import (
 
 	"admiralty.io/multicluster-controller/pkg/cluster"
 	"admiralty.io/multicluster-controller/pkg/manager"
+	"admiralty.io/multicluster-scheduler/pkg/controllers/globalsvc"
 	"admiralty.io/multicluster-scheduler/pkg/controllers/schedule"
 	"admiralty.io/multicluster-scheduler/pkg/scheduler"
 	"admiralty.io/multicluster-service-account/pkg/config"
@@ -35,12 +36,18 @@ func main() {
 	}
 	cl := cluster.New("", cfg, cluster.Options{})
 
+	m := manager.New()
+
 	co, err := schedule.NewController(cl, scheduler.New())
 	if err != nil {
 		log.Fatalf("cannot create schedule controller: %v", err)
 	}
+	m.AddController(co)
 
-	m := manager.New()
+	co, err = globalsvc.NewController(cl)
+	if err != nil {
+		log.Fatalf("cannot create globalsvc controller: %v", err)
+	}
 	m.AddController(co)
 
 	if err := m.Start(signals.SetupSignalHandler()); err != nil {

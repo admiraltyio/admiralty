@@ -193,7 +193,7 @@ func filterAnnotations(annotations map[string]string) (map[string]string, map[st
 	mcAnnotations := make(map[string]string)
 	otherAnnotations := make(map[string]string)
 	for k, v := range annotations {
-		if strings.HasPrefix(k, common.AnnotationKeyPrefix) {
+		if strings.HasPrefix(k, common.KeyPrefix) {
 			mcAnnotations[k] = v
 		} else {
 			otherAnnotations[k] = v

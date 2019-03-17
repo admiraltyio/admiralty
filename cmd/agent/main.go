@@ -26,6 +26,7 @@ import (
 	"admiralty.io/multicluster-scheduler/pkg/controllers/nodepool"
 	"admiralty.io/multicluster-scheduler/pkg/controllers/receive"
 	"admiralty.io/multicluster-scheduler/pkg/controllers/send"
+	"admiralty.io/multicluster-scheduler/pkg/controllers/svcreroute"
 	"admiralty.io/multicluster-service-account/pkg/config"
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -70,6 +71,7 @@ func main() {
 	scheduler := cluster.New("scheduler", cfg, cluster.Options{CacheOptions: cluster.CacheOptions{Namespace: ns}})
 
 	observations := map[runtime.Object]runtime.Object{
+		&v1.Service{}:        &v1alpha1.ServiceObservation{},
 		&v1.Pod{}:            &v1alpha1.PodObservation{},
 		&v1.Node{}:           &v1alpha1.NodeObservation{},
 		&v1alpha1.NodePool{}: &v1alpha1.NodePoolObservation{},
@@ -85,13 +87,20 @@ func main() {
 		m.AddController(co)
 	}
 
-	co, err := receive.NewController(agent, scheduler)
+	decisions := map[runtime.Object]runtime.Object{
+		&v1alpha1.PodDecision{}:     &v1.Pod{},
+		&v1alpha1.ServiceDecision{}: &v1.Service{},
+	}
+
+	for decType, delType := range decisions {
+		co, err := receive.NewController(agent, scheduler, decType, delType)
 	if err != nil {
 		log.Fatalf("cannot create receive controller: %v", err)
 	}
 	m.AddController(co)
+	}
 
-	co, err = feedback.NewController(agent, scheduler, agentClientset)
+	co, err := feedback.NewController(agent, scheduler, agentClientset)
 	if err != nil {
 		log.Fatalf("cannot create feedback controller: %v", err)
 	}
@@ -100,6 +109,12 @@ func main() {
 	co, err = nodepool.NewController(agent)
 	if err != nil {
 		log.Fatalf("cannot create nodepool controller: %v", err)
+	}
+	m.AddController(co)
+
+	co, err = svcreroute.NewController(agent)
+	if err != nil {
+		log.Fatalf("cannot create svcreroute controller: %v", err)
 	}
 	m.AddController(co)
 

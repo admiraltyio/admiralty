@@ -15,7 +15,7 @@ install_bootstrap_multicluster_service_account() {
 
 install_multicluster_scheduler() {
 	c1 && skaffold run -f test/e2e/scheduler/skaffold.yaml
-	# kustomize build test/e2e/federation | k1 apply -f -
+	kustomize build test/e2e/federation | k1 apply -f -
 	c1 && skaffold run -f test/e2e/agent1/skaffold.yaml
 
 	c2 && skaffold run -f test/e2e/agent2/skaffold.yaml

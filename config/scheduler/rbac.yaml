@@ -11,46 +11,14 @@ rules:
 - apiGroups:
   - "multicluster.admiralty.io"
   resources:
+  # decisions
   - poddecisions
-  verbs:
-  - get
-  - list
-  - watch
-  - create
-  - update
-  - patch
-  - delete
-# TODO: less verbs?
-- apiGroups:
-  - "multicluster.admiralty.io"
-  resources:
+  - servicedecisions
+  # observations
   - podobservations
-  verbs:
-  - get
-  - list
-  - watch
-  - create
-  - update
-  - patch
-  - delete
-# TODO: less verbs?
-- apiGroups:
-  - "multicluster.admiralty.io"
-  resources:
   - nodeobservations
-  verbs:
-  - get
-  - list
-  - watch
-  - create
-  - update
-  - patch
-  - delete
-# TODO: less verbs?
-- apiGroups:
-  - "multicluster.admiralty.io"
-  resources:
   - nodepoolobservations
+  - serviceobservations
   verbs:
   - get
   - list
@@ -59,7 +27,6 @@ rules:
   - update
   - patch
   - delete
-# TODO: less verbs?
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -81,46 +48,14 @@ rules:
 - apiGroups:
   - "multicluster.admiralty.io"
   resources:
+  # decisions
   - poddecisions
-  verbs:
-  - get
-  - list
-  - watch
-  - create
-  - update
-  - patch
-  - delete
-# TODO: less verbs?
-- apiGroups:
-  - "multicluster.admiralty.io"
-  resources:
+  - servicedecisions
+  # observations
   - podobservations
-  verbs:
-  - get
-  - list
-  - watch
-  - create
-  - update
-  - patch
-  - delete
-# TODO: less verbs?
-- apiGroups:
-  - "multicluster.admiralty.io"
-  resources:
   - nodeobservations
-  verbs:
-  - get
-  - list
-  - watch
-  - create
-  - update
-  - patch
-  - delete
-# TODO: less verbs?
-- apiGroups:
-  - "multicluster.admiralty.io"
-  resources:
   - nodepoolobservations
+  - serviceobservations
   verbs:
   - get
   - list
@@ -129,4 +64,3 @@ rules:
   - update
   - patch
   - delete
-# TODO: less verbs?

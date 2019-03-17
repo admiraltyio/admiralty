@@ -81,7 +81,7 @@ func NewWebhook(mgr manager.Manager) (*admission.Webhook, error) {
 	return builder.NewWebhookBuilder().
 		Name(webhookName).
 		Mutating().
-		Operations(admissionregistrationv1beta1.Create). // TODO: update (but careful not too proxy the proxy)
+		Operations(admissionregistrationv1beta1.Create). // TODO: update (but careful not to proxy the proxy)
 		WithManager(mgr).
 		ForType(&corev1.Pod{}).
 		Handlers(&Handler{}).

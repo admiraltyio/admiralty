@@ -19,7 +19,7 @@ package schedule
 import (
 	"context"
 	"fmt"
-	"log"
+	"strings"
 
 	"admiralty.io/multicluster-controller/pkg/cluster"
 	"admiralty.io/multicluster-controller/pkg/controller"
@@ -90,7 +90,6 @@ func (r *reconciler) Reconcile(req reconcile.Request) (reconcile.Result, error) 
 		// but it could be a delegate pod, in which case we want to remove the corresponding pod decision from the pending map
 		ref := reference.GetMulticlusterControllerOf(proxyPod)
 		if ref != nil && ref.Kind == "PodDecision" {
-			log.Printf("deleting pending pod decision %s", ref.Name)
 			delete(r.pendingDecisions, ref.Name)
 		}
 
@@ -140,11 +139,22 @@ func (r *reconciler) makeDelegatePod(proxyPodObs *v1alpha1.PodObservation) (*cor
 	annotations[common.AnnotationKeyProxyPodNamespace] = proxyPod.Namespace
 	annotations[common.AnnotationKeyProxyPodName] = proxyPod.Name
 
+	labels := make(map[string]string)
+	for k, v := range srcPod.Labels {
+		// we need to change the labels so as not to confuse potential controller of proxy pod, e.g., replica set
+		// if the original label key has a domain prefix, replace it with ours
+		// if it doesn't, add our domain prefix
+		keySplit := strings.Split(k, "/") // note: assume no empty key (enforced by Kubernetes)
+		newKey := common.KeyPrefix + keySplit[len(keySplit)-1]
+		labels[newKey] = v
+	}
+
 	delegatePod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        proxyPodObs.Name,
 			Namespace:   proxyPod.Namespace, // already defaults to "default" (vs. could be empty in srcPod)
 			ClusterName: proxyPod.ClusterName,
+			Labels:      labels,
 			Annotations: annotations},
 		Spec: *srcPod.Spec.DeepCopy()}
 
@@ -254,7 +264,6 @@ func (r *reconciler) createDelegatePodDecision(delegatePod *corev1.Pod, proxyPod
 	if err := r.client.Create(context.TODO(), delegatePodDec); err != nil {
 		return fmt.Errorf("cannot create delegate pod decision %s in namespace %s: %v", delegatePodDec.Name, delegatePodDec.Namespace, err)
 	}
-	log.Printf("adding pending pod decision %s", delegatePodDec.Name)
 	r.pendingDecisions[delegatePodDec.Name] = delegatePodDec
 	return nil
 }

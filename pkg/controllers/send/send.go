@@ -27,6 +27,7 @@ import (
 	"admiralty.io/multicluster-controller/pkg/reference"
 	"admiralty.io/multicluster-scheduler/pkg/apis"
 	"admiralty.io/multicluster-scheduler/pkg/apis/multicluster/v1alpha1"
+	"admiralty.io/multicluster-scheduler/pkg/common"
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -181,6 +182,8 @@ func (r *reconciler) makeObservation(live runtime.Object, obsNamespacedName type
 		obs = &v1alpha1.NodeObservation{}
 	case *v1alpha1.NodePool:
 		obs = &v1alpha1.NodePoolObservation{}
+	case *v1.Service:
+		obs = &v1alpha1.ServiceObservation{}
 	default:
 		return nil, fmt.Errorf("type %T cannot be observed", live)
 	}
@@ -197,6 +200,16 @@ func (r *reconciler) makeObservation(live runtime.Object, obsNamespacedName type
 	obsMeta.SetNamespace(obsNamespacedName.Namespace)
 	obsMeta.SetName(obsNamespacedName.Name)
 
+	labels := map[string]string{
+		common.LabelKeyOriginalName:        liveMeta.GetName(),
+		common.LabelKeyOriginalNamespace:   liveMeta.GetNamespace(),
+		common.LabelKeyOriginalClusterName: liveMeta.GetClusterName(),
+	}
+	for k, v := range liveMeta.GetLabels() {
+		labels[k] = v
+	}
+	obsMeta.SetLabels(labels)
+
 	return obs, nil
 }
 
@@ -212,6 +225,8 @@ func liveStateEqual(obs runtime.Object, live runtime.Object) (bool, error) {
 	case *v1alpha1.NodeObservation:
 		return reflect.DeepEqual(live, obs.Status.LiveState), nil
 	case *v1alpha1.NodePoolObservation:
+		return reflect.DeepEqual(live, obs.Status.LiveState), nil
+	case *v1alpha1.ServiceObservation:
 		return reflect.DeepEqual(live, obs.Status.LiveState), nil
 	default:
 		return false, fmt.Errorf("type %T is not an observation", obs)
@@ -240,6 +255,13 @@ func setLiveState(obs runtime.Object, live runtime.Object) error {
 			return fmt.Errorf("type %T is not type %T's live form", live, obs)
 		}
 		obs.Status = v1alpha1.NodePoolObservationStatus{LiveState: live}
+		return nil
+	case *v1alpha1.ServiceObservation:
+		live, ok := live.(*v1.Service)
+		if !ok {
+			return fmt.Errorf("type %T is not type %T's live form", live, obs)
+		}
+		obs.Status = v1alpha1.ServiceObservationStatus{LiveState: live}
 		return nil
 	default:
 		return fmt.Errorf("type %T is not an observation", obs)

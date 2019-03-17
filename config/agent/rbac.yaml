@@ -25,6 +25,7 @@ rules:
   - ""
   resources:
   - pods
+  - services
   verbs:
   - get
   - list
@@ -44,6 +45,7 @@ rules:
   - ""
   resources:
   - nodes
+  - endpoints
   verbs:
   - get
   - list

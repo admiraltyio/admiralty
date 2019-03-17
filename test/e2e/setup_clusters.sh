@@ -4,7 +4,7 @@ set -euo pipefail
 PROJECT=$(gcloud config get-value project)
 REGION=$(gcloud config get-value compute/zone)
 for NAME in cluster1 cluster2; do
-	gcloud container clusters create $NAME --preemptible
+	gcloud container clusters create $NAME --preemptible --enable-ip-alias
 	gcloud container clusters get-credentials $NAME
 	CONTEXT=gke_$PROJECT"_"$REGION"_"$NAME
 	sed -i -e "s/$CONTEXT/$NAME/g" ~/.kube/config
