@@ -94,7 +94,7 @@ setup() {
 
 	cd ..
 
-	rm -r clustermesh-tools
+	rm -rf clustermesh-tools
 }
 
 test() {
