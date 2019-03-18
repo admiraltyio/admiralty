@@ -94,10 +94,10 @@ func main() {
 
 	for decType, delType := range decisions {
 		co, err := receive.NewController(agent, scheduler, decType, delType)
-	if err != nil {
-		log.Fatalf("cannot create receive controller: %v", err)
-	}
-	m.AddController(co)
+		if err != nil {
+			log.Fatalf("cannot create receive controller: %v", err)
+		}
+		m.AddController(co)
 	}
 
 	co, err := feedback.NewController(agent, scheduler, agentClientset)
