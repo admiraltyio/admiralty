@@ -26,5 +26,7 @@ spec:
           requests:
             cpu: 100m
             memory: 20Mi
+        securityContext:
+          runAsUser: 1000
       serviceAccountName: multicluster-scheduler-agent
       terminationGracePeriodSeconds: 10

@@ -31,6 +31,8 @@ spec:
           requests:
             cpu: 100m
             memory: 20Mi
+        securityContext:
+          runAsUser: 1000
         ports:
         - containerPort: 9876
         volumeMounts:
