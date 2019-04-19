@@ -4,7 +4,7 @@ source test/e2e/aliases.sh
 
 install_bootstrap_multicluster_service_account() {
 	# Install MCSA and bootstrap cluster1 and cluster2 to import from cluster1 (which will host the control plane)
-	RELEASE_URL=https://github.com/admiraltyio/multicluster-service-account/releases/download/v0.3.0
+	RELEASE_URL=https://github.com/admiraltyio/multicluster-service-account/releases/download/v0.3.1
 	MCSA_URL="$RELEASE_URL/install.yaml"
 	k1 apply -f "$MCSA_URL"
 	k2 apply -f "$MCSA_URL"

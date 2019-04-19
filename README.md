@@ -77,7 +77,7 @@ If you're already running [multicluster-service-account](https://github.com/admi
 Download the multicluster-service-account manifest and install it in each member cluster:
 
 ```bash
-MCSA_RELEASE_URL=https://github.com/admiraltyio/multicluster-service-account/releases/download/v0.3.0
+MCSA_RELEASE_URL=https://github.com/admiraltyio/multicluster-service-account/releases/download/v0.3.1
 for CLUSTER_NAME in "${MEMBER_CLUSTER_NAMES[@]}"; do
     kubectl --context "$CLUSTER_NAME" apply -f "$MCSA_RELEASE_URL/install.yaml"
 done
@@ -260,7 +260,7 @@ import (
   "admiralty.io/multicluster-service-account/pkg/config"
   appsv1 "k8s.io/api/apps/v1"
   corev1 "k8s.io/api/core/v1"
-  _ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
+  _ "k8s.io/client-go/plugin/pkg/client/auth"
   "k8s.io/sample-controller/pkg/signals"
 )
 
