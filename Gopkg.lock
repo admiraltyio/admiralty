@@ -25,14 +25,6 @@
   version = "v0.2.0"
 
 [[projects]]
-  digest = "1:5ad08b0e14866764a6d7475eb11c9cf05cad9a52c442593bdfa544703ff77f61"
-  name = "cloud.google.com/go"
-  packages = ["compute/metadata"]
-  pruneopts = "UT"
-  revision = "0ebda48a7f143b1cce9eb37a8c1106ac762a3430"
-  version = "v0.34.0"
-
-[[projects]]
   branch = "master"
   digest = "1:d6afaeed1502aa28e80a4ed0981d570ad91b2579193404256ce672ed0a609e0d"
   name = "github.com/beorn7/perks"
@@ -510,14 +502,11 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:9dc1722414ac75f164c0dde25439fc9bf8ba3bdf22fbcdd93f4ecab392df1cd3"
+  digest = "1:0977fc80383ba48e634c807e8e47d4ceab54759944587c2233bf3c624bed91cc"
   name = "golang.org/x/oauth2"
   packages = [
     ".",
-    "google",
     "internal",
-    "jws",
-    "jwt",
   ]
   pruneopts = "UT"
   revision = "fd3eaa146cbb5c89ce187c275fb79bd3a36a5ffc"
@@ -597,16 +586,13 @@
   revision = "68c5ac90f574c3cf0e181d3cdde7cc60cb38fa9b"
 
 [[projects]]
-  digest = "1:fa026a5c59bd2df343ec4a3538e6288dcf4e2ec5281d743ae82c120affe6926a"
+  digest = "1:6f3bd49ddf2e104e52062774d797714371fac1b8bddfd8e124ce78e6b2264a10"
   name = "google.golang.org/appengine"
   packages = [
-    ".",
     "internal",
-    "internal/app_identity",
     "internal/base",
     "internal/datastore",
     "internal/log",
-    "internal/modules",
     "internal/remote_api",
     "internal/urlfetch",
     "urlfetch",
@@ -760,7 +746,7 @@
   version = "kubernetes-1.12.3"
 
 [[projects]]
-  digest = "1:1bc4bf3586feabadefb550eb2636cc092c0621e135dea641ccb9944d490cb95b"
+  digest = "1:856ed15038abdf8f6df3b8636ce78cbe009fc24220b2fac3ab22791dc4653f13"
   name = "k8s.io/client-go"
   packages = [
     "discovery",
@@ -803,11 +789,9 @@
     "pkg/apis/clientauthentication/v1beta1",
     "pkg/version",
     "plugin/pkg/client/auth/exec",
-    "plugin/pkg/client/auth/gcp",
     "rest",
     "rest/watch",
     "restmapper",
-    "third_party/forked/golang/template",
     "tools/auth",
     "tools/cache",
     "tools/clientcmd",
@@ -830,7 +814,6 @@
     "util/flowcontrol",
     "util/homedir",
     "util/integer",
-    "util/jsonpath",
     "util/retry",
     "util/workqueue",
   ]
@@ -973,18 +956,19 @@
     "github.com/go-test/deep",
     "github.com/onsi/gomega",
     "golang.org/x/net/context",
+    "gopkg.in/inf.v0",
     "k8s.io/api/admissionregistration/v1beta1",
     "k8s.io/api/core/v1",
     "k8s.io/apimachinery/pkg/api/errors",
     "k8s.io/apimachinery/pkg/api/meta",
     "k8s.io/apimachinery/pkg/api/resource",
     "k8s.io/apimachinery/pkg/apis/meta/v1",
+    "k8s.io/apimachinery/pkg/apis/meta/v1/unstructured",
     "k8s.io/apimachinery/pkg/runtime",
     "k8s.io/apimachinery/pkg/runtime/schema",
     "k8s.io/apimachinery/pkg/types",
     "k8s.io/client-go/kubernetes",
     "k8s.io/client-go/kubernetes/scheme",
-    "k8s.io/client-go/plugin/pkg/client/auth/gcp",
     "k8s.io/client-go/rest",
     "k8s.io/client-go/tools/remotecommand",
     "k8s.io/code-generator/cmd/deepcopy-gen",

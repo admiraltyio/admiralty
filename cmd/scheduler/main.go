@@ -25,7 +25,6 @@ import (
 	"admiralty.io/multicluster-scheduler/pkg/controllers/schedule"
 	"admiralty.io/multicluster-scheduler/pkg/scheduler"
 	"admiralty.io/multicluster-service-account/pkg/config"
-	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	"k8s.io/sample-controller/pkg/signals"
 )
 
