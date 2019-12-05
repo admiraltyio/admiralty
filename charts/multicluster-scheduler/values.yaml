@@ -1,0 +1,36 @@
+global:
+  nameOverride: ""
+  fullnameOverride: ""
+
+  useClusterNamespaces: false
+
+  clusters:
+  #  - name: c1
+  #    clusterNamespace: "" # (default: namespace where multicluster-scheduler is deployed)
+  #    memberships:
+  #      - federationName: default
+  #  - name: c2
+  #    clusterNamespace: "" # (default: namespace where multicluster-scheduler is deployed)
+  #    memberships:
+  #      - federationName: default
+
+  # HACK .Chart isn't passed down to child charts
+  # so we cherry-pick the fields that they need as globals
+  # User, DO NOT override!
+  chart:
+    name: multicluster-scheduler
+    version: "0.1.0"
+    appVersion: "0.4.0"
+
+agent:
+  enabled: false
+  # see subchart's values.yaml for additional variables
+
+webhook:
+  enabled: false
+
+scheduler:
+  enabled: false
+
+clusters:
+  enabled: false

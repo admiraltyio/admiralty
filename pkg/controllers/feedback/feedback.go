@@ -22,15 +22,18 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+	"time"
 
 	"admiralty.io/multicluster-controller/pkg/cluster"
 	"admiralty.io/multicluster-controller/pkg/controller"
+	"admiralty.io/multicluster-controller/pkg/patterns"
+	"admiralty.io/multicluster-controller/pkg/patterns/gc"
 	"admiralty.io/multicluster-controller/pkg/reconcile"
-	"admiralty.io/multicluster-scheduler/pkg/apis"
 	"admiralty.io/multicluster-scheduler/pkg/apis/multicluster/v1alpha1"
 	"admiralty.io/multicluster-scheduler/pkg/common"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -38,7 +41,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-func NewController(agent *cluster.Cluster, scheduler *cluster.Cluster, agentClientset *kubernetes.Clientset) (*controller.Controller, error) {
+func NewController(agent *cluster.Cluster, scheduler *cluster.Cluster, observationNamespace string,
+	agentClientset *kubernetes.Clientset) (*controller.Controller, error) {
+
 	agentClient, err := agent.GetDelegatingClient()
 	if err != nil {
 		return nil, fmt.Errorf("getting delegating client for agent cluster: %v", err)
@@ -51,18 +56,20 @@ func NewController(agent *cluster.Cluster, scheduler *cluster.Cluster, agentClie
 	co := controller.New(&reconciler{
 		agent:          agentClient,
 		scheduler:      schedulerClient,
-		agentContext:   agent.Name,
 		agentClientset: agentClientset,
 		agentConfig:    agent.Config,
 	}, controller.Options{})
 
-	if err := apis.AddToScheme(scheduler.GetScheme()); err != nil {
-		return nil, fmt.Errorf("adding APIs to scheduler cluster's scheme: %v", err)
-	}
-	if err := co.WatchResourceReconcileObject(scheduler, &v1alpha1.PodObservation{}, controller.WatchOptions{}); err != nil {
+	if err := co.WatchResourceReconcileObject(scheduler, &v1alpha1.PodObservation{}, controller.WatchOptions{
+		Namespace:     observationNamespace,
+		LabelSelector: labels.SelectorFromValidatedSet(labels.Set{gc.LabelParentClusterName: agent.GetClusterName()}),
+		CustomPredicate: func(obj interface{}) bool {
+			podObs := obj.(*v1alpha1.PodObservation)
+			return podObs.Status.DelegateState != nil
+		},
+	}); err != nil {
 		return nil, fmt.Errorf("setting up pod observation watch on scheduler cluster: %v", err)
 	}
-	// TODO? watch proxy pod with custom handler
 
 	return co, nil
 }
@@ -70,46 +77,36 @@ func NewController(agent *cluster.Cluster, scheduler *cluster.Cluster, agentClie
 type reconciler struct {
 	agent          client.Client
 	scheduler      client.Client
-	agentContext   string
 	agentConfig    *rest.Config
 	agentClientset *kubernetes.Clientset
 }
 
 func (r *reconciler) Reconcile(req reconcile.Request) (reconcile.Result, error) {
 	podObs := &v1alpha1.PodObservation{}
-	if err := r.scheduler.Get(context.TODO(), req.NamespacedName, podObs); err != nil {
+	if err := r.scheduler.Get(context.Background(), req.NamespacedName, podObs); err != nil {
 		if !errors.IsNotFound(err) {
 			return reconcile.Result{}, fmt.Errorf("cannot get pod observation %s in namespace %s in scheduler cluster: %v", req.Name, req.Namespace, err)
 		}
 		return reconcile.Result{}, nil
 	}
-	delegatePod := podObs.Status.LiveState
+	delegatePod := podObs.Status.DelegateState // not nil thanks to watchoptions custompredicate
 
-	clusterName, ok := delegatePod.Annotations[common.AnnotationKeyProxyPodClusterName]
+	proxyPodNs, ok := podObs.Labels[gc.LabelParentNamespace]
 	if !ok {
-		// not a multicluster pod
-		return reconcile.Result{}, nil
+		return reconcile.Result{}, fmt.Errorf("pod observation %s in namespace %s in scheduler cluster is missing label %s",
+			req.Name, req.Namespace, gc.LabelParentNamespace)
 	}
-	if clusterName != r.agentContext {
-		// request for other cluster, do nothing
-		// TODO: filter upstream (with Watch predicate)
-		return reconcile.Result{}, nil
-	}
-	ns, ok := delegatePod.Annotations[common.AnnotationKeyProxyPodNamespace]
+	proxyPodName, ok := podObs.Labels[gc.LabelParentName]
 	if !ok {
-		// not a multicluster pod
-		return reconcile.Result{}, nil
+		return reconcile.Result{}, fmt.Errorf("pod observation %s in namespace %s in scheduler cluster is missing label %s",
+			req.Name, req.Namespace, gc.LabelParentName)
 	}
-	name, ok := delegatePod.Annotations[common.AnnotationKeyProxyPodName]
-	if !ok {
-		// not a multicluster pod
-		return reconcile.Result{}, nil
-	}
+	// TODO use controller ref instead?
 
 	proxyPod := &corev1.Pod{}
-	if err := r.agent.Get(context.TODO(), types.NamespacedName{Namespace: ns, Name: name}, proxyPod); err != nil {
+	if err := r.agent.Get(context.Background(), types.NamespacedName{Namespace: proxyPodNs, Name: proxyPodName}, proxyPod); err != nil {
 		if !errors.IsNotFound(err) {
-			return reconcile.Result{}, fmt.Errorf("cannot get proxy pod %s in namespace %s in agent cluster: %v", name, ns, err)
+			return reconcile.Result{}, fmt.Errorf("cannot get proxy pod %s in namespace %s in agent cluster: %v", proxyPodName, proxyPodNs, err)
 		}
 		return reconcile.Result{}, nil
 	}
@@ -122,7 +119,12 @@ func (r *reconciler) Reconcile(req reconcile.Request) (reconcile.Result, error) 
 			mcProxyPodAnnotations[k] = v
 		}
 		proxyPod.Annotations = mcProxyPodAnnotations
-		if err := r.agent.Update(context.TODO(), proxyPod); err != nil {
+		if err := r.agent.Update(context.Background(), proxyPod); err != nil {
+			if patterns.IsOptimisticLockError(err) {
+				// TODO watch proxy pods instead, to requeue when the cache is updated
+				oneSec, _ := time.ParseDuration("1s")
+				return reconcile.Result{RequeueAfter: oneSec}, nil
+			}
 			return reconcile.Result{}, fmt.Errorf("cannot update proxy pod %s in namespace %s in agent cluster: %v", proxyPod.Name, proxyPod.Namespace, err)
 		}
 	}

@@ -1,14 +1,13 @@
+#!/usr/bin/env bash
 set -euo pipefail
 
-RELEASE="$1"
+VERSION="$1"
 
-echo "codegen"
-hack/codegen.sh
 echo "test"
 test/test.sh
 echo "build"
-build/build.sh
+build/build.sh "$VERSION"
 echo "e2e test"
-test/e2e/e2e.sh
+test/e2e/e2e.sh "$VERSION"
 echo "release"
-release/release.sh $RELEASE
+release/release.sh "$VERSION"

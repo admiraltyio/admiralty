@@ -60,7 +60,10 @@ func NewServer(mgr manager.Manager, namespace string) (*webhook.Server, error) {
 				Name:      deployName,
 				// Selectors should select the pods that runs this webhook server.
 				Selectors: map[string]string{
-					"app": deployName,
+					"app.kubernetes.io/name": deployName,
+					// HACK: there should be more here (cf. selectorLabels in helm chart)
+					// we could get the labels using the downward API, just like we get DEPLOYMENT_NAME
+					// but this won't be necessary once we stop using BootstrapOptions
 				},
 			},
 		},
@@ -84,7 +87,7 @@ func NewWebhook(mgr manager.Manager) (*admission.Webhook, error) {
 		Operations(admissionregistrationv1beta1.Create). // TODO: update (but careful not to proxy the proxy)
 		WithManager(mgr).
 		ForType(&corev1.Pod{}).
-		Handlers(&Handler{}).
+		Handlers(&Handler{mutator: mutator{}}).
 		FailurePolicy(admissionregistrationv1beta1.Fail).
 		NamespaceSelector(&metav1.LabelSelector{MatchLabels: map[string]string{"multicluster-scheduler": "enabled"}}).
 		Build()
@@ -93,6 +96,7 @@ func NewWebhook(mgr manager.Manager) (*admission.Webhook, error) {
 type Handler struct {
 	decoder atypes.Decoder
 	client  client.Client
+	mutator mutator
 }
 
 func (h *Handler) Handle(ctx context.Context, req atypes.Request) atypes.Response {
@@ -102,31 +106,45 @@ func (h *Handler) Handle(ctx context.Context, req atypes.Request) atypes.Respons
 		return admission.ErrorResponse(http.StatusBadRequest, err)
 	}
 
-	if _, ok := srcPod.Annotations[common.AnnotationKeyElect]; !ok {
-		// not a multicluster pod
-		return admission.PatchResponse(srcPod, srcPod)
-	}
-
-	srcPodManifest, err := yaml.Marshal(srcPod)
-	if err != nil {
+	proxyPod := srcPod.DeepCopy()
+	if err := h.mutator.mutate(proxyPod); err != nil {
 		return admission.ErrorResponse(http.StatusInternalServerError, err)
 	}
+	return admission.PatchResponse(srcPod, proxyPod)
+}
 
-	proxyPod := srcPod.DeepCopy()
-	// proxyPod.Annotations is not nil because we checked it contains AnnotationKeyElect
-	proxyPod.Annotations[common.AnnotationKeySourcePodManifest] = string(srcPodManifest)
+type mutator struct {
+}
 
-	for i, c := range proxyPod.Spec.Containers { // same number of containers because of jsonpatch bug
-		proxyPod.Spec.Containers[i] = corev1.Container{
+func (m mutator) mutate(pod *corev1.Pod) error {
+	if _, ok := pod.Annotations[common.AnnotationKeyElect]; !ok {
+		// not a multicluster pod
+		return nil
+	}
+
+	srcPodManifest, err := yaml.Marshal(pod)
+	if err != nil {
+		return err
+	}
+
+	// pod.Annotations is not nil because we checked it contains AnnotationKeyElect
+	pod.Annotations[common.AnnotationKeySourcePodManifest] = string(srcPodManifest)
+
+	for i, c := range pod.Spec.Containers {
+		pod.Spec.Containers[i] = corev1.Container{
 			Name:    c.Name,
-			Image:   "busybox",
-			Command: []string{"sh", "-c", "trap 'exit 0' SIGUSR1; trap 'exit 1' SIGUSR2; (while sleep 3600; do :; done) & wait"}}
+			Image:   image,
+			Command: command}
 		// the feedback controller will send SIGUSR1 or SIGUSR2 when the delegate pod succeeds or fails, resp.
 	}
 	// TODO: add resource reqs/lims + other best practices
+	// TODO!!! remove scheduling prefs
 
-	return admission.PatchResponse(srcPod, proxyPod)
+	return nil
 }
+
+var image = "busybox"
+var command = []string{"sh", "-c", "trap 'exit 0' SIGUSR1; trap 'exit 1' SIGUSR2; (while sleep 3600; do :; done) & wait"}
 
 // Handler implements inject.Client.
 // A client will be automatically injected.

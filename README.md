@@ -9,26 +9,9 @@ Multicluster-scheduler is a system of Kubernetes controllers that intelligently 
 
 Check out [Admiralty's blog post](https://admiralty.io/blog/running-argo-workflows-across-multiple-kubernetes-clusters/) demonstrating how to run an Argo workflow across clusters to better utilize resources and combine data from different regions or clouds.
 
-## How it Works
-
-![](doc/multicluster-scheduler-sequence-diagram.svg)
-
-Multicluster-scheduler is a system of Kubernetes controllers managed by the **scheduler**, deployed in any cluster, and its **agents**, deployed in the member clusters. The scheduler manages two controllers: the eponymous scheduler controller and the global service controller. Each agent manages six controllers: pod admission, service reroute, observations, decisions, feedback, and node pool.
-
-1. The **pod admission controller**, a [dynamic, mutating admission webhook](https://kubernetes.io/docs/reference/access-authn-authz/extensible-admission-controllers/), intercepts pod creation requests. If a pod is annotated with `multicluster.admiralty.io/elect=""`, its original manifest is saved as an annotation, and its containers are replaced by **proxies** that simply await success or failure signals from the feedback controller (see below).
-1. The **service reroute controller** modifies services whose endpoints target proxy pods. The keys of their label selectors are prefixed with `multicluster.admiralty.io/`, to match corresponding **delegate** pods (see below). Also, the services are annotated with `io.cilium/global-service=true`, to be load-balanced across a Cilium cluster mesh.
-1. The **observations controller**, a [multi-cluster controller](https://github.com/admiraltyio/multicluster-controller), watches pods (including proxy pods), services (including global services), nodes, and node pools (created by the node pool controller, see below) in the agent's cluster and reconciles corresponding **observations** in the scheduler's cluster. Observations are images of the source objects' states.
-1. The **scheduler** watches proxy pod observations and reconciles delegate pod **decisions**, all in its own cluster. It decides target clusters based on the other observations. The scheduler doesn't push anything to the member clusters.
-1. The **global service controller** watches global service observations (observations of services annotated with `io.cilium/global-service=true`, either by the service reroute controller or by another tool or user) and reconciles global service decisions (copies of the originals), in all clusters of the federation.
-1. The **decisions controller**, another multi-cluster controller, watches pod and service decisions in the scheduler's cluster and reconciles corresponding delegates in the agent's cluster.
-1. The **feedback controller** watches delegate pod observations and reconciles the corresponding proxy pods. If a delegate pod is annotated (e.g., with Argo outputs), the annotations are replicated upstream, into the corresponding proxy pod. When a delegate pod succeeds or fails, the controller kills the corresponding proxy pod's container with the proper signal. The feedback controller maintains the contract between proxy pods and their controllers, e.g., replica sets or Argo workflows.
-1. The **node pool controller** automatically creates **node pool** objects in the agent's cluster. In GKE and AKS, it uses the `cloud.google.com/gke-nodepool` or `agentpool` label, respectively; in the absence of those labels, a default node pool object is created. Min/max node counts and pricing information can be updated by the user, or controlled by other tools. Custom node pool objects can also be created using label selectors. Node pool information can be used for scheduling.
-
-Observations, decisions, and node pools are [custom resources](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/). Node pools are defined (by CRDs) in each member cluster, whereas all observations and decisions are only defined in the scheduler's cluster.
-
 ## Getting Started
 
-We assume that you are a cluster admin for two clusters, associated with, e.g., the contexts "cluster1" and "cluster2" in your kubeconfig. We're going to install a basic scheduler in cluster1 and agents in cluster1 and cluster2, but the scripts can easily be adapted for other configurations. Then, we will deploy a multi-cluster NGINX.
+We assume that you are a cluster admin for two clusters, associated with, e.g., the contexts "cluster1" and "cluster2" in your kubeconfig. We're going to install a basic scheduler in cluster1 and agents in cluster1 and cluster2. Then, we will deploy a multi-cluster NGINX.
 
 ```bash
 CLUSTER1=cluster1 # change me
@@ -41,97 +24,72 @@ CLUSTER2=cluster2 # change me
 
 For cross-cluster service calls, multicluster-scheduler relies on a Cilium cluster mesh and global services. If you need this feature, [install Cilium](http://docs.cilium.io/en/stable/gettingstarted/#installation) and [set up a cluster mesh](http://docs.cilium.io/en/stable/gettingstarted/clustermesh/). If you install Cilium later, you may have to restart pods.
 
-#### Scheduler
+#### Helm
 
-Choose a cluster to host the scheduler, download the basic scheduler's manifest and install it:
+The Helm (v3) chart isn't hosted yet, so you need to clone this repository and run:
 
 ```bash
-SCHEDULER_CLUSTER_NAME="$CLUSTER1"
-RELEASE_URL=https://github.com/admiraltyio/multicluster-scheduler/releases/download/v0.3.0
-kubectl config use-context "$SCHEDULER_CLUSTER_NAME"
-kubectl apply -f "$RELEASE_URL/scheduler.yaml"
+helm install multicluster-scheduler charts/multicluster-scheduler \
+    --context $CLUSTER1 \
+    -f test/e2e/single-namespace/values-cluster1.yaml
+helm install multicluster-scheduler charts/multicluster-scheduler \
+    --context $CLUSTER2 \
+    -f test/e2e/single-namespace/values-cluster2.yaml
 ```
 
-#### Federation
+Note: the Helm chart is flexible enough to configure multiple federations and/or refine RBAC so clusters can't see each other's observations. While we work on properly documenting the chart, feel free reach out and/or check out the chart's own [values.yaml](charts/multicluster-scheduler/values.yaml), and some example `values.yaml` files under [test/e2e](test/e2e).
 
-In the same cluster as the scheduler, create a namespace for the federation and, in it, a service account and role binding for each member cluster. The scheduler's cluster can be a member too.
+#### Service Account Exchange
 
-```bash
-FEDERATION_NAMESPACE=foo
-kubectl create namespace "$FEDERATION_NAMESPACE"
-MEMBER_CLUSTER_NAMES=("$CLUSTER1" "$CLUSTER2") # Add as many member clusters as you want.
-for CLUSTER_NAME in "${MEMBER_CLUSTER_NAMES[@]}"; do
-    kubectl create serviceaccount "$CLUSTER_NAME" \
-        -n "$FEDERATION_NAMESPACE"
-    kubectl create rolebinding "$CLUSTER_NAME" \
-        -n "$FEDERATION_NAMESPACE" \
-        --serviceaccount "$FEDERATION_NAMESPACE:$CLUSTER_NAME" \
-        --clusterrole multicluster-scheduler-member
-done
-```
+For agents to talk to the scheduler across cluster boundaries (via custom resource definitions, cf. [How it Works](#how-it-works)), we need to export service accounts in the scheduler's cluster as kubeconfig files and save those files inside secrets in the agents' clusters.
 
-#### Multicluster-Service-Account
-
-If you're already running [multicluster-service-account](https://github.com/admiraltyio/multicluster-service-account) in each member cluster, and the scheduler's cluster is known to them as `$SCHEDULER_CLUSTER_NAME`, you can skip this step and [install the agents](#agent). Otherwise, read on.
-
-Download the multicluster-service-account manifest and install it in each member cluster:
+Luckily, the `kubemcsa export` command of [multicluster-service-account](https://github.com/admiraltyio/multicluster-service-account#you-might-not-need-multicluster-service-account) can prepare the secrets for us. First, install kubemcsa (you don't need to deploy multicluster-service-account):
 
 ```bash
-MCSA_RELEASE_URL=https://github.com/admiraltyio/multicluster-service-account/releases/download/v0.3.1
-for CLUSTER_NAME in "${MEMBER_CLUSTER_NAMES[@]}"; do
-    kubectl --context "$CLUSTER_NAME" apply -f "$MCSA_RELEASE_URL/install.yaml"
-done
-```
-
-Then, download the kubemcsa binary and run the bootstrap command to allow member clusters to import service accounts from the scheduler's cluster:
-
-```bash
+MCSA_RELEASE_URL=https://github.com/admiraltyio/multicluster-service-account/releases/download/v0.6.1
 OS=linux # or darwin (i.e., OS X) or windows
 ARCH=amd64 # if you're on a different platform, you must know how to build from source
 curl -Lo kubemcsa "$MCSA_RELEASE_URL/kubemcsa-$OS-$ARCH"
 chmod +x kubemcsa
-sudo mv kubemcsa /usr/local/bin
-
-for CLUSTER_NAME in "${MEMBER_CLUSTER_NAMES[@]}"; do
-    kubemcsa bootstrap "$CLUSTER_NAME" "$SCHEDULER_CLUSTER_NAME"
-done
 ```
 
-#### Agent
-
-Download the agent manifest and install it in each member cluster:
+Then, run `kubemcsa export` to generate templates for secrets containing kubeconfigs equivalent to the `c1` and `c2` service accounts created by Helm in cluster1, and apply the templates with kubectl in cluster1 and cluster2, respectively:
 
 ```bash
-curl -LO $RELEASE_URL/agent.yaml
-for CLUSTER_NAME in "${MEMBER_CLUSTER_NAMES[@]}"; do
-    sed -e "s/SCHEDULER_CLUSTER_NAME/$SCHEDULER_CLUSTER_NAME/g" \
-        -e "s/FEDERATION_NAMESPACE/$FEDERATION_NAMESPACE/g" \
-        -e "s/CLUSTER_NAME/$CLUSTER_NAME/g" \
-        agent.yaml > "agent-$CLUSTER_NAME.yaml"
-    kubectl --context "$CLUSTER_NAME" apply -f "agent-$CLUSTER_NAME.yaml"
-done
+./kubemcsa export --context $CLUSTER1 c1 --as remote | kubectl --context $CLUSTER1 apply -f -
+./kubemcsa export --context $CLUSTER1 c2 --as remote | kubectl --context $CLUSTER2 apply -f -
 ```
 
-Check that node pool objects have been created in the agents' clusters and observations appear in the scheduler's cluster:
+Note: you may wonder why the agent in cluster1 needs a kubeconfig as it runs in the same cluster as the scheduler. We simply like symmetry and didn't want to make the agent's configuration special in that case.
+
+#### Verification
+
+After a minute, check that node pool objects have been created in the agents' clusters and observations appear in the scheduler's cluster:
 
 ```bash
-for CLUSTER_NAME in "${MEMBER_CLUSTER_NAMES[@]}"; do
-    kubectl --context "$CLUSTER_NAME" get nodepools # or np
-done
-kubectl -n "$FEDERATION_NAMESPACE" get nodepoolobservations # or npobs
-kubectl -n "$FEDERATION_NAMESPACE" get nodeobservations # or nodeobs
-kubectl -n "$FEDERATION_NAMESPACE" get podobservations # or podobs
-kubectl -n "$FEDERATION_NAMESPACE" get serviceobservations # or svcobs
+kubectl --context $CLUSTER1 get nodepools # or np
+kubectl --context $CLUSTER2 get nodepools # or np
+
+kubectl config use-context $CLUSTER1
+kubectl get nodepoolobservations # or npobs
+kubectl get nodeobservations # or nodeobs
+kubectl get podobservations # or podobs
+kubectl get serviceobservations # or svcobs
 # or, by category
-kubectl -n "$FEDERATION_NAMESPACE" get observations --show-kind # or obs
+kubectl get observations --show-kind # or obs
 ```
 
 ### Example
 
-Multicluster-scheduler's pod admission controller operates in namespaces labeled with `multicluster-scheduler=enabled`. In any of the member cluster, e.g., cluster2, label the `default` namespace. Then, deploy NGINX in it with the election annotation on the pod template:
+Multicluster-scheduler's pod admission controller operates in namespaces labeled with `multicluster-scheduler=enabled`. In any of the member cluster, e.g., cluster2, label the `default` namespace:
 
 ```bash
 kubectl --context "$CLUSTER2" label namespace default multicluster-scheduler=enabled
+```
+
+Then, deploy NGINX in it with the election annotation on the pod template:
+
+```bash
 cat <<EOF | kubectl --context "$CLUSTER2" apply -f -
 apiVersion: apps/v1
 kind: Deployment
@@ -164,17 +122,17 @@ EOF
 Things to check:
 
 1. The original pods have been transformed into proxy pods. Notice the replacement containers, and the original manifest saved as an annotation.
-1. Proxy pod observations have been created in the scheduler's cluster. Notice their names indicating the proxy pods' cluster name, namespace and names. This information is also stored in `status.liveState.metadata`.
-1. Delegate pod decisions have been created in the scheduler's cluster as well. Delegate pod decisions are named after the proxy pod observations, but the cluster names in `spec.template.metadata` don't necessarily match because they indicate the target clusters. Each decision was made based on all of the observations available at the time.
+1. Proxy pod observations have been created in the scheduler's cluster.
+1. Delegate pod decisions have been created in the scheduler's cluster as well. Each decision was made based on all of the observations available at the time.
 1. Delegate pods have been created in either cluster. Notice that their spec matches the original manifest.
 
 ```bash
 kubectl --context "$CLUSTER2" get pods # (-o yaml for details)
-kubectl -n "$FEDERATION_NAMESPACE" get podobs # (-o yaml)
-kubectl -n "$FEDERATION_NAMESPACE" get poddecisions # or poddec (-o yaml)
-for CLUSTER_NAME in "${MEMBER_CLUSTER_NAMES[@]}"; do
-    kubectl --context "$CLUSTER_NAME" get pods # (-o yaml)
-done
+kubectl --context "$CLUSTER1" get podobs # (-o yaml)
+kubectl --context "$CLUSTER1" get poddecisions # or poddec (-o yaml)
+
+kubectl --context "$CLUSTER1" get pods # (-o yaml)
+kubectl --context "$CLUSTER2" get pods # (-o yaml)
 ```
 
 ### Enforcing Placement
@@ -222,94 +180,43 @@ Now call the delegate pods in cluster1 from cluster2:
 kubectl --context "$CLUSTER2" run foo -it --rm --image alpine --command -- sh -c "apk add curl && curl nginx"
 ```
 
-## Comparison with Federation v2
+## How it Works
 
-The goal of [Federation v2](https://github.com/kubernetes-sigs/federation-v2) is similar to multicluster-scheduler's. However, they differ in several ways:
+![](docs/multicluster-scheduler-sequence-diagram.svg)
 
-- Federation v2 has a broader scope than multicluster-scheduler. Any resource can be federated and deployed via a single control plane, even if the same result could be achieved with continuous delivery, e.g., GitOps. Multicluster-scheduler focuses on _scheduling_.
-- Multicluster-scheduler doesn't require using new federated resource types (cf. Federation v2's templates, placements and overrides). Instead, pods only need to be annotated to be scheduled to other clusters. This makes adopting multicluster-scheduler painless and ensures compatibility with other tools like Argo.
-- Whereas Federation v2's API resides in a single cluster, multicluster-scheduler's annotated pods can be declared in any member cluster and/or the scheduler's cluster. Teams can keep working in separate clusters, while utilizing available resources in other clusters as needed. 
-- Federation v2 propagates scheduling resources with a push-sync reconciler. Multicluster-scheduler's agents push observations and pull scheduling decisions to/from the scheduler's cluster. The scheduler reconciles scheduling decisions with observations, but never calls the Kubernetes APIs of the member clusters. Clusters allowing outbound traffic to, but no inbound traffic from the scheduler's cluster (e.g., on-prem, in some cases) can join the federation. Also, if the scheduler's cluster is compromised, attackers don't automatically gain access to the entire federation.
-- Federation v2 integrates with [ExternalDNS](https://github.com/kubernetes-incubator/external-dns) to provide [cross-cluster service discovery](https://github.com/kubernetes-sigs/federation-v2/blob/master/docs/servicedns-with-externaldns.md) and [multicluster ingress](https://github.com/kubernetes-sigs/federation-v2/blob/master/docs/ingressdns-with-externaldns.md). Multicluster-scheduler doesn't solve multicluster ingress at the moment, but integrates with Cilium for cross-cluster service discovery, and [everything else Cilium has to offer](https://cilium.readthedocs.io/en/latest/intro/). A detailed comparison of the two approaches is beyond the scope of this README (but certainly worth a future blog post).
+Multicluster-scheduler is a system of Kubernetes controllers managed by the **scheduler**, deployed in any cluster, and its **agents**, deployed in the member clusters. The scheduler manages two controllers: the eponymous scheduler controller and the global service controller. Each agent manages six controllers: pod admission, service reroute, observations, decisions, feedback, and node pool.
+
+1. The **pod admission controller**, a [dynamic, mutating admission webhook](https://kubernetes.io/docs/reference/access-authn-authz/extensible-admission-controllers/), intercepts pod creation requests. If a pod is annotated with `multicluster.admiralty.io/elect=""`, its original manifest is saved as an annotation, and its containers are replaced by **proxies** that simply await success or failure signals from the feedback controller (see below).
+1. The **service reroute controller** modifies services whose endpoints target proxy pods. The keys of their label selectors are prefixed with `multicluster.admiralty.io/`, to match corresponding **delegate** pods (see below). Also, the services are annotated with `io.cilium/global-service=true`, to be load-balanced across a Cilium cluster mesh.
+1. The **observations controller**, a [multi-cluster controller](https://github.com/admiraltyio/multicluster-controller), watches pods (including proxy pods), services (including global services), nodes, and node pools (created by the node pool controller, see below) in the agent's cluster and reconciles corresponding **observations** in the scheduler's cluster. Observations are images of the source objects' states.
+1. The **scheduler** watches proxy pod observations and reconciles delegate pod **decisions**, all in its own cluster. It decides target clusters based on the other observations. The scheduler doesn't push anything to the member clusters.
+1. The **global service controller** watches global service observations (observations of services annotated with `io.cilium/global-service=true`, either by the service reroute controller or by another tool or user) and reconciles global service decisions (copies of the originals), in all clusters of the federation.
+1. The **decisions controller**, another multi-cluster controller, watches pod and service decisions in the scheduler's cluster and reconciles corresponding delegates in the agent's cluster.
+1. The **feedback controller** watches delegate pod observations and reconciles the corresponding proxy pods. If a delegate pod is annotated (e.g., with Argo outputs), the annotations are replicated upstream, into the corresponding proxy pod. When a delegate pod succeeds or fails, the controller kills the corresponding proxy pod's container with the proper signal. The feedback controller maintains the contract between proxy pods and their controllers, e.g., replica sets or Argo workflows.
+1. The **node pool controller** automatically creates **node pool** objects in the agent's cluster. In GKE and AKS, it uses the `cloud.google.com/gke-nodepool` or `agentpool` label, respectively; in the absence of those labels, a default node pool object is created. Min/max node counts and pricing information can be updated by the user, or controlled by other tools. Custom node pool objects can also be created using label selectors. Node pool information can be used for scheduling.
+
+Observations, decisions, and node pools are [custom resources](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/). Node pools are defined (by CRDs) in each member cluster, whereas all observations and decisions are only defined in the scheduler's cluster.
+
+## Comparison with Kubefed (Federation v2)
+
+The goal of [Kubefed](https://github.com/kubernetes-sigs/kubefed) is similar to multicluster-scheduler's. However, they differ in several ways:
+
+- Kubefed has a broader scope than multicluster-scheduler. Any resource can be federated and deployed via a single control plane, even if the same result could be achieved with continuous delivery, e.g., GitOps. Multicluster-scheduler focuses on _scheduling_.
+- Multicluster-scheduler doesn't require using new federated resource types (cf. Kubefed's templates, placements and overrides). Instead, pods only need to be annotated to be scheduled to other clusters. This makes adopting multicluster-scheduler painless and ensures compatibility with other tools like Argo.
+- Whereas Kubefed's API resides in a single cluster, multicluster-scheduler's annotated pods can be declared in any member cluster and/or the scheduler's cluster. Teams can keep working in separate clusters, while utilizing available resources in other clusters as needed. 
+- Kubefed propagates scheduling resources with a push-sync reconciler. Multicluster-scheduler's agents push observations and pull scheduling decisions to/from the scheduler's cluster. The scheduler reconciles scheduling decisions with observations, but never calls the Kubernetes APIs of the member clusters. Clusters allowing outbound traffic to, but no inbound traffic from the scheduler's cluster (e.g., on-prem, in some cases) can join the federation. Also, if the scheduler's cluster is compromised, attackers don't automatically gain access to the entire federation.
+- Kubefed integrates with [ExternalDNS](https://github.com/kubernetes-incubator/external-dns) to provide [cross-cluster service discovery](https://github.com/kubernetes-sigs/federation-v2/blob/master/docs/servicedns-with-externaldns.md) and [multicluster ingress](https://github.com/kubernetes-sigs/federation-v2/blob/master/docs/ingressdns-with-externaldns.md). Multicluster-scheduler doesn't solve multicluster ingress at the moment, but integrates with Cilium for cross-cluster service discovery, and [everything else Cilium has to offer](https://cilium.readthedocs.io/en/latest/intro/). A detailed comparison of the two approaches is beyond the scope of this README (but certainly worth a future blog post).
 
 ## Roadmap
 
 - [x] [Integration with Argo](https://admiralty.io/blog/running-argo-workflows-across-multiple-kubernetes-clusters/)
 - [x] Integration with Cilium cluster mesh and global services
+- [x] One namespace per member cluster in the scheduler's cluster for more granular RBAC
 - [ ] Alternative cross-cluster networking implementations: Istio (1.1), Submariner
 - [ ] More integrations: Horizontal Pod Autoscaler, Knative, Rook, k3s, kube-batch
 - [ ] Advanced scheduling, respecting affinities, anti-affinities, taints, tolerations, quotas, etc.
 - [ ] Port-forward between proxy and delegate pods
-- [ ] One namespace per member cluster in the scheduler's cluster for more granular RBAC
 - [ ] Integrate node pool concept with other tools
-
-## Bring Your Own Scheduler
-
-You can easily implement your own multi-cluster scheduler. Here's a basic manager scaffolding, where the custom `scheduler` struct, which implements the [`Scheduler` interface](https://godoc.org/admiralty.io/multicluster-scheduler/pkg/controllers/schedule#Scheduler), is passed as an argument to the controller:
-
-```go
-package main
-
-import (
-  "log"
-
-  "admiralty.io/multicluster-controller/pkg/cluster"
-  "admiralty.io/multicluster-controller/pkg/manager"
-  "admiralty.io/multicluster-scheduler/pkg/apis/multicluster/v1alpha1"
-  "admiralty.io/multicluster-scheduler/pkg/controllers/schedule"
-  "admiralty.io/multicluster-service-account/pkg/config"
-  appsv1 "k8s.io/api/apps/v1"
-  corev1 "k8s.io/api/core/v1"
-  _ "k8s.io/client-go/plugin/pkg/client/auth"
-  "k8s.io/sample-controller/pkg/signals"
-)
-
-func main() {
-  cfg, _, err := config.ConfigAndNamespace()
-  if err != nil {
-    log.Fatalf("cannot load config: %v", err)
-  }
-  cl := cluster.New("", cfg, cluster.Options{})
-
-  co, err := schedule.NewController(cl, &scheduler{})
-  if err != nil {
-    log.Fatalf("cannot create scheduler controller: %v", err)
-  }
-
-  m := manager.New()
-  m.AddController(co)
-
-  if err := m.Start(signals.SetupSignalHandler()); err != nil {
-    log.Fatalf("while or after starting manager: %v", err)
-  }
-}
-
-type scheduler struct {
-    // ... e.g., structured observations
-}
-
-func (s *Scheduler) Reset() {
-    // called before the setters to reinitialize internal state
-}
-
-func (s *scheduler) SetNodePool(np *v1alpha1.NodePool) {
-    // ... e.g., store to inform scheduling decisions
-    // Note: the controller has added a ClusterName to the object's metadata.
-}
-
-func (s *scheduler) SetNode(n *corev1.Node) {
-    // ... e.g., store to inform scheduling decisions
-    // Note: the controller has added a ClusterName to the object's metadata.
-}
-func (s *scheduler) SetPod(p *corev1.Pod) {
-    // ... e.g., store to inform scheduling decisions
-    // Note: the controller has added a ClusterName to the object's metadata.
-}
-
-func (s *scheduler) Schedule(p *corev1.Pod) (string, error) {
-    // ... Given the original pod, decide a cluster name.
-}
-```
 
 ## API Reference
 

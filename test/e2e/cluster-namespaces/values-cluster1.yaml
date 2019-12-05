@@ -1,0 +1,27 @@
+global:
+  useClusterNamespaces: true
+  clusters:
+    - name: c1
+      clusterNamespace: c1
+    - name: c2
+      clusterNamespace: c2
+
+scheduler:
+  enabled: true
+  securityContext:
+    runAsUser: 1000
+
+agent:
+  enabled: true
+  remotes:
+    - secretName: remote
+  securityContext:
+    runAsUser: 1000
+
+webhook:
+  enabled: true
+  securityContext:
+    runAsUser: 1000
+
+clusters:
+  enabled: true

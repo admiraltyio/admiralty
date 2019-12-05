@@ -1,0 +1,12 @@
+agent:
+  enabled: true
+  clusterName: c2
+  remotes:
+    - serviceAccountImportName: remote
+  securityContext:
+    runAsUser: 1000
+
+webhook:
+  enabled: true
+  securityContext:
+    runAsUser: 1000

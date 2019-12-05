@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "fullname" . }}
+  labels: {{ include "labels" . | nindent 4 }}
+data:
+  config: |
+    apiVersion: config.admiralty.io/v1alpha1
+    kind: Agent
+    useClusterNamespaces: {{ .Values.global.useClusterNamespaces }}
+    remotes:
+          {{- range .Values.remotes }}
+      - kubeconfig: /var/run/secrets/admiralty.io/serviceaccountimports/{{ .serviceAccountImportName | default .secretName | required "a remote must have either a secretName or a serviceAccountImportName" }}/config
+          {{- if not $.Values.global.useClusterNamespaces }}
+        clusterName: {{ .clusterName | default $.Values.clusterName | required "if useClusterNamespaces == false, clusterName must be defined either globally or at the remote level" }}
+          {{- end }}
+          {{- if and .secretName .context }}
+        context: {{ .context }}
+          {{- end }}
+          {{- end }}

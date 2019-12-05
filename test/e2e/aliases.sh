@@ -1,4 +1,6 @@
-k1() { kubectl --context cluster1 "$@"; }
-k2() { kubectl --context cluster2 "$@"; }
-c1() { kubectl config use-context cluster1 "$@"; }
-c2() { kubectl config use-context cluster2 "$@"; }
+k1() { KUBECONFIG=kubeconfig-cluster1 kubectl "$@"; }
+k2() { KUBECONFIG=kubeconfig-cluster2 kubectl "$@"; }
+k3() { KUBECONFIG=kubeconfig-cluster3 kubectl "$@"; }
+helm1() { KUBECONFIG=kubeconfig-cluster1 helm "$@"; }
+helm2() { KUBECONFIG=kubeconfig-cluster2 helm "$@"; }
+helm3() { KUBECONFIG=kubeconfig-cluster3 helm "$@"; }

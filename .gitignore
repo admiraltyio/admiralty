@@ -30,5 +30,8 @@ bin
 
 # build artifacts
 _out
-# generated
-release/kustomization.yaml
+
+# test binaries and kubeconfigs
+argo
+kubemcsa
+kubeconfig-cluster*

@@ -23,6 +23,7 @@ import (
 
 	"admiralty.io/multicluster-controller/pkg/cluster"
 	"admiralty.io/multicluster-controller/pkg/controller"
+	"admiralty.io/multicluster-controller/pkg/patterns"
 	"admiralty.io/multicluster-controller/pkg/reconcile"
 	"admiralty.io/multicluster-scheduler/pkg/common"
 	corev1 "k8s.io/api/core/v1"
@@ -41,9 +42,17 @@ func NewController(agent *cluster.Cluster) (*controller.Controller, error) {
 		client: client,
 	}, controller.Options{})
 
+	// we watch endpoints to see if their listed pods are proxy pods
 	if err := co.WatchResourceReconcileObject(agent, &corev1.Endpoints{}, controller.WatchOptions{}); err != nil {
 		return nil, fmt.Errorf("setting up endpoints watch: %v", err)
 	}
+	// we watch services because they are updated in the loop,
+	// and if those updates fail with an optimistic lock error
+	// we must requeue when we receive the cache is updated
+	if err := co.WatchResourceReconcileObject(agent, &corev1.Service{}, controller.WatchOptions{}); err != nil {
+		return nil, fmt.Errorf("setting up service watch: %v", err)
+	}
+	// a service and its endpoints object have the same name/namespace, i.e., the same reconcile key
 
 	return co, nil
 }
@@ -54,7 +63,7 @@ type reconciler struct {
 
 func (r *reconciler) Reconcile(req reconcile.Request) (reconcile.Result, error) {
 	ep := &corev1.Endpoints{}
-	if err := r.client.Get(context.TODO(), req.NamespacedName, ep); err != nil {
+	if err := r.client.Get(context.Background(), req.NamespacedName, ep); err != nil {
 		if !errors.IsNotFound(err) {
 			return reconcile.Result{}, fmt.Errorf("cannot get endpoints %s in namespace %s: %v", req.Name, req.Namespace, err)
 		}
@@ -72,7 +81,7 @@ func (r *reconciler) Reconcile(req reconcile.Request) (reconcile.Result, error) 
 	}
 
 	svc := &corev1.Service{}
-	if err := r.client.Get(context.TODO(), req.NamespacedName, svc); err != nil {
+	if err := r.client.Get(context.Background(), req.NamespacedName, svc); err != nil {
 		if !errors.IsNotFound(err) {
 			return reconcile.Result{}, fmt.Errorf("cannot get service %s in namespace %s: %v", req.Name, req.Namespace, err)
 		}
@@ -107,7 +116,7 @@ func (r *reconciler) Reconcile(req reconcile.Request) (reconcile.Result, error) 
 		return reconcile.Result{}, nil
 	}
 
-	if err := r.client.Update(context.TODO(), svc); err != nil {
+	if err := r.client.Update(context.Background(), svc); err != nil && !patterns.IsOptimisticLockError(err) {
 		return reconcile.Result{}, fmt.Errorf("cannot update service %s in namespace %s: %v", req.Name, req.Namespace, err)
 	}
 
@@ -120,7 +129,7 @@ func (r *reconciler) shouldReroute(ep *corev1.Endpoints) (bool, error) {
 			if a.TargetRef != nil && a.TargetRef.Kind == "Pod" {
 				key := types.NamespacedName{Name: a.TargetRef.Name, Namespace: a.TargetRef.Namespace}
 				pod := &corev1.Pod{}
-				if err := r.client.Get(context.TODO(), key, pod); err != nil {
+				if err := r.client.Get(context.Background(), key, pod); err != nil {
 					if !errors.IsNotFound(err) {
 						return false, fmt.Errorf("cannot get pod %s in namespace %s: %v", key.Name, key.Namespace, err)
 					}

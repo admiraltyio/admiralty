@@ -1,0 +1,25 @@
+global:
+  clusters:
+    - name: c1
+    - name: c2
+
+scheduler:
+  enabled: true
+  securityContext:
+    runAsUser: 1000
+
+agent:
+  enabled: true
+  clusterName: c1
+  remotes:
+    - secretName: remote
+  securityContext:
+    runAsUser: 1000
+
+webhook:
+  enabled: true
+  securityContext:
+    runAsUser: 1000
+
+clusters:
+  enabled: true

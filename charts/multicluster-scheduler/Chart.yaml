@@ -1,0 +1,31 @@
+apiVersion: v2
+name: multicluster-scheduler
+version: 0.1.0
+#kubeVersion: A SemVer range of compatible Kubernetes versions (optional)
+description: A system of Kubernetes controllers that intelligently schedules workloads across clusters.
+type: application
+#keywords:
+#  - A list of keywords about this project (optional)
+home: https://github.com/admiraltyio/multicluster-scheduler
+#sources:
+#  - https://github.com/admiraltyio/multicluster-scheduler
+dependencies:
+  - name: agent
+    version: 0.1.0
+    condition: agent.enabled
+  - name: webhook
+    version: 0.1.0
+    condition: webhook.enabled
+  - name: scheduler
+    version: 0.1.0
+    condition: scheduler.enabled
+  - name: clusters
+    version: 0.1.0
+    condition: clusters.enabled
+#maintainers: # (optional)
+#  - name: The maintainer's name (required for each maintainer)
+#    email: The maintainer's email (optional for each maintainer)
+#    url: A URL for the maintainer (optional for each maintainer)
+icon: https://admiralty.io/icons/icon-144x144.png
+appVersion: 0.4.0
+#deprecated: Whether this chart is deprecated (optional, boolean)

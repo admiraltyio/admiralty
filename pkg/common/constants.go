@@ -16,30 +16,30 @@ limitations under the License.
 
 package common
 
-// TODO... standardize label and annotation propagation story
-
 var (
 	KeyPrefix = "multicluster.admiralty.io/"
 
-	AnnotationKeyElect                       = KeyPrefix + "elect"
-	AnnotationKeyClusterName                 = KeyPrefix + "clustername"
-	AnnotationKeyServiceDependenciesSelector = KeyPrefix + "service-dependencies-selector"
+	// annotations on source pod (by user) and proxy pods (copied by mutating admission webhook)
+
+	AnnotationKeyElect          = KeyPrefix + "elect"
+	AnnotationKeyFederationName = KeyPrefix + "federationname"
+	AnnotationKeyClusterName    = KeyPrefix + "clustername"
+
+	// annotations on proxy pods (by mutating admission webhook)
 
 	KeyPrefixSourcePod = KeyPrefix + "sourcepod-"
 
 	AnnotationKeySourcePodManifest = KeyPrefixSourcePod + "manifest"
 
+	// labels on delegate pods (by bind controller)
+
 	KeyPrefixProxyPod = KeyPrefix + "proxypod-"
 
-	AnnotationKeyProxyPodClusterName = KeyPrefixProxyPod + "clustername"
-	AnnotationKeyProxyPodNamespace   = KeyPrefixProxyPod + "namespace"
-	AnnotationKeyProxyPodName        = KeyPrefixProxyPod + "name"
+	LabelKeyProxyPodClusterName = KeyPrefixProxyPod + "clustername"
+	LabelKeyProxyPodNamespace   = KeyPrefixProxyPod + "namespace"
+	LabelKeyProxyPodName        = KeyPrefixProxyPod + "name"
 
-	KeyPrefixOriginal = KeyPrefix + "original-"
-
-	LabelKeyOriginalName        = KeyPrefixOriginal + "name"
-	LabelKeyOriginalNamespace   = KeyPrefixOriginal + "namespace"
-	LabelKeyOriginalClusterName = KeyPrefixOriginal + "clusterName"
+	// labels on delegate services (by global service controller)
 
 	LabelKeyIsDelegate = KeyPrefix + "is-delegate"
 )

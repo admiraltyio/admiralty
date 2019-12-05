@@ -1,7 +1,0 @@
-bases:
-- ../../config/agent/multicluster-service-account
-imageTags:
-- name: quay.io/admiralty/multicluster-scheduler-agent
-  newTag: RELEASE
-- name: quay.io/admiralty/multicluster-scheduler-pod-admission-controller
-  newTag: RELEASE

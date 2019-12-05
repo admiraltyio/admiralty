@@ -1,0 +1,32 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: {{ if .Values.global.useClusterNamespaces }}Cluster{{ end }}Role
+metadata:
+  name: {{ include "fullname" . }}
+  labels: {{ include "labels" . | nindent 4 }}
+rules:
+  - apiGroups:
+      - multicluster.admiralty.io
+    resources:
+      # decisions
+      - poddecisions
+      - servicedecisions
+      # observations
+      - podobservations
+      - nodeobservations
+      - nodepoolobservations
+      - serviceobservations
+      - persistentvolumeobservations
+      - persistentvolumeclaimobservations
+      - replicationcontrollerobservations
+      - replicasetobservations
+      - statefulsetobservations
+      - poddisruptionbudgetobservations
+      - storageclassobservations
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - update
+      - patch
+      - delete

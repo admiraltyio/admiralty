@@ -1,9 +1,0 @@
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: multicluster-scheduler-agent
-spec:
-  template:
-    metadata:
-      annotations:
-        multicluster.admiralty.io/service-account-import.name: cluster2

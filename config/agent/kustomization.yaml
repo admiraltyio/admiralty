@@ -1,7 +1,0 @@
-namespace: multicluster-scheduler-agent
-resources:
-- namespace.yaml
-- deployment.yaml
-- rbac.yaml
-- ../crds/multicluster_v1alpha1_nodepool.yaml
-- webhook.yaml

@@ -1,0 +1,14 @@
+global:
+  useClusterNamespaces: true
+
+agent:
+  enabled: true
+  remotes:
+    - secretName: remote
+  securityContext:
+    runAsUser: 1000
+
+webhook:
+  enabled: true
+  securityContext:
+    runAsUser: 1000

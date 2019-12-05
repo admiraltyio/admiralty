@@ -21,101 +21,87 @@ import (
 
 	"admiralty.io/multicluster-controller/pkg/cluster"
 	"admiralty.io/multicluster-controller/pkg/manager"
-	"admiralty.io/multicluster-scheduler/pkg/apis/multicluster/v1alpha1"
+	"admiralty.io/multicluster-scheduler/pkg/apis"
+	"admiralty.io/multicluster-scheduler/pkg/config/agent"
 	"admiralty.io/multicluster-scheduler/pkg/controllers/feedback"
 	"admiralty.io/multicluster-scheduler/pkg/controllers/nodepool"
 	"admiralty.io/multicluster-scheduler/pkg/controllers/receive"
 	"admiralty.io/multicluster-scheduler/pkg/controllers/send"
 	"admiralty.io/multicluster-scheduler/pkg/controllers/svcreroute"
 	"admiralty.io/multicluster-service-account/pkg/config"
-	"k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
+	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	"k8s.io/sample-controller/pkg/signals"
 )
 
 func main() {
-	// In the context of multicluster-scheduler, the service account import used to
-	// create the *remote* Cluster (to login to the scheduler) gives its name to the *local* Cluster.
-	// Indeed, each member Cluster of a federation has a corresponding service account
-	// in the federation namespace controlled by the remote scheduler.
-	// TODO: one namespace per member cluster to enforce member-level RBAC (not just federation-level).
-	agentName, err := config.SingleServiceAccountImportName()
-	if err != nil {
-		log.Fatalf("cannot get agent name: %v", err)
-	}
-	log.Printf("Agent name: %s", agentName)
-
-	cfg, _, err := config.ConfigAndNamespaceForContext("")
-	// here, we just want to make sure we DON'T use a service account import,
-	// which, if there is only one, would be loaded by config.ConfigAndNamespace()
-	// TODO (multicluster-service-account): create function with better name or use client-go directly
-	if err != nil {
-		log.Fatalf("cannot load local cluster config: %v", err)
-	}
-	log.Printf("Agent API server URL: %s\n", cfg.Host)
-	agent := cluster.New(agentName, cfg, cluster.Options{})
-
-	agentClientset, err := kubernetes.NewForConfig(cfg)
-	if err != nil {
-		log.Fatalf("cannot create agent client set: %v", err)
-	}
-
-	cfg, ns, err := config.NamedServiceAccountImportConfigAndNamespace(agentName)
-	if err != nil {
-		log.Fatalf("cannot load remote cluster config: %v", err)
-	}
-	log.Printf("Scheduler API server URL: %s\n", cfg.Host)
-	log.Printf("Federation namespace: %s\n", ns)
-	scheduler := cluster.New("scheduler", cfg, cluster.Options{CacheOptions: cluster.CacheOptions{Namespace: ns}})
-
-	observations := map[runtime.Object]runtime.Object{
-		&v1.Service{}:        &v1alpha1.ServiceObservation{},
-		&v1.Pod{}:            &v1alpha1.PodObservation{},
-		&v1.Node{}:           &v1alpha1.NodeObservation{},
-		&v1alpha1.NodePool{}: &v1alpha1.NodePoolObservation{},
-	}
-
 	m := manager.New()
 
-	for liveType, obsType := range observations {
-		co, err := send.NewController(agent, scheduler, ns, liveType, obsType)
-		if err != nil {
-			log.Fatalf("cannot create send controller: %v", err)
-		}
-		m.AddController(co)
-	}
-
-	decisions := map[runtime.Object]runtime.Object{
-		&v1alpha1.PodDecision{}:     &v1.Pod{},
-		&v1alpha1.ServiceDecision{}: &v1.Service{},
-	}
-
-	for decType, delType := range decisions {
-		co, err := receive.NewController(agent, scheduler, decType, delType)
-		if err != nil {
-			log.Fatalf("cannot create receive controller: %v", err)
-		}
-		m.AddController(co)
-	}
-
-	co, err := feedback.NewController(agent, scheduler, agentClientset)
+	agentClientCfg, _, err := config.ConfigAndNamespaceForContext("")
 	if err != nil {
-		log.Fatalf("cannot create feedback controller: %v", err)
+		log.Fatalf("cannot load member cluster config: %v", err)
 	}
-	m.AddController(co)
+	log.Printf("Local API server URL: %s\n", agentClientCfg.Host)
 
-	co, err = nodepool.NewController(agent)
+	agentClientset, err := kubernetes.NewForConfig(agentClientCfg)
+	if err != nil {
+		log.Fatalf("cannot create member client set: %v", err)
+	}
+
+	agentCluster := cluster.New("local", agentClientCfg, cluster.Options{})
+	if err := apis.AddToScheme(agentCluster.GetScheme()); err != nil {
+		log.Fatalf("adding APIs to member cluster's scheme: %v", err)
+	}
+
+	co, err := nodepool.NewController(agentCluster)
 	if err != nil {
 		log.Fatalf("cannot create nodepool controller: %v", err)
 	}
 	m.AddController(co)
 
-	co, err = svcreroute.NewController(agent)
+	co, err = svcreroute.NewController(agentCluster)
 	if err != nil {
 		log.Fatalf("cannot create svcreroute controller: %v", err)
 	}
 	m.AddController(co)
+
+	agentConfig := agent.New()
+
+	for _, remote := range agentConfig.Remotes {
+		log.Printf("Remote Kubernetes API server address: %s\n", remote.ClientConfig.Host)
+		log.Printf("Remote namespace: %s\n", remote.Namespace)
+
+		// member cluster can be known by different names depending on the remote
+		agentCluster := agentCluster.CloneWithName(remote.ClusterName)
+
+		remoteCluster := cluster.New("remote", remote.ClientConfig,
+			cluster.Options{CacheOptions: cluster.CacheOptions{Namespace: remote.Namespace}})
+		if err := apis.AddToScheme(remoteCluster.GetScheme()); err != nil {
+			log.Fatalf("adding APIs to scheduler cluster's scheme: %v", err)
+		}
+
+		for liveType, obsType := range send.AllObservations {
+			co, err := send.NewController(agentCluster, remoteCluster, remote.Namespace, liveType, obsType)
+			if err != nil {
+				log.Fatalf("cannot create send controller: %v", err)
+			}
+			m.AddController(co)
+		}
+
+		for decType, delType := range receive.AllDecisions {
+			co, err := receive.NewController(agentCluster, remoteCluster, remote.Namespace, decType, delType)
+			if err != nil {
+				log.Fatalf("cannot create receive controller: %v", err)
+			}
+			m.AddController(co)
+		}
+
+		co, err := feedback.NewController(agentCluster, remoteCluster, remote.Namespace, agentClientset)
+		if err != nil {
+			log.Fatalf("cannot create feedback controller: %v", err)
+		}
+		m.AddController(co)
+	}
 
 	if err := m.Start(signals.SetupSignalHandler()); err != nil {
 		log.Fatalf("while or after starting manager: %v", err)

@@ -29,6 +29,8 @@ type PodObservationSpec struct {
 type PodObservationStatus struct {
 	// +optional
 	LiveState *corev1.Pod `json:"liveState,omitempty"`
+	// +optional
+	DelegateState *corev1.Pod `json:"delegateState,omitempty"`
 }
 
 // +genclient

@@ -1,0 +1,79 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "fullname" . }}
+  labels: {{ include "labels" . | nindent 4 }}
+rules:
+  - apiGroups:
+      - multicluster.admiralty.io
+    resources:
+      - nodepools
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - update
+      - patch
+      - delete
+  - apiGroups:
+      - ""
+    resources:
+      - pods
+      - services
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - update
+      - patch
+      - delete
+  - apiGroups:
+      - ""
+    resources:
+      - pods/exec
+    verbs:
+      - create
+  - apiGroups:
+      - ""
+    resources:
+      - nodes
+      - endpoints
+      - replicasets
+      - persistentvolumes
+      - persistentvolumeclaims
+      - replicationcontrollers
+    verbs:
+      - get
+      - list
+      - watch
+      - update
+  - apiGroups:
+      - apps
+    resources:
+      - replicasets
+      - statefulsets
+    verbs:
+      - get
+      - list
+      - watch
+      - update
+  - apiGroups:
+      - policy
+    resources:
+      - poddisruptionbudgets
+    verbs:
+      - get
+      - list
+      - watch
+      - update
+  - apiGroups:
+      - storage.k8s.io
+    resources:
+      - storageclasses
+    verbs:
+      - get
+      - list
+      - watch
+      - update

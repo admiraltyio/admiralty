@@ -1,4 +1,0 @@
-bases:
-- ../
-patches:
-- deployment_patch.yaml

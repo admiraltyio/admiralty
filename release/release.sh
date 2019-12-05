@@ -1,16 +1,17 @@
+#!/usr/bin/env bash
 set -euo pipefail
 
-RELEASE="$1"
+VERSION="$1"
 
-DEPLOYMENTS=("admiralty" "multicluster-service-account" "scheduler")
-for DEPLOYMENT in "${DEPLOYMENTS[@]}"; do
-	sed "s/RELEASE/$RELEASE/g" "release/$DEPLOYMENT/kustomization.tmpl.yaml" > "release/$DEPLOYMENT/kustomization.yaml"
+IMAGES=(
+  "multicluster-scheduler-agent"
+  "multicluster-scheduler-pod-admission-controller"
+  "multicluster-scheduler-basic"
+)
+
+for IMAGE in "${IMAGES[@]}"; do
+  docker push "quay.io/admiralty/$IMAGE:$VERSION"
 done
 
-kustomize build release/admiralty -o _out/admiralty.yaml
-kustomize build release/multicluster-service-account -o _out/agent.yaml
-kustomize build release/scheduler -o _out/scheduler.yaml
-# TODO: upload to GitHub
-
-RELEASE=$RELEASE skaffold build -f release/skaffold.yaml
+# TODO: upload Helm chart
 # TODO: also tag images with latest

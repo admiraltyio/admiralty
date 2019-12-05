@@ -1,0 +1,9 @@
+{{- range .Values.global.clusters }}
+        {{- $cluster := set . "useClusterNamespaces" $.Values.global.useClusterNamespaces }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+        {{- include "clusterNamespacedName" $cluster | indent 2 }}
+  labels: {{ include "labels" $ | nindent 4 }}
+        {{- end }}

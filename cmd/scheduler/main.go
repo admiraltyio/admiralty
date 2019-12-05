@@ -21,31 +21,58 @@ import (
 
 	"admiralty.io/multicluster-controller/pkg/cluster"
 	"admiralty.io/multicluster-controller/pkg/manager"
+	"admiralty.io/multicluster-scheduler/pkg/apis"
+	schedulerconfig "admiralty.io/multicluster-scheduler/pkg/config/scheduler"
+	"admiralty.io/multicluster-scheduler/pkg/controllers/bind"
+	"admiralty.io/multicluster-scheduler/pkg/controllers/delegatestate"
 	"admiralty.io/multicluster-scheduler/pkg/controllers/globalsvc"
 	"admiralty.io/multicluster-scheduler/pkg/controllers/schedule"
 	"admiralty.io/multicluster-scheduler/pkg/scheduler"
 	"admiralty.io/multicluster-service-account/pkg/config"
+	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	"k8s.io/sample-controller/pkg/signals"
 )
 
 func main() {
-	cfg, _, err := config.ConfigAndNamespace()
+	kcfg, ns, err := config.ConfigAndNamespace()
 	if err != nil {
 		log.Fatalf("cannot load config: %v", err)
 	}
-	cl := cluster.New("", cfg, cluster.Options{})
+	schedCfg := schedulerconfig.Load(ns)
+
+	o := cluster.Options{}
+	if len(schedCfg.Namespaces) == 1 {
+		o.Namespace = schedCfg.Namespaces[0]
+	}
+
+	cl := cluster.New("", kcfg, o)
+	if err := apis.AddToScheme(cl.GetScheme()); err != nil {
+		log.Fatalf("adding APIs to cluster's scheme: %v", err)
+	}
 
 	m := manager.New()
 
-	co, err := schedule.NewController(cl, scheduler.New())
+	co, err := schedule.NewController(cl, scheduler.New(), schedCfg)
 	if err != nil {
 		log.Fatalf("cannot create schedule controller: %v", err)
 	}
 	m.AddController(co)
 
-	co, err = globalsvc.NewController(cl)
+	co, err = globalsvc.NewController(cl, schedCfg)
 	if err != nil {
 		log.Fatalf("cannot create globalsvc controller: %v", err)
+	}
+	m.AddController(co)
+
+	co, err = bind.NewController(cl, schedCfg)
+	if err != nil {
+		log.Fatalf("cannot create bind controller: %v", err)
+	}
+	m.AddController(co)
+
+	co, err = delegatestate.NewController(cl, schedCfg)
+	if err != nil {
+		log.Fatalf("cannot create delegatestate controller: %v", err)
 	}
 	m.AddController(co)
 

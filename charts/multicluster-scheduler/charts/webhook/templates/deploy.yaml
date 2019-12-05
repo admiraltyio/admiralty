@@ -1,0 +1,56 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "fullname" . }}
+  labels: {{ include "labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels: {{ include "selectorLabels" . | nindent 6 }}
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels: {{ include "labels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: webhook
+          image: {{ .Values.image.repository }}:{{ default .Values.global.chart.appVersion .Values.image.tag }}
+          env:
+            - name: DEPLOYMENT_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.serviceAccountName
+          ports:
+            - containerPort: 9876
+          volumeMounts:
+            - mountPath: /tmp/cert
+              name: cert
+              readOnly: true
+                {{- with .Values.image.pullPolicy }}
+          imagePullPolicy: {{ . }}
+                {{- end }}
+                {{- with .Values.resources }}
+          resources: {{ toYaml . | nindent 12 }}
+            {{- end }}
+      serviceAccountName: {{ include "fullname" . }}
+      volumes:
+        - name: cert
+          secret:
+            defaultMode: 420
+            secretName: {{ include "fullname" . }}-cert
+            {{- with .Values.image.pullSecretName }}
+      imagePullSecrets:
+        - name: {{ . }}
+                {{- end }}
+            {{- with .Values.nodeSelector }}
+      nodeSelector: {{ toYaml . | nindent 8 }}
+            {{- end }}
+            {{- with .Values.securityContext }}
+      securityContext: {{ toYaml . | nindent 8 }}
+            {{- end }}
+            {{- with .Values.affinity }}
+      affinity: {{ toYaml . | nindent 8 }}
+            {{- end }}
+            {{- with .Values.tolerations }}
+      tolerations: {{ toYaml . | nindent 8 }}
+        {{- end }}

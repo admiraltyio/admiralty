@@ -1,5 +1,6 @@
+#!/usr/bin/env bash
 set -euo pipefail
 
 go generate ./pkg/... ./cmd/...
-go run vendor/sigs.k8s.io/controller-tools/cmd/controller-gen/main.go all
 go fmt ./pkg/... ./cmd/...
+# TODO goimports

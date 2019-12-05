@@ -1,6 +1,0 @@
-bases:
-- ../
-patches:
-- deployment_patch.yaml
-resources:
-- serviceaccountimport.yaml

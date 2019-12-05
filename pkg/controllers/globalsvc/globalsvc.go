@@ -22,37 +22,45 @@ import (
 
 	"admiralty.io/multicluster-controller/pkg/cluster"
 	"admiralty.io/multicluster-controller/pkg/controller"
+	"admiralty.io/multicluster-controller/pkg/patterns"
+	"admiralty.io/multicluster-controller/pkg/patterns/gc"
 	"admiralty.io/multicluster-controller/pkg/reconcile"
-	"admiralty.io/multicluster-scheduler/pkg/apis"
+	"admiralty.io/multicluster-controller/pkg/reference"
 	"admiralty.io/multicluster-scheduler/pkg/apis/multicluster/v1alpha1"
 	"admiralty.io/multicluster-scheduler/pkg/common"
+	schedulerconfig "admiralty.io/multicluster-scheduler/pkg/config/scheduler"
 	"github.com/go-test/deep"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/labels"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
-func NewController(scheduler *cluster.Cluster) (*controller.Controller, error) {
+func NewController(scheduler *cluster.Cluster, schedCfg *schedulerconfig.Config) (*controller.Controller, error) {
 	client, err := scheduler.GetDelegatingClient()
 	if err != nil {
 		return nil, fmt.Errorf("getting delegating client for scheduler cluster: %v", err)
 	}
 
 	co := controller.New(&reconciler{
-		client: client,
-		scheme: scheduler.GetScheme(),
+		client:   client,
+		schedCfg: schedCfg,
 	}, controller.Options{})
 
-	if err := apis.AddToScheme(scheduler.GetScheme()); err != nil {
-		return nil, fmt.Errorf("adding APIs to scheduler cluster's scheme: %v", err)
-	}
-	if err := co.WatchResourceReconcileObject(scheduler, &v1alpha1.ServiceObservation{}, controller.WatchOptions{}); err != nil {
+	if err := co.WatchResourceReconcileObjectOverrideContext(scheduler, &v1alpha1.ServiceObservation{}, controller.WatchOptions{
+		Namespaces: schedCfg.Namespaces,
+		CustomPredicate: func(obj interface{}) bool {
+			svcObs := obj.(*v1alpha1.ServiceObservation)
+			svc := svcObs.Status.LiveState
+			return svc.Annotations["io.cilium/global-service"] == "true" &&
+				svc.Labels[common.LabelKeyIsDelegate] != "true" // no need to globalyze a delegate service (result of other service's globalyzation)
+		},
+	}, ""); err != nil {
 		return nil, fmt.Errorf("setting up proxy service observation watch: %v", err)
 	}
-	if err := co.WatchResourceReconcileController(scheduler, &v1alpha1.ServiceDecision{}, controller.WatchOptions{}); err != nil {
+	if err := co.WatchResourceReconcileController(scheduler, &v1alpha1.ServiceDecision{}, controller.WatchOptions{
+		Namespaces: schedCfg.Namespaces,
+	}); err != nil {
 		return nil, fmt.Errorf("setting up delegate service decision watch: %v", err)
 	}
 
@@ -60,13 +68,13 @@ func NewController(scheduler *cluster.Cluster) (*controller.Controller, error) {
 }
 
 type reconciler struct {
-	client client.Client
-	scheme *runtime.Scheme
+	client   client.Client
+	schedCfg *schedulerconfig.Config
 }
 
 func (r *reconciler) Reconcile(req reconcile.Request) (reconcile.Result, error) {
 	svcObs := &v1alpha1.ServiceObservation{}
-	if err := r.client.Get(context.TODO(), req.NamespacedName, svcObs); err != nil {
+	if err := r.client.Get(context.Background(), req.NamespacedName, svcObs); err != nil {
 		if !errors.IsNotFound(err) {
 			return reconcile.Result{}, fmt.Errorf("cannot get service observation %s in namespace %s: %v", req.Name, req.Namespace, err)
 		}
@@ -76,59 +84,77 @@ func (r *reconciler) Reconcile(req reconcile.Request) (reconcile.Result, error) 
 
 	svc := svcObs.Status.LiveState
 
-	if svc.Labels[common.LabelKeyIsDelegate] == "true" {
-		// no need to globalyze a delegate service (result of other service's globalyzation)
-		return reconcile.Result{}, nil
+	srcClusterName := r.schedCfg.GetObservationClusterName(svcObs)
+
+	var clusters map[string]struct{}
+	fedName := svc.Annotations[common.AnnotationKeyFederationName]
+	if fedName == "" {
+		clusters = r.schedCfg.PairedClustersByCluster[srcClusterName]
+	} else {
+		clusters = r.schedCfg.ClustersByFederation[fedName]
 	}
 
-	if svc.Annotations["io.cilium/global-service"] != "true" {
-		return reconcile.Result{}, nil
-	}
-
-	// HACK: get all cluster names from node pools
-	npObsL := &v1alpha1.NodePoolObservationList{}
-	if err := r.client.List(context.TODO(), &client.ListOptions{}, npObsL); err != nil {
-		return reconcile.Result{}, fmt.Errorf("cannot list node pool observations: %v", err)
-	}
-	clusterNames := make(map[string]struct{})
-	for _, npObs := range npObsL.Items {
-		clusterNames[npObs.Status.LiveState.ClusterName] = struct{}{}
-	}
-
-	for clusterName := range clusterNames {
-		if clusterName == svc.ClusterName {
+	for clusterName := range clusters {
+		if clusterName == srcClusterName {
 			continue
 		}
 
-		delSvc := makeDelegateService(svc, clusterName)
-		svcDecName := req.Name + "-" + clusterName
+		delSvc := makeDelegateService(svc)
 
-		svcDec := &v1alpha1.ServiceDecision{}
-		if err := r.client.Get(context.TODO(), types.NamespacedName{Name: svcDecName, Namespace: req.Namespace}, svcDec); err != nil {
-			if !errors.IsNotFound(err) {
-				return reconcile.Result{}, fmt.Errorf("cannot get service decision %s in namespace %s: %v", svcDecName, req.Namespace, err)
-			}
+		svcDecNamespace := r.schedCfg.NamespaceForCluster[clusterName]
 
+		l := &v1alpha1.ServiceDecisionList{}
+		s := labels.SelectorFromValidatedSet(labels.Set{
+			gc.LabelParentName:      svcObs.Name,
+			gc.LabelParentNamespace: svcObs.Namespace,
+		})
+		err := r.client.List(context.Background(), &client.ListOptions{Namespace: svcDecNamespace, LabelSelector: s}, l)
+		if err != nil {
+			return reconcile.Result{}, fmt.Errorf(
+				"cannot list service decisions in namespace %s with label selector %s: %v",
+				svcDecNamespace, s, err)
+		}
+		if len(l.Items) > 1 {
+			return reconcile.Result{}, fmt.Errorf(
+				"duplicate service decisions found in namespace %s with label selector %s: %v",
+				svcDecNamespace, s, err)
+		} else if len(l.Items) == 0 {
 			svcDec := &v1alpha1.ServiceDecision{}
-			svcDec.Name = svcDecName
-			svcDec.Namespace = req.Namespace
+			// we use generate name to avoid (unlikely) conflicts
+			genName := fmt.Sprintf("%s-%s-", svcObs.Namespace, svcObs.Name)
+			if len(genName) > 253 {
+				genName = genName[0:253]
+			}
+			svcDec.GenerateName = genName
+			svcDec.Namespace = svcDecNamespace
+			svcDec.Labels = labels.Set{
+				gc.LabelParentName:      svcObs.Name,
+				gc.LabelParentNamespace: svcObs.Namespace,
+			}
+			svcDec.Annotations = map[string]string{common.AnnotationKeyClusterName: clusterName}
 			svcDec.Spec.Template.ObjectMeta = delSvc.ObjectMeta
 			svcDec.Spec.Template.Spec = delSvc.Spec
 
-			if err := controllerutil.SetControllerReference(svcObs, svcDec, r.scheme); err != nil {
-				return reconcile.Result{}, fmt.Errorf("cannot set controller reference on service decision %s in namespace %s for owner %s in namespace %s: %v",
-					svcDecName, req.Namespace, svcObs.Name, svcObs.Namespace, err)
+			ref := reference.NewMulticlusterOwnerReference(svcObs, svc.GroupVersionKind(), "")
+			if err := reference.SetMulticlusterControllerReference(svcDec, ref); err != nil {
+				return reconcile.Result{}, fmt.Errorf(
+					"cannot set controller reference on service decision %s (name not yet generated) "+
+						"in namespace %s for owner %s in namespace %s: %v",
+					genName, svcDecNamespace, svcObs.Name, svcObs.Namespace, err)
 			}
 
-			if err := r.client.Create(context.TODO(), svcDec); err != nil {
+			if err := r.client.Create(context.Background(), svcDec); err != nil {
 				if !errors.IsAlreadyExists(err) {
-					return reconcile.Result{}, fmt.Errorf("cannot create service decision %s in namespace %s: %v", svcDecName, req.Namespace, err)
+					return reconcile.Result{}, fmt.Errorf(
+						"cannot create service decision %s (name not yet generated) in namespace %s: %v",
+						genName, svcDecNamespace, err)
 				}
 			}
 
 			continue
 		}
 
+		svcDec := &l.Items[0]
 		delSvc.Spec.ClusterIP = svcDec.Spec.Template.Spec.ClusterIP
 
 		if deep.Equal(svcDec.Spec.Template.ObjectMeta, delSvc.ObjectMeta) == nil ||
@@ -139,18 +165,18 @@ func (r *reconciler) Reconcile(req reconcile.Request) (reconcile.Result, error) 
 
 		svcDec.Spec.Template.ObjectMeta = delSvc.ObjectMeta
 		svcDec.Spec.Template.Spec = delSvc.Spec
-		if err := r.client.Update(context.TODO(), svcDec); err != nil {
-			return reconcile.Result{}, fmt.Errorf("cannot update delegate service decision %s in namespace %s: %v", svcDecName, req.Namespace, err)
+		if err := r.client.Update(context.Background(), svcDec); err != nil && !patterns.IsOptimisticLockError(err) {
+			return reconcile.Result{}, fmt.Errorf("cannot update delegate service decision %s in namespace %s: %v",
+				svcDec.Name, svcDec.Namespace, err)
 		}
 	}
 
 	return reconcile.Result{}, nil
 }
 
-func makeDelegateService(svc *corev1.Service, clusterName string) *corev1.Service {
+func makeDelegateService(svc *corev1.Service) *corev1.Service {
 	delSvc := &corev1.Service{}
 
-	delSvc.ClusterName = clusterName
 	delSvc.Name = svc.Name
 	delSvc.Namespace = svc.Namespace
 
