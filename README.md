@@ -145,7 +145,7 @@ kubectl --context "$CLUSTER2" patch deployment nginx -p '{
     "template":{
       "metadata":{
         "annotations":{
-          "multicluster.admiralty.io/clustername":"'$CLUSTER1'"
+          "multicluster.admiralty.io/clustername":"c1"
         }
       }
     }
