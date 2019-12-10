@@ -26,13 +26,14 @@ For cross-cluster service calls, multicluster-scheduler relies on a Cilium clust
 
 #### Helm
 
-The Helm (v3) chart isn't hosted yet, so you need to clone this repository and run:
+Starting from v0.4, the recommended way to install multicluster-scheduler is with Helm (v3):
 
 ```bash
-helm install multicluster-scheduler charts/multicluster-scheduler \
+helm repo add admiralty https://charts.admiralty.io
+helm install multicluster-scheduler admiralty/multicluster-scheduler \
     --context $CLUSTER1 \
     -f test/e2e/single-namespace/values-cluster1.yaml
-helm install multicluster-scheduler charts/multicluster-scheduler \
+helm install multicluster-scheduler admiralty/multicluster-scheduler \
     --context $CLUSTER2 \
     -f test/e2e/single-namespace/values-cluster2.yaml
 ```
