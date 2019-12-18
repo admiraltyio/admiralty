@@ -8,11 +8,13 @@ TARGETS=(
   "cmd/agent"
   "cmd/pod-admission-controller"
   "cmd/scheduler"
+  "cmd/remove-finalizers"
 )
 IMAGES=(
   "multicluster-scheduler-agent"
   "multicluster-scheduler-pod-admission-controller"
   "multicluster-scheduler-basic"
+  "multicluster-scheduler-remove-finalizers"
 )
 
 for TARGET in "${TARGETS[@]}"; do

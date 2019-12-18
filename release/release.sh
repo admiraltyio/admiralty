@@ -7,6 +7,7 @@ IMAGES=(
   "multicluster-scheduler-agent"
   "multicluster-scheduler-pod-admission-controller"
   "multicluster-scheduler-basic"
+  "multicluster-scheduler-remove-finalizers"
 )
 
 for IMAGE in "${IMAGES[@]}"; do
