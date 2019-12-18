@@ -30,15 +30,25 @@ Starting from v0.4, the recommended way to install multicluster-scheduler is wit
 
 ```bash
 helm repo add admiralty https://charts.admiralty.io
+
 helm install multicluster-scheduler admiralty/multicluster-scheduler \
-    --context $CLUSTER1 \
-    -f test/e2e/single-namespace/values-cluster1.yaml
+  --context $CLUSTER1 \
+  --set global.clusters[0].name=c1 \
+  --set global.clusters[1].name=c2 \
+  --set scheduler.enabled=true \
+  --set clusters.enabled=true \
+  --set agent.enabled=true \
+  --set agent.clusterName=c1 \
+  --set webhook.enabled=true
+
 helm install multicluster-scheduler admiralty/multicluster-scheduler \
-    --context $CLUSTER2 \
-    -f test/e2e/single-namespace/values-cluster2.yaml
+  --context $CLUSTER2 \
+  --set agent.enabled=true \
+  --set agent.clusterName=c2 \
+  --set webhook.enabled=true
 ```
 
-Note: the Helm chart is flexible enough to configure multiple federations and/or refine RBAC so clusters can't see each other's observations. While we work on properly documenting the chart, feel free reach out and/or check out the chart's own [values.yaml](charts/multicluster-scheduler/values.yaml), and some example `values.yaml` files under [test/e2e](test/e2e).
+Note: the Helm chart is flexible enough to configure multiple federations and/or refine RBAC so clusters can't see each other's observations. See [the chart's documentation](charts/multicluster-scheduler/README.md).
 
 #### Service Account Exchange
 

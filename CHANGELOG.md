@@ -20,6 +20,26 @@
 
 -->
 
+## v0.5.0
+
+### New Features
+
+- Sensible defaults to make configuration easier:
+  - `agent.remotes[0].secretName=remote` in Helm chart
+  - clusterNamespace defaults to cluster name in Helm chart and `pkg/config`
+
+### Bugfixes
+
+- Fix [#13](https://github.com/admiraltyio/multicluster-scheduler/issues/13): Post-delete hook job ensures finalizers used for cross-cluster garbage collection are removed when multicluster-scheduler is uninstalled. Previously, those finalizers had to be removed by the user.
+
+### Internals
+
+- Align chart (and subcharts) versioning with main project for simplicity, because they are released together.
+
+### Documentation
+
+- [Helm chart documentation](charts/multicluster-scheduler/README.md)
+
 ## v0.4.0
 
 ### New Features
