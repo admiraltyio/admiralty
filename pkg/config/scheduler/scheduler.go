@@ -62,7 +62,11 @@ func setDefaults(raw *configv1alpha1.Scheduler, schedulerNamespace string) {
 	for i := range raw.Clusters {
 		c := &raw.Clusters[i]
 		if c.ClusterNamespace == "" {
-			c.ClusterNamespace = schedulerNamespace
+			if raw.UseClusterNamespaces {
+				c.ClusterNamespace = c.Name
+			} else {
+				c.ClusterNamespace = schedulerNamespace
+			}
 		}
 		if len(c.Memberships) == 0 {
 			c.Memberships = []configv1alpha1.Membership{{FederationName: "default"}}

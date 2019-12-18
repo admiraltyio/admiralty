@@ -1,8 +1,6 @@
 agent:
   enabled: true
   clusterName: c2
-  remotes:
-    - secretName: remote
   securityContext:
     runAsUser: 1000
 

@@ -1,7 +1,7 @@
 {{- define "clusterNamespacedName" }}
 {{- if .useClusterNamespaces }}
 name: member
-namespace: {{ .name }}
+namespace: {{ .clusterNamespace | default .name }}
 {{- else }}
 name: {{ .name }}
 {{- end }}

@@ -2,9 +2,7 @@ global:
   useClusterNamespaces: true
   clusters:
     - name: c1
-      clusterNamespace: c1
     - name: c2
-      clusterNamespace: c2
 
 scheduler:
   enabled: true
@@ -13,8 +11,6 @@ scheduler:
 
 agent:
   enabled: true
-  remotes:
-    - secretName: remote
   securityContext:
     runAsUser: 1000
 

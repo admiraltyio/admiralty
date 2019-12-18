@@ -11,8 +11,6 @@ scheduler:
 agent:
   enabled: true
   clusterName: c1
-  remotes:
-    - secretName: remote
   securityContext:
     runAsUser: 1000
 
