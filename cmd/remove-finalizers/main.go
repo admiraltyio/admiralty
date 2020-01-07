@@ -1,16 +1,35 @@
+/*
+Copyright 2019 The Multicluster-Scheduler Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package main
 
 import (
-	"admiralty.io/multicluster-controller/pkg/cluster"
+	"context"
+	"os"
+
 	"admiralty.io/multicluster-scheduler/pkg/apis"
 	"admiralty.io/multicluster-scheduler/pkg/apis/multicluster/v1alpha1"
 	"admiralty.io/multicluster-service-account/pkg/config"
-	"context"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 )
 
 func main() {
@@ -23,22 +42,30 @@ func main() {
 
 	k, err := kubernetes.NewForConfig(cfg)
 
-	clus := cluster.New("local", cfg, cluster.Options{})
-	c, err := clus.GetDelegatingClient()
+	m, err := apiutil.NewDiscoveryRESTMapper(cfg)
 	utilruntime.Must(err)
-
-	err = apis.AddToScheme(clus.GetScheme())
+	s := scheme.Scheme
+	err = apis.AddToScheme(s)
 	utilruntime.Must(err)
+	c, err := client.New(cfg, client.Options{Scheme: s, Mapper: m})
 
 	p := patchAll{k, c, patch}
 
-	p.patchNamespacedResources()
-	p.patchClusterScopedResources()
+	role := os.Args[1]
+	switch role {
+	case "agent":
+		p.patchNamespacedResources()
+		p.patchClusterScopedResources()
 
-	// the node pool CRD won't be deleted when multicluster-scheduler Helm release is deleted
-	// if the user deletes the CRD later, the node pools will be deleted
-	// finalizers would be blocking then
-	p.patchNodePools(ctx)
+		// the node pool CRD won't be deleted when multicluster-scheduler Helm release is deleted
+		// if the user deletes the CRD later, the node pools will be deleted
+		// finalizers would be blocking then
+		p.patchNodePools(ctx)
+	case "scheduler":
+		p.patchPodObservations(ctx)
+		p.patchPodDecisions(ctx)
+		p.patchServiceDecisions(ctx)
+	}
 }
 
 type patchAll struct {
@@ -204,7 +231,55 @@ func (p patchAll) patchStorageClasses() {
 
 func (p patchAll) patchNodePools(ctx context.Context) {
 	l := &v1alpha1.NodePoolList{}
-	err := p.c.List(ctx, &client.ListOptions{}, l)
+	err := p.c.List(ctx, l)
+	utilruntime.Must(err)
+	for _, o := range l.Items {
+		for i, f := range o.Finalizers {
+			if f == "multicluster.admiralty.io/multiclusterForegroundDeletion" {
+				o.Finalizers = append(o.Finalizers[:i], o.Finalizers[i+1:]...)
+				err := p.c.Update(ctx, &o) // TODO use patch when we upgrade controller-runtime
+				utilruntime.Must(err)
+				break
+			}
+		}
+	}
+}
+
+func (p patchAll) patchPodObservations(ctx context.Context) {
+	l := &v1alpha1.PodObservationList{}
+	err := p.c.List(ctx, l)
+	utilruntime.Must(err)
+	for _, o := range l.Items {
+		for i, f := range o.Finalizers {
+			if f == "multicluster.admiralty.io/multiclusterForegroundDeletion" {
+				o.Finalizers = append(o.Finalizers[:i], o.Finalizers[i+1:]...)
+				err := p.c.Update(ctx, &o) // TODO use patch when we upgrade controller-runtime
+				utilruntime.Must(err)
+				break
+			}
+		}
+	}
+}
+
+func (p patchAll) patchPodDecisions(ctx context.Context) {
+	l := &v1alpha1.PodDecisionList{}
+	err := p.c.List(ctx, l)
+	utilruntime.Must(err)
+	for _, o := range l.Items {
+		for i, f := range o.Finalizers {
+			if f == "multicluster.admiralty.io/multiclusterForegroundDeletion" {
+				o.Finalizers = append(o.Finalizers[:i], o.Finalizers[i+1:]...)
+				err := p.c.Update(ctx, &o) // TODO use patch when we upgrade controller-runtime
+				utilruntime.Must(err)
+				break
+			}
+		}
+	}
+}
+
+func (p patchAll) patchServiceDecisions(ctx context.Context) {
+	l := &v1alpha1.ServiceDecisionList{}
+	err := p.c.List(ctx, l)
 	utilruntime.Must(err)
 	for _, o := range l.Items {
 		for i, f := range o.Finalizers {

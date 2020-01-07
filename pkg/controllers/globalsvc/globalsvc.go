@@ -108,7 +108,7 @@ func (r *reconciler) Reconcile(req reconcile.Request) (reconcile.Result, error) 
 			gc.LabelParentName:      svcObs.Name,
 			gc.LabelParentNamespace: svcObs.Namespace,
 		})
-		err := r.client.List(context.Background(), &client.ListOptions{Namespace: svcDecNamespace, LabelSelector: s}, l)
+		err := r.client.List(context.Background(), l, &client.ListOptions{Namespace: svcDecNamespace, LabelSelector: s})
 		if err != nil {
 			return reconcile.Result{}, fmt.Errorf(
 				"cannot list service decisions in namespace %s with label selector %s: %v",

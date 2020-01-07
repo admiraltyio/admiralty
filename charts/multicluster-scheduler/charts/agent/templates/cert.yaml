@@ -1,0 +1,13 @@
+apiVersion: cert-manager.io/v1alpha2
+kind: Certificate
+metadata:
+  name: {{ include "fullname" . }}
+  labels: {{ include "labels" . | nindent 4 }}
+spec:
+  commonName: {{ include "fullname" . }}.{{ .Release.Namespace }}.svc
+  dnsNames:
+    - {{ include "fullname" . }}.{{ .Release.Namespace }}.svc
+    - {{ include "fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local
+  secretName: {{ include "fullname" . }}-cert
+  issuerRef:
+    name: {{ include "fullname" . }}

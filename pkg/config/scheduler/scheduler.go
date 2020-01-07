@@ -42,6 +42,7 @@ type Config struct {
 
 func Load(schedulerNamespace string) *Config {
 	path := flag.String("config", "/etc/admiralty/config", "")
+	flag.Parse()
 	s, err := ioutil.ReadFile(*path)
 	if err != nil {
 		log.Fatalf("cannot open scheduler configuration: %v", err)

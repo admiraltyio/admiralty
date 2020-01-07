@@ -18,7 +18,12 @@ spec:
       containers:
         - name: controller
           image: {{ .Values.image.repository }}:{{ default .Values.global.chart.appVersion .Values.image.tag }}
+          ports:
+            - containerPort: 9443
           volumeMounts:
+            - mountPath: /tmp/k8s-webhook-server/serving-certs
+              name: cert
+              readOnly: true
             - name: config
               mountPath: /etc/admiralty
                       {{- range .Values.remotes }}
@@ -36,6 +41,10 @@ spec:
             {{- end }}
       serviceAccountName: {{ include "fullname" . }}
       volumes:
+        - name: cert
+          secret:
+            defaultMode: 420
+            secretName: {{ include "fullname" . }}-cert
         - name: config
           configMap:
             name: {{ include "fullname" . }}

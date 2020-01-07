@@ -19,32 +19,48 @@ var testCases = map[string]struct {
 	"proxy pod": {
 		corev1.Pod{
 			ObjectMeta: v1.ObjectMeta{Annotations: map[string]string{common.AnnotationKeyElect: ""}},
-			Spec: corev1.PodSpec{Containers: []corev1.Container{{
-				Name:  "nginx",
-				Image: "nginx",
-			}}}},
+			Spec: corev1.PodSpec{
+				Containers: []corev1.Container{{
+					Name:  "nginx",
+					Image: "nginx",
+				}},
+			},
+		},
 		corev1.Pod{
 			ObjectMeta: v1.ObjectMeta{Annotations: map[string]string{
 				common.AnnotationKeyElect:             "",
 				common.AnnotationKeySourcePodManifest: "HACK", // yaml serialization computed in test code
 			}},
-			Spec: corev1.PodSpec{Containers: []corev1.Container{{
-				Name:    "nginx",
-				Image:   image,
-				Command: command,
-			}}}},
+			Spec: corev1.PodSpec{
+				Containers: []corev1.Container{{
+					Name:  "nginx",
+					Image: "nginx",
+				}},
+				NodeName: "admiralty",
+				Tolerations: []corev1.Toleration{{
+					Key:   "virtual-kubelet.io/provider",
+					Value: "admiralty",
+				}},
+			},
+		},
 	},
 	"other pod": {
 		corev1.Pod{
-			Spec: corev1.PodSpec{Containers: []corev1.Container{{
-				Name:  "nginx",
-				Image: "nginx",
-			}}}},
+			Spec: corev1.PodSpec{
+				Containers: []corev1.Container{{
+					Name:  "nginx",
+					Image: "nginx",
+				}},
+			},
+		},
 		corev1.Pod{
-			Spec: corev1.PodSpec{Containers: []corev1.Container{{
-				Name:  "nginx",
-				Image: "nginx",
-			}}}},
+			Spec: corev1.PodSpec{
+				Containers: []corev1.Container{{
+					Name:  "nginx",
+					Image: "nginx",
+				}},
+			},
+		},
 	},
 	"federation name": {
 		corev1.Pod{
@@ -62,11 +78,17 @@ var testCases = map[string]struct {
 				common.AnnotationKeyFederationName:    "f1",
 				common.AnnotationKeySourcePodManifest: "HACK", // yaml serialization computed in test code
 			}},
-			Spec: corev1.PodSpec{Containers: []corev1.Container{{
-				Name:    "nginx",
-				Image:   image,
-				Command: command,
-			}}}},
+			Spec: corev1.PodSpec{
+				Containers: []corev1.Container{{
+					Name:  "nginx",
+					Image: "nginx",
+				}},
+				NodeName: "admiralty",
+				Tolerations: []corev1.Toleration{{
+					Key:   "virtual-kubelet.io/provider",
+					Value: "admiralty",
+				}},
+			}},
 	},
 	"keep labels and annotations (in general, object meta)": {
 		corev1.Pod{
@@ -74,10 +96,13 @@ var testCases = map[string]struct {
 				Annotations: map[string]string{common.AnnotationKeyElect: "", "k1": "v1"},
 				Labels:      map[string]string{"k2": "v2"},
 			},
-			Spec: corev1.PodSpec{Containers: []corev1.Container{{
-				Name:  "nginx",
-				Image: "nginx",
-			}}}},
+			Spec: corev1.PodSpec{
+				Containers: []corev1.Container{{
+					Name:  "nginx",
+					Image: "nginx",
+				}},
+			},
+		},
 		corev1.Pod{
 			ObjectMeta: v1.ObjectMeta{
 				Annotations: map[string]string{
@@ -87,11 +112,18 @@ var testCases = map[string]struct {
 				},
 				Labels: map[string]string{"k2": "v2"},
 			},
-			Spec: corev1.PodSpec{Containers: []corev1.Container{{
-				Name:    "nginx",
-				Image:   image,
-				Command: command,
-			}}}},
+			Spec: corev1.PodSpec{
+				Containers: []corev1.Container{{
+					Name:  "nginx",
+					Image: "nginx",
+				}},
+				NodeName: "admiralty",
+				Tolerations: []corev1.Toleration{{
+					Key:   "virtual-kubelet.io/provider",
+					Value: "admiralty",
+				}},
+			},
+		},
 	},
 }
 

@@ -92,9 +92,16 @@ func NewController(agent *cluster.Cluster, scheduler *cluster.Cluster, observati
 	liveType runtime.Object, observationType runtime.Object) (*controller.Controller, error) {
 	return gc.NewController(agent, scheduler, gc.Options{
 		ParentPrototype: liveType,
-		ChildPrototype:  observationType,
-		ChildNamespace:  observationNamespace,
-		Applier:         applier{},
+		ParentWatchOptions: controller.WatchOptions{CustomPredicate: func(obj interface{}) bool {
+			node, ok := obj.(*corev1.Node)
+			if !ok {
+				return true
+			}
+			return node.Labels["type"] != "virtual-kubelet"
+		}},
+		ChildPrototype: observationType,
+		ChildNamespace: observationNamespace,
+		Applier:        applier{},
 	})
 }
 

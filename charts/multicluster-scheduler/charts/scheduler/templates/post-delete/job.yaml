@@ -15,7 +15,7 @@ spec:
       restartPolicy: Never
       containers:
         - name: remove-finalizers
-          args: ["agent"]
+          args: ["scheduler"]
           image: {{ .Values.global.postDeleteJob.image.repository }}:{{ default .Values.global.chart.appVersion .Values.global.postDeleteJob.image.tag }}
                 {{- with .Values.global.postDeleteJob.image.pullPolicy }}
           imagePullPolicy: {{ . }}

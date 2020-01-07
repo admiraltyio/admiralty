@@ -35,6 +35,11 @@ func (e *EnqueueRequestForNodePool) enqueue(obj interface{}) {
 
 	r := reconcile.Request{Context: e.Context}
 	l := o.GetLabels()
+
+	if l["type"] == "virtual-kubelet" {
+		return
+	}
+
 	name := l[NodePoolLabel]
 	if name == "" {
 		name = l[GKENodePoolLabel]

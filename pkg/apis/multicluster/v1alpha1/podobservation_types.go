@@ -30,7 +30,7 @@ type PodObservationStatus struct {
 	// +optional
 	LiveState *corev1.Pod `json:"liveState,omitempty"`
 	// +optional
-	DelegateState *corev1.Pod `json:"delegateState,omitempty"`
+	DelegateState *corev1.Pod `json:"delegateState,omitempty"` // TODO... move to its own CRD (PodFeedback)
 }
 
 // +genclient

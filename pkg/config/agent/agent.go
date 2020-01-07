@@ -1,12 +1,13 @@
 package agent
 
 import (
-	configv1alpha1 "admiralty.io/multicluster-scheduler/pkg/apis/config/v1alpha1"
-	"admiralty.io/multicluster-service-account/pkg/config"
 	"flag"
 	"io/ioutil"
-	"k8s.io/client-go/rest"
 	"log"
+
+	configv1alpha1 "admiralty.io/multicluster-scheduler/pkg/apis/config/v1alpha1"
+	"admiralty.io/multicluster-service-account/pkg/config"
+	"k8s.io/client-go/rest"
 	"sigs.k8s.io/yaml"
 )
 
@@ -23,6 +24,7 @@ type Remote struct {
 func New() Config {
 	agentCfg := Config{}
 	cfgPath := flag.String("config", "/etc/admiralty/config", "")
+	flag.Parse()
 	s, err := ioutil.ReadFile(*cfgPath)
 	if err != nil {
 		log.Fatalf("cannot open agent configuration: %v", err)

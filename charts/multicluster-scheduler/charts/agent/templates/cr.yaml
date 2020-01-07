@@ -21,6 +21,7 @@ rules:
     resources:
       - pods
       - services
+      - nodes
     verbs:
       - get
       - list
@@ -32,13 +33,12 @@ rules:
   - apiGroups:
       - ""
     resources:
-      - pods/exec
+      - pods/status
     verbs:
-      - create
+      - update
   - apiGroups:
       - ""
     resources:
-      - nodes
       - endpoints
       - replicasets
       - persistentvolumes
@@ -77,3 +77,9 @@ rules:
       - list
       - watch
       - update
+  - apiGroups:
+      - ""
+    resources:
+      - nodes/status
+    verbs:
+      - patch

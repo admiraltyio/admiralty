@@ -3,6 +3,7 @@ set -euo pipefail
 
 source test/e2e/aliases.sh
 source test/e2e/mcsa.sh
+source test/e2e/webhook_ready.sh
 
 MCSA_URL="$MCSA_RELEASE_URL/install.yaml"
 
@@ -41,6 +42,9 @@ spec:
   namespace: default
   name: c2
 EOF
+
+  webhook_ready 1 default multicluster-scheduler-agent multicluster-scheduler-agent multicluster-scheduler-agent-cert
+  webhook_ready 2 default multicluster-scheduler-agent multicluster-scheduler-agent multicluster-scheduler-agent-cert
 }
 
 tear_down() {

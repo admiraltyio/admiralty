@@ -17,7 +17,6 @@ limitations under the License.
 package feedback
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"reflect"
@@ -31,19 +30,15 @@ import (
 	"admiralty.io/multicluster-controller/pkg/reconcile"
 	"admiralty.io/multicluster-scheduler/pkg/apis/multicluster/v1alpha1"
 	"admiralty.io/multicluster-scheduler/pkg/common"
+	"github.com/go-test/deep"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/remotecommand"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-func NewController(agent *cluster.Cluster, scheduler *cluster.Cluster, observationNamespace string,
-	agentClientset *kubernetes.Clientset) (*controller.Controller, error) {
-
+func NewController(agent *cluster.Cluster, scheduler *cluster.Cluster, observationNamespace string) (*controller.Controller, error) {
 	agentClient, err := agent.GetDelegatingClient()
 	if err != nil {
 		return nil, fmt.Errorf("getting delegating client for agent cluster: %v", err)
@@ -54,10 +49,8 @@ func NewController(agent *cluster.Cluster, scheduler *cluster.Cluster, observati
 	}
 
 	co := controller.New(&reconciler{
-		agent:          agentClient,
-		scheduler:      schedulerClient,
-		agentClientset: agentClientset,
-		agentConfig:    agent.Config,
+		agent:     agentClient,
+		scheduler: schedulerClient,
 	}, controller.Options{})
 
 	if err := co.WatchResourceReconcileObject(scheduler, &v1alpha1.PodObservation{}, controller.WatchOptions{
@@ -75,10 +68,8 @@ func NewController(agent *cluster.Cluster, scheduler *cluster.Cluster, observati
 }
 
 type reconciler struct {
-	agent          client.Client
-	scheduler      client.Client
-	agentConfig    *rest.Config
-	agentClientset *kubernetes.Clientset
+	agent     client.Client
+	scheduler client.Client
 }
 
 func (r *reconciler) Reconcile(req reconcile.Request) (reconcile.Result, error) {
@@ -114,6 +105,9 @@ func (r *reconciler) Reconcile(req reconcile.Request) (reconcile.Result, error) 
 	mcProxyPodAnnotations, otherProxyPodAnnotations := filterAnnotations(proxyPod.Annotations)
 	_, otherDelegatePodAnnotations := filterAnnotations(delegatePod.Annotations)
 
+	// we can't group annotation and status updates into an update,
+	// because general update ignores status
+
 	if !reflect.DeepEqual(otherProxyPodAnnotations, otherDelegatePodAnnotations) {
 		for k, v := range otherDelegatePodAnnotations {
 			mcProxyPodAnnotations[k] = v
@@ -129,66 +123,19 @@ func (r *reconciler) Reconcile(req reconcile.Request) (reconcile.Result, error) 
 		}
 	}
 
-	if proxyPod.Status.Phase == corev1.PodRunning {
-		if delegatePod.Status.Phase == corev1.PodSucceeded {
-			for _, c := range proxyPod.Spec.Containers {
-				if err := r.sendSignal(proxyPod.Name, proxyPod.Namespace, c.Name, "SIGUSR1"); err != nil {
-					return reconcile.Result{}, fmt.Errorf("cannot send SIGUSR1=PodSucceeded to container %s in pod %s in namespace %s in agent cluster: %v", c.Name, proxyPod.Name, proxyPod.Namespace, err)
-				}
+	if deep.Equal(proxyPod.Status, delegatePod.Status) != nil {
+		proxyPod.Status = delegatePod.Status
+		if err := r.agent.Status().Update(context.Background(), proxyPod); err != nil {
+			if patterns.IsOptimisticLockError(err) {
+				// TODO watch proxy pods instead, to requeue when the cache is updated
+				oneSec, _ := time.ParseDuration("1s")
+				return reconcile.Result{RequeueAfter: oneSec}, nil
 			}
-		} else if delegatePod.Status.Phase == corev1.PodFailed {
-			for _, c := range proxyPod.Spec.Containers {
-				if err := r.sendSignal(proxyPod.Name, proxyPod.Namespace, c.Name, "-SIGUSR2"); err != nil {
-					return reconcile.Result{}, fmt.Errorf("cannot send SIGUSR1=PodFailed to container %s in pod %s in namespace %s in agent cluster: %v", c.Name, proxyPod.Name, proxyPod.Namespace, err)
-				}
-			}
+			return reconcile.Result{}, fmt.Errorf("cannot update proxy pod %s in namespace %s in agent cluster: %v", proxyPod.Name, proxyPod.Namespace, err)
 		}
 	}
 
 	return reconcile.Result{}, nil
-}
-
-func (r *reconciler) sendSignal(pod string, namespace string, container string, signal string) error {
-	if err := r.exec(pod, namespace, container, true, true, "kill", "-"+signal, "1"); err != nil {
-		if !strings.Contains(err.Error(), "command terminated with exit code 137") &&
-			!strings.Contains(err.Error(), "container not found") {
-			// "exit code 137" is expected, "container not found" could happen if some containers have been killed in a previous pass
-			return err
-		}
-	}
-	return nil
-}
-
-func (r *reconciler) exec(pod string, namespace string, container string, stdout bool, stderr bool, command ...string) error {
-	execRequest := r.agentClientset.CoreV1().RESTClient().Post().
-		Resource("pods").
-		Name(pod).
-		Namespace(namespace).
-		SubResource("exec").
-		Param("stdout", fmt.Sprintf("%v", stdout)).
-		Param("stderr", fmt.Sprintf("%v", stderr)).
-		Param("container", container)
-
-	for _, cmd := range command {
-		execRequest = execRequest.Param("command", cmd)
-	}
-
-	exec, err := remotecommand.NewSPDYExecutor(r.agentConfig, "POST", execRequest.URL())
-	if err != nil {
-		return fmt.Errorf("cannot create SPDY executor to POST to %s (agent cluster): %v", execRequest.URL(), err)
-	}
-
-	var stdOut bytes.Buffer
-	var stdErr bytes.Buffer
-	if err := exec.Stream(remotecommand.StreamOptions{
-		Stdout: &stdOut,
-		Stderr: &stdErr,
-		Tty:    false,
-	}); err != nil {
-		return fmt.Errorf("streaming error: %v", err)
-	}
-
-	return nil
 }
 
 func filterAnnotations(annotations map[string]string) (map[string]string, map[string]string) {

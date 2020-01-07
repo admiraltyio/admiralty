@@ -16,8 +16,6 @@ setup_argo() {
   # the workflow service account must exist in the other cluster
   k2 apply -f examples/argo-workflows/_service-account.yaml
 
-  k1 label ns default multicluster-scheduler=enabled
-
   # TODO download only if not present or version mismatch
   curl -Lo argo https://github.com/argoproj/argo/releases/download/v2.2.1/argo-linux-amd64
   chmod +x argo
@@ -29,8 +27,6 @@ setup_argo() {
 }
 
 tear_down_argo() {
-  k1 label ns default multicluster-scheduler-
-
   k2 delete -f examples/argo-workflows/_service-account.yaml
   k1 delete -f examples/argo-workflows/_service-account.yaml
   k1 delete -n argo -f https://raw.githubusercontent.com/argoproj/argo/v2.2.1/manifests/install.yaml
@@ -38,9 +34,10 @@ tear_down_argo() {
 }
 
 test_blog_scenario_a_multicluster() {
-  KUBECONFIG=kubeconfig-cluster1 ./argo submit --serviceaccount argo-workflow --watch examples/argo-workflows/blog-scenario-a-multicluster.yaml
+  k1 label ns default multicluster-scheduler=enabled
+  KUBECONFIG=kubeconfig-cluster1 ./argo submit --serviceaccount argo-workflow --wait examples/argo-workflows/blog-scenario-a-multicluster.yaml
 
-  if [ $(k2 get pod | wc -l) -gt 1 ]; then
+  if [ $(k2 get pod -l multicluster.admiralty.io/workflow | wc -l) -gt 1 ]; then
     echo "SUCCESS"
   else
     echo "FAILURE"
@@ -48,4 +45,5 @@ test_blog_scenario_a_multicluster() {
   fi
 
   KUBECONFIG=kubeconfig-cluster1 ./argo delete --all
+  k1 label ns default multicluster-scheduler-
 }

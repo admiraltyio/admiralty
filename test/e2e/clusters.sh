@@ -13,7 +13,7 @@ setup_clusters() {
 
     kind load docker-image "quay.io/admiralty/multicluster-scheduler-basic:$VERSION" --name $CLUSTER
     kind load docker-image "quay.io/admiralty/multicluster-scheduler-agent:$VERSION" --name $CLUSTER
-    kind load docker-image "quay.io/admiralty/multicluster-scheduler-pod-admission-controller:$VERSION" --name $CLUSTER
+    kind load docker-image "quay.io/admiralty/multicluster-scheduler-remove-finalizers:$VERSION" --name $CLUSTER
   done
 }
 

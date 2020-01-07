@@ -20,6 +20,24 @@
 
 -->
 
+## v0.6.0
+
+### New Features
+
+- Multicluster-scheduler is now a virtual-kubelet provider. Proxy pods are scheduled to a virtual node rather than actual nodes:
+  - Their containers no longer need to be replaced by dummy signal traps, because they aren't run locally.
+  - A proxy pod's status is simply the copy of its delegate's status. Therefore, it appears pending as long as its delegate is pending (fixes [#7](https://github.com/admiraltyio/multicluster-scheduler/issues/7)).
+  - Finally, proxy pods no longer count toward the pod limit of actual nodes.
+- Merge `cmd/agent` and `cmd/webhook`, and run virtual-kubelet as part of the same process. This reduces the number of Kubernetes deployments and Helm subcharts. If we need to scale them independently in the future, we can easily split them again.
+
+### Bugfixes
+
+- Add missing post-delete Helm hook for scheduler resources, to delete finalizers on pod and service observations and decisions.
+
+### Internals
+
+- Upgrade controller-runtime to v0.4.0, because v0.1.12 wasn't compatible with virtual-kubelet (their dependencies weren't). As a result, **[cert-manager](https://cert-manager.io/) is now a pre-requisite**, because certificate generation for webhooks has been removed as of controller-runtime v0.2.0.
+
 ## v0.5.0
 
 ### New Features

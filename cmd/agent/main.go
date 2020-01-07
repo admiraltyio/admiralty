@@ -17,10 +17,12 @@ limitations under the License.
 package main
 
 import (
+	"context"
+	"flag"
 	"log"
 
 	"admiralty.io/multicluster-controller/pkg/cluster"
-	"admiralty.io/multicluster-controller/pkg/manager"
+	mcmgr "admiralty.io/multicluster-controller/pkg/manager"
 	"admiralty.io/multicluster-scheduler/pkg/apis"
 	"admiralty.io/multicluster-scheduler/pkg/config/agent"
 	"admiralty.io/multicluster-scheduler/pkg/controllers/feedback"
@@ -28,14 +30,26 @@ import (
 	"admiralty.io/multicluster-scheduler/pkg/controllers/receive"
 	"admiralty.io/multicluster-scheduler/pkg/controllers/send"
 	"admiralty.io/multicluster-scheduler/pkg/controllers/svcreroute"
+	"admiralty.io/multicluster-scheduler/pkg/vk/node"
+	"admiralty.io/multicluster-scheduler/pkg/webhooks/proxypod"
 	"admiralty.io/multicluster-service-account/pkg/config"
+	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
+	vklog "github.com/virtual-kubelet/virtual-kubelet/log"
+	logruslogger "github.com/virtual-kubelet/virtual-kubelet/log/logrus"
 	"k8s.io/client-go/kubernetes"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
+	"k8s.io/client-go/rest"
+	"k8s.io/klog"
 	"k8s.io/sample-controller/pkg/signals"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
+	"sigs.k8s.io/controller-runtime/pkg/webhook"
 )
 
+// TODO standardize logging
+
 func main() {
-	m := manager.New()
+	stopCh := signals.SetupSignalHandler()
 
 	agentClientCfg, _, err := config.ConfigAndNamespaceForContext("")
 	if err != nil {
@@ -43,10 +57,13 @@ func main() {
 	}
 	log.Printf("Local API server URL: %s\n", agentClientCfg.Host)
 
-	agentClientset, err := kubernetes.NewForConfig(agentClientCfg)
-	if err != nil {
-		log.Fatalf("cannot create member client set: %v", err)
-	}
+	startControllers(stopCh, agentClientCfg)
+	startWebhook(stopCh, agentClientCfg)
+	startVirtualKubelet(stopCh, agentClientCfg)
+}
+
+func startControllers(stopCh <-chan struct{}, agentClientCfg *rest.Config) {
+	m := mcmgr.New()
 
 	agentCluster := cluster.New("local", agentClientCfg, cluster.Options{})
 	if err := apis.AddToScheme(agentCluster.GetScheme()); err != nil {
@@ -96,14 +113,68 @@ func main() {
 			m.AddController(co)
 		}
 
-		co, err := feedback.NewController(agentCluster, remoteCluster, remote.Namespace, agentClientset)
+		co, err := feedback.NewController(agentCluster, remoteCluster, remote.Namespace)
 		if err != nil {
 			log.Fatalf("cannot create feedback controller: %v", err)
 		}
 		m.AddController(co)
 	}
 
-	if err := m.Start(signals.SetupSignalHandler()); err != nil {
-		log.Fatalf("while or after starting manager: %v", err)
+	go func() {
+		if err := m.Start(stopCh); err != nil {
+			log.Fatalf("while or after starting multi-cluster manager: %v", err)
+		}
+	}()
+}
+
+func startWebhook(stopCh <-chan struct{}, agentClientCfg *rest.Config) {
+	webhookMgr, err := manager.New(agentClientCfg, manager.Options{Port: 9443})
+	if err != nil {
+		log.Fatalf("cannot create webhook manager: %v", err)
+	}
+
+	hookServer := webhookMgr.GetWebhookServer()
+	hookServer.Register("/mutate-v1-pod", &webhook.Admission{Handler: &proxypod.Handler{}})
+
+	go func() {
+		if err := webhookMgr.Start(stopCh); err != nil {
+			log.Fatalf("while or after starting webhook manager: %v", err)
+		}
+	}()
+}
+
+func startVirtualKubelet(stopCh <-chan struct{}, agentClientCfg *rest.Config) {
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		<-stopCh
+		cancel()
+	}()
+
+	nodeCfg := &node.Opts{}
+	nodeCfg.BindFlags()
+
+	var logLevel string
+	flag.StringVar(&logLevel, "log-level", "info", `set the log level, e.g. "debug", "info", "warn", "error"`)
+
+	klog.InitFlags(nil)
+
+	flag.Parse()
+
+	vklog.L = logruslogger.FromLogrus(logrus.NewEntry(logrus.StandardLogger()))
+	if logLevel != "" {
+		lvl, err := logrus.ParseLevel(logLevel)
+		if err != nil {
+			vklog.G(ctx).Fatal(errors.Wrap(err, "could not parse log level"))
+		}
+		logrus.SetLevel(lvl)
+	}
+
+	k, err := kubernetes.NewForConfig(agentClientCfg)
+	if err != nil {
+		vklog.G(ctx).Fatal(err)
+	}
+
+	if err := node.Run(ctx, *nodeCfg, k); err != nil && errors.Cause(err) != context.Canceled {
+		vklog.G(ctx).Fatal(err)
 	}
 }

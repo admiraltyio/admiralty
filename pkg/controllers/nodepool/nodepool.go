@@ -29,7 +29,9 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/selection"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -119,19 +121,19 @@ func (r *reconciler) getTaggedNodes(nodePoolName string) ([]corev1.Node, error) 
 	var nodes []corev1.Node
 
 	list := &corev1.NodeList{}
-	if err := r.client.List(context.Background(), client.MatchingLabels(map[string]string{NodePoolLabel: nodePoolName}), list); err != nil {
+	if err := r.client.List(context.Background(), list, client.MatchingLabels{NodePoolLabel: nodePoolName}); err != nil {
 		return nil, err
 	}
 	nodes = append(nodes, list.Items...)
 
 	list = &corev1.NodeList{}
-	if err := r.client.List(context.Background(), client.MatchingLabels(map[string]string{GKENodePoolLabel: nodePoolName}), list); err != nil {
+	if err := r.client.List(context.Background(), list, client.MatchingLabels{GKENodePoolLabel: nodePoolName}); err != nil {
 		return nil, err
 	}
 	nodes = append(nodes, list.Items...)
 
 	list = &corev1.NodeList{}
-	if err := r.client.List(context.Background(), client.MatchingLabels(map[string]string{AKSNodePoolLabel: nodePoolName}), list); err != nil {
+	if err := r.client.List(context.Background(), list, client.MatchingLabels{AKSNodePoolLabel: nodePoolName}); err != nil {
 		return nil, err
 	}
 	nodes = append(nodes, list.Items...)
@@ -151,11 +153,18 @@ func (r *reconciler) getOrphanNodes() ([]corev1.Node, error) {
 	var nodes []corev1.Node
 
 	list := &corev1.NodeList{}
-	o := &client.ListOptions{}
-	if err := o.SetLabelSelector("!" + NodePoolLabel); err != nil {
+	s := labels.NewSelector()
+	req, err := labels.NewRequirement(NodePoolLabel, selection.DoesNotExist, nil)
+	if err != nil {
 		return nil, err
 	}
-	if err := r.client.List(context.Background(), o, list); err != nil {
+	s = s.Add(*req)
+	req, err = labels.NewRequirement("type", selection.NotEquals, []string{"virtual-kubelet"})
+	if err != nil {
+		return nil, err
+	}
+	s = s.Add(*req)
+	if err := r.client.List(context.Background(), list, client.MatchingLabelsSelector{Selector: s}); err != nil {
 		return nil, err
 	}
 	nodes = append(nodes, list.Items...)
@@ -174,9 +183,8 @@ func (r *reconciler) getSelectedNodes(selector *metav1.LabelSelector) ([]corev1.
 	if err != nil {
 		return nil, err
 	}
-	o := &client.ListOptions{LabelSelector: selectorInterface}
 	list := &corev1.NodeList{}
-	if err := r.client.List(context.Background(), o, list); err != nil {
+	if err := r.client.List(context.Background(), list, client.MatchingLabelsSelector{Selector: selectorInterface}); err != nil {
 		return nil, err
 	}
 	return list.Items, nil

@@ -50,7 +50,7 @@ func (r schedulerShim) Schedule(srcPod *corev1.Pod) (string, error) {
 
 func (r *schedulerShim) getObservations(namespace string, clusters map[string]struct{}) error {
 	podObsL := &v1alpha1.PodObservationList{}
-	if err := r.client.List(context.Background(), &client.ListOptions{Namespace: namespace}, podObsL); err != nil {
+	if err := r.client.List(context.Background(), podObsL, &client.ListOptions{Namespace: namespace}); err != nil {
 		return fmt.Errorf("cannot list pod observations: %v", err)
 	}
 	for _, podObs := range podObsL.Items {
@@ -65,7 +65,7 @@ func (r *schedulerShim) getObservations(namespace string, clusters map[string]st
 	}
 
 	nodeObsL := &v1alpha1.NodeObservationList{}
-	if err := r.client.List(context.Background(), &client.ListOptions{Namespace: namespace}, nodeObsL); err != nil {
+	if err := r.client.List(context.Background(), nodeObsL, &client.ListOptions{Namespace: namespace}); err != nil {
 		return fmt.Errorf("cannot list node observations: %v", err)
 	}
 	for _, nodeObs := range nodeObsL.Items {
@@ -77,7 +77,7 @@ func (r *schedulerShim) getObservations(namespace string, clusters map[string]st
 	}
 
 	npObsL := &v1alpha1.NodePoolObservationList{}
-	if err := r.client.List(context.Background(), &client.ListOptions{Namespace: namespace}, npObsL); err != nil {
+	if err := r.client.List(context.Background(), npObsL, &client.ListOptions{Namespace: namespace}); err != nil {
 		return fmt.Errorf("cannot list node pool observations: %v", err)
 	}
 	for _, npObs := range npObsL.Items {

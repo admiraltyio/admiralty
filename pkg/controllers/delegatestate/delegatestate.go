@@ -85,10 +85,10 @@ func (r *reconciler) Reconcile(req reconcile.Request) (reconcile.Result, error) 
 		gc.LabelParentNamespace:   proxyPodNs,
 		gc.LabelParentName:        proxyPodName,
 	})
-	if err := r.scheduler.List(context.Background(), &client.ListOptions{
+	if err := r.scheduler.List(context.Background(), proxyPodObsList, &client.ListOptions{
 		Namespace:     r.schedCfg.NamespaceForCluster[proxyPodClusterName],
 		LabelSelector: s,
-	}, proxyPodObsList); err != nil {
+	}); err != nil {
 		return reconcile.Result{}, fmt.Errorf("cannot list pod obs in namespace %s with label selector %s: %v",
 			proxyPodNs, s, err)
 	}

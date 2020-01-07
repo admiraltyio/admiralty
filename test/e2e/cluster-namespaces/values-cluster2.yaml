@@ -5,8 +5,3 @@ agent:
   enabled: true
   securityContext:
     runAsUser: 1000
-
-webhook:
-  enabled: true
-  securityContext:
-    runAsUser: 1000

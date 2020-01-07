@@ -6,13 +6,11 @@ VERSION="$1"
 ROOT_PKG="admiralty.io/multicluster-scheduler"
 TARGETS=(
   "cmd/agent"
-  "cmd/pod-admission-controller"
   "cmd/scheduler"
   "cmd/remove-finalizers"
 )
 IMAGES=(
   "multicluster-scheduler-agent"
-  "multicluster-scheduler-pod-admission-controller"
   "multicluster-scheduler-basic"
   "multicluster-scheduler-remove-finalizers"
 )

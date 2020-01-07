@@ -4,12 +4,32 @@ Multicluster-Scheduler is a system of Kubernetes controllers that intelligently 
 
 > Note: This chart was built for Helm v3.
 
+## Prerequisites
+
+- [cert-manager](https://cert-manager.io/docs/installation/kubernetes/) v0.11+ in each member cluster
+
 ## TL;DR
+
+If you haven't already installed cert-manager:
+
+```sh
+helm repo add jetstack https://charts.jetstack.io
+helm repo update
+
+# in member clusters
+kubectl apply --validate=false -f https://raw.githubusercontent.com/jetstack/cert-manager/release-0.12/deploy/manifests/00-crds.yaml
+kubectl create namespace cert-manager
+helm install cert-manager \
+  --namespace cert-manager \
+  --version v0.12.0 \
+  jetstack/cert-manager
+```
 
 This will install multicluster-scheduler in the default namespace, in [standard mode](#standard-mode-vs-cluster-namespaces):
 
 ```sh
 helm repo add admiralty https://charts.admiralty.io
+helm repo update
 
 # in the scheduler's cluster
 helm install multicluster-scheduler admiralty/multicluster-scheduler \
@@ -24,18 +44,17 @@ kubemcsa export c2 --as remote > c2.yaml
 helm install multicluster-scheduler-member admiralty/multicluster-scheduler \
   --set agent.enabled=true \
   --set agent.clusterName=c1 \
-  --set webhook.enabled=true
 kubectl apply -f c1.yaml
 # repeat for c2
 ```
 
 ## Subcharts
 
-This chart is composed of four subcharts: `scheduler` and `clusters` are installed in the scheduler's cluster; `agent` and `webhook` are installed in each member cluster. The scheduler's cluster can be a member cluster too, in which case you'll install all four subcharts in it.
+This chart is composed of three subcharts: `scheduler` and `clusters` are installed in the scheduler's cluster; `agent` is installed in each member cluster. The scheduler's cluster can be a member cluster too, in which case you'll install all three subcharts in it.
 
-The `scheduler` , `agent`, and `webhook` subcharts each install a deployment and its associated config map, service account, and [RBAC](https://kubernetes.io/docs/reference/access-authn-authz/rbac/) resources. All three are namespaced.
+The `scheduler` and `agent` subcharts each install a deployment and its associated config map, service account, and [RBAC](https://kubernetes.io/docs/reference/access-authn-authz/rbac/) resources. Both are namespaced. The `agent` subchart also installs admission-webhook-related resources: service, configuration, cert-manager self-signed issuer and certificate.
 
-The `clusters` subchart doesn't install any deployment, but service accounts and RBAC resources, for the agents in each member cluster to call the Kubernetes API of the scheduler's cluster (cf. [How It Works](../../README.md) in the main README). In [cluster-namespace mode](#cluster-namespaces), the `clusters` subchart installs resources in multiple namespaces; in standard mode, it must be installed in the same namespace as the scheduler.
+The `clusters` subchart doesn't install any deployment, but service accounts and RBAC resources, for the agents in each member cluster to call the Kubernetes API of the scheduler's cluster (cf. [How It Works](../../README.md) in the main README). In [cluster-namespace mode](#standard-mode-vs-cluster-namespaces), the `clusters` subchart installs resources in multiple namespaces; in standard mode, it must be installed in the same namespace as the scheduler.
 
 > Note: multicluster-scheduler doesn't support clusters without RBAC. There's no `rbac.create` parameter.
 
@@ -57,6 +76,7 @@ Add the Admiralty Helm chart repository to your Helm client:
 
 ```sh
 helm repo add admiralty https://charts.admiralty.io
+helm repo update
 ```
 
 All subcharts are disabled by default, so you CANNOT just `helm install`. That wouldn't install anything. Instead, you need to configure the chart a certain way for the scheduler's cluster, and a different way for each member cluster.
@@ -87,16 +107,12 @@ clusters:
 
 # Include the following if the scheduler's cluster is also a member cluster.
 # Note: Alternatively, you could install two releases in that cluster (with different release names!),
-# one with the scheduler and clusters subcharts, the other with the agent and webhook subcharts.
+# one with the scheduler and clusters subcharts, the other with the agent subchart.
 
 agent:
   enabled: true
   clusterName: SCHEDULER_CLUSTER_NAME # In standard mode, clusters declare their own names.
   # ... Configure the agent deployment with custom values.
-
-webhook:
-  enabled: true
-  # ... Configure the webhook deployment with custom values.
 ```
 
 > Note: The cluster names need NOT match context names and/or any other cluster nomenclature you may use. They are contained within the multicluster-scheduler [domain](https://en.wikipedia.org/wiki/Domain-driven_design).
@@ -119,10 +135,6 @@ Create another file named `values-member-1.yaml` containing something like:
 agent:
   enabled: true
   clusterName: MEMBER_1_CLUSTER_NAME
-  # ... Configure the agent deployment with custom values.
-
-webhook:
-  enabled: true
   # ... Configure the agent deployment with custom values.
 ```
 
@@ -178,10 +190,6 @@ clusters:
 agent:
   enabled: true
   # ... Configure the agent deployment with custom values.
-
-webhook:
-  enabled: true
-  # ... Configure the webhook deployment with custom values.
 ```
 
 > Note: The cluster names need NOT match context names and/or any other cluster nomenclature you may use. They are contained within the multicluster-scheduler [domain](https://en.wikipedia.org/wiki/Domain-driven_design).
@@ -208,10 +216,6 @@ In cluster-namespace mode, member clusters need not know their names, so you can
 
 ```yaml
 agent:
-  enabled: true
-  # ... Configure the agent deployment with custom values.
-
-webhook:
   enabled: true
   # ... Configure the agent deployment with custom values.
 ```
@@ -372,6 +376,15 @@ Don't forget to label the agent's namespace (e.g., "admiralty") with `multiclust
 | global.clusters[].clusterNamespace | string | the cluster name in cluster-namespace mode, else the release namespace |  |
 | global.clusters[].memberships | array | `[{"federationName":"default"}]` | cf. [Multiple Federations](#multiple-federations) |
 | global.clusters[].memberships[].federationName | string | `""` | required |
+| global.postDeleteJob.image.repository | string | `"quay.io/admiralty/multicluster-scheduler-remove-finalizers"` |  |
+| global.postDeleteJob.image.tag | string | `"0.6.0"` |  |
+| global.postDeleteJob.image.pullPolicy | string | `"IfNotPresent"` |  |
+| global.postDeleteJob.image.pullSecretName | string | `""` |  |
+| global.postDeleteJob.nodeSelector | object | `{}` |  |
+| global.postDeleteJob.resources | object | `{}` |  |
+| global.postDeleteJob.securityContext | object | `{}` |  |
+| global.postDeleteJob.affinity | object | `{}` |  |
+| global.postDeleteJob.tolerations | array | `[]` |  |
 | agent.enabled | boolean | `false` |  |
 | agent.clusterName | string | `""` | required in standard mode, ignored in cluster-namespace mode |
 | agent.remotes | array | `[{"secretName":"remote"}]` | agents can technically connect to multiple remote schedulers (not documented yet) |
@@ -381,7 +394,7 @@ Don't forget to label the agent's namespace (e.g., "admiralty") with `multiclust
 | agent.remotes[].context | string | `""` | if using a custom kubeconfig secret, with multiple contexts, override the kubeconfig's current context |
 | agent.remotes[].clusterName | string | `""` | override agent.clusterName for this remote |
 | agent.image.repository | string | `"quay.io/admiralty/multicluster-scheduler-agent"` |  |
-| agent.image.tag | string | `"0.5.0"` |  |
+| agent.image.tag | string | `"0.6.0"` |  |
 | agent.image.pullPolicy | string | `"IfNotPresent"` |  |
 | agent.image.pullSecretName | string | `""` |  |
 | agent.nodeSelector | object | `{}` |  |
@@ -389,19 +402,10 @@ Don't forget to label the agent's namespace (e.g., "admiralty") with `multiclust
 | agent.securityContext | object | `{}` |  |
 | agent.affinity | object | `{}` |  |
 | agent.tolerations | array | `[]` |  |
-| agent.postDeleteJob.image.repository | string | `"quay.io/admiralty/multicluster-scheduler-remove-finalizers"` |  |
-| agent.postDeleteJob.image.tag | string | `"0.5.0"` |  |
-| agent.postDeleteJob.image.pullPolicy | string | `"IfNotPresent"` |  |
-| agent.postDeleteJob.image.pullSecretName | string | `""` |  |
-| agent.postDeleteJob.nodeSelector | object | `{}` |  |
-| agent.postDeleteJob.resources | object | `{}` |  |
-| agent.postDeleteJob.securityContext | object | `{}` |  |
-| agent.postDeleteJob.affinity | object | `{}` |  |
-| agent.postDeleteJob.tolerations | array | `[]` |  |
 | clusters.enabled | boolean | `false` |  |
 | scheduler.enabled | boolean | `false` |  |
 | scheduler.image.repository | string | `"quay.io/admiralty/multicluster-scheduler-basic"` |  |
-| scheduler.image.tag | string | `"0.5.0"` |  |
+| scheduler.image.tag | string | `"0.6.0"` |  |
 | scheduler.image.pullPolicy | string | `"IfNotPresent"` |  |
 | scheduler.image.pullSecretName | string | `""` |  |
 | scheduler.nodeSelector | object | `{}` |  |
@@ -409,13 +413,3 @@ Don't forget to label the agent's namespace (e.g., "admiralty") with `multiclust
 | scheduler.securityContext | object | `{}` |  |
 | scheduler.affinity | object | `{}` |  |
 | scheduler.tolerations | array | `[]` |  |
-| webhook.enabled | boolean | `false` |  |
-| webhook.image.repository | string | `"quay.io/admiralty/multicluster-scheduler-pod-admission-controller"` |  |
-| webhook.image.tag | string | `"0.5.0"` |  |
-| webhook.image.pullPolicy | string | `"IfNotPresent"` |  |
-| webhook.image.pullSecretName | string | `""` |  |
-| webhook.nodeSelector | object | `{}` |  |
-| webhook.resources | object | `{}` |  |
-| webhook.securityContext | object | `{}` |  |
-| webhook.affinity | object | `{}` |  |
-| webhook.tolerations | array | `[]` |  |
