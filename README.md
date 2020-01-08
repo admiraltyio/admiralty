@@ -33,7 +33,7 @@ for CONTEXT in $CLUSTER1 $CLUSTER2
 do
   kubectl --context $CONTEXT apply --validate=false -f https://raw.githubusercontent.com/jetstack/cert-manager/release-0.12/deploy/manifests/00-crds.yaml
   kubectl --context $CONTEXT create namespace cert-manager
-  helm --context $CONTEXT install cert-manager \
+  helm --kube-context $CONTEXT install cert-manager \
     --namespace cert-manager \
     --version v0.12.0 \
     jetstack/cert-manager
@@ -53,18 +53,18 @@ helm repo add admiralty https://charts.admiralty.io
 helm repo update
 
 helm install multicluster-scheduler admiralty/multicluster-scheduler \
-  --context $CLUSTER1 \
+  --kube-context $CLUSTER1 \
   --set global.clusters[0].name=c1 \
   --set global.clusters[1].name=c2 \
   --set scheduler.enabled=true \
   --set clusters.enabled=true \
   --set agent.enabled=true \
-  --set agent.clusterName=c1 \
+  --set agent.clusterName=c1
 
 helm install multicluster-scheduler admiralty/multicluster-scheduler \
-  --context $CLUSTER2 \
+  --kube-context $CLUSTER2 \
   --set agent.enabled=true \
-  --set agent.clusterName=c2 \
+  --set agent.clusterName=c2
 ```
 
 Note: the Helm chart is flexible enough to configure multiple federations and/or refine RBAC so clusters can't see each other's observations. See [the chart's documentation](charts/multicluster-scheduler/README.md).
