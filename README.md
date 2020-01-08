@@ -19,6 +19,8 @@ CLUSTER1=cluster1 # change me
 CLUSTER2=cluster2 # change me
 ```
 
+Note: you can easily create two clusters on your machine with [kind](https://kind.sigs.k8s.io/).
+
 ### Installation
 
 #### Prerequisites
@@ -90,7 +92,9 @@ Then, run `kubemcsa export` to generate templates for secrets containing kubecon
 ./kubemcsa export --context $CLUSTER1 c2 --as remote | kubectl --context $CLUSTER2 apply -f -
 ```
 
-Note: you may wonder why the agent in cluster1 needs a kubeconfig as it runs in the same cluster as the scheduler. We simply like symmetry and didn't want to make the agent's configuration special in that case.
+Note: You may wonder why the agent in cluster1 needs a kubeconfig as it runs in the same cluster as the scheduler. We simply like symmetry and didn't want to make the agent's configuration special in that case.
+
+**Important!** `kubemcsa export` combines a service account token with the Kubernetes API server address and associated certificate of the scheduler's cluster found in your local kubeconfig. The address and certificate are routable and valid from your machine, but they need to be routable/valid from pods in each agent's cluster as well. For example, if you're using [kind](https://kind.sigs.k8s.io/), by default the address is `127.0.0.1:SOME_PORT`, because kind exposes API servers on random ports of your machine. However, `127.0.0.1` has a different meaning from the multicluster-scheduler agent pods. On Linux, you can generate a kubeconfig with `kind get kubeconfig --internal` that will work from your machine and from pods, because it uses the master node container's IP in the overlay network, instead of `127.0.0.1`. That won't work on Windows/Mac though. In that case, you can either run the commands above from a container, or tweak the result of `kubemcsa export` before piping it into `kubectl apply`, to override the secret's `server` and `ca.crt` data fields (TODO: support overrides in `kubemcsa export`).
 
 #### Verification
 
