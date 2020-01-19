@@ -32,19 +32,23 @@ helm repo add admiralty https://charts.admiralty.io
 helm repo update
 
 # in the scheduler's cluster
+kubectl create namespace admiralty
 helm install multicluster-scheduler admiralty/multicluster-scheduler \
+  --namespace admiralty \
   --set global.clusters[0].name=c1 \
   --set global.clusters[1].name=c2 \
   --set scheduler.enabled=true \
   --set clusters.enabled=true
-kubemcsa export c1 --as remote > c1.yaml
-kubemcsa export c2 --as remote > c2.yaml
+kubemcsa export c1 -n admiralty --as remote > c1.yaml
+kubemcsa export c2 -n admiralty --as remote > c2.yaml
 
 # in member clusters
+kubectl create namespace admiralty # if not already created
 helm install multicluster-scheduler-member admiralty/multicluster-scheduler \
+  --namespace admiralty \
   --set agent.enabled=true \
   --set agent.clusterName=c1 \
-kubectl apply -f c1.yaml
+kubectl apply -n admiralty -f c1.yaml
 # repeat for c2
 ```
 
@@ -254,16 +258,16 @@ Then, with your kubeconfig and context pointing at the scheduler's cluster, for 
 
 ```sh
 # standard mode
-./kubemcsa export MEMBER_CLUSTER_NAME --as remote > MEMBER_CLUSTER_NAME.yaml
+./kubemcsa export MEMBER_CLUSTER_NAME -n admiralty --as remote > MEMBER_CLUSTER_NAME.yaml
 
 # cluster-namespace mode
-./kubemcsa export remote --namespace MEMBER_CLUSTER_NAMESPACE --as remote > MEMBER_CLUSTER_NAME.yaml
+./kubemcsa export remote -n MEMBER_CLUSTER_NAMESPACE --as remote > MEMBER_CLUSTER_NAME.yaml
 ```
 
 Finally, for each member cluster, with your kubeconfig and context pointing at that cluster:
 
 ```sh
-kubectl apply -f MEMBER_CLUSTER_NAME.yaml
+kubectl apply -n admiralty -f MEMBER_CLUSTER_NAME.yaml
 ```
 
 > Note: If the scheduler's cluster and member clusters are controlled by different entities, you can save the result of `kubemcsa export`, send it securely to a member cluster administrator, for them to run `kubectl apply`.

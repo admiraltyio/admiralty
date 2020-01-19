@@ -54,8 +54,10 @@ Starting from v0.4, the recommended way to install multicluster-scheduler is wit
 helm repo add admiralty https://charts.admiralty.io
 helm repo update
 
+kubectl --context $CLUSTER1 create namespace admiralty
 helm install multicluster-scheduler admiralty/multicluster-scheduler \
   --kube-context $CLUSTER1 \
+  --namespace admiralty \
   --set global.clusters[0].name=c1 \
   --set global.clusters[1].name=c2 \
   --set scheduler.enabled=true \
@@ -63,8 +65,10 @@ helm install multicluster-scheduler admiralty/multicluster-scheduler \
   --set agent.enabled=true \
   --set agent.clusterName=c1
 
+kubectl --context $CLUSTER2 create namespace admiralty
 helm install multicluster-scheduler admiralty/multicluster-scheduler \
   --kube-context $CLUSTER2 \
+  --namespace admiralty \
   --set agent.enabled=true \
   --set agent.clusterName=c2
 ```
@@ -88,8 +92,10 @@ chmod +x kubemcsa
 Then, run `kubemcsa export` to generate templates for secrets containing kubeconfigs equivalent to the `c1` and `c2` service accounts created by Helm in cluster1, and apply the templates with kubectl in cluster1 and cluster2, respectively:
 
 ```bash
-./kubemcsa export --context $CLUSTER1 c1 --as remote | kubectl --context $CLUSTER1 apply -f -
-./kubemcsa export --context $CLUSTER1 c2 --as remote | kubectl --context $CLUSTER2 apply -f -
+./kubemcsa export --context $CLUSTER1 -n admiralty c1 --as remote \
+  | kubectl --context $CLUSTER1 -n admiralty apply -f -
+./kubemcsa export --context $CLUSTER1 -n admiralty c2 --as remote \
+  | kubectl --context $CLUSTER2 -n admiralty apply -f -
 ```
 
 Note: You may wonder why the agent in cluster1 needs a kubeconfig as it runs in the same cluster as the scheduler. We simply like symmetry and didn't want to make the agent's configuration special in that case.
@@ -108,12 +114,12 @@ kubectl --context $CLUSTER1 get nodepools # or np
 kubectl --context $CLUSTER2 get nodepools # or np
 
 kubectl config use-context $CLUSTER1
-kubectl get nodepoolobservations # or npobs
-kubectl get nodeobservations # or nodeobs
-kubectl get podobservations # or podobs
-kubectl get serviceobservations # or svcobs
+kubectl -n admiralty get nodepoolobservations # or npobs
+kubectl -n admiralty get nodeobservations # or nodeobs
+kubectl -n admiralty get podobservations # or podobs
+kubectl -n admiralty get serviceobservations # or svcobs
 # or, by category
-kubectl get observations --show-kind # or obs
+kubectl -n admiralty get observations --show-kind # or obs
 ```
 
 ### Example
@@ -165,8 +171,8 @@ Things to check:
 
 ```bash
 kubectl --context "$CLUSTER2" get pods # (-o yaml for details)
-kubectl --context "$CLUSTER1" get podobs # (-o yaml)
-kubectl --context "$CLUSTER1" get poddecisions # or poddec (-o yaml)
+kubectl --context "$CLUSTER1" -n admiralty get podobs # (-o yaml)
+kubectl --context "$CLUSTER1" -n admiralty get poddecisions # or poddec (-o yaml)
 
 kubectl --context "$CLUSTER1" get pods # (-o yaml)
 kubectl --context "$CLUSTER2" get pods # (-o yaml)
