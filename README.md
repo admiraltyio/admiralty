@@ -39,6 +39,7 @@ do
     --kube-context $CONTEXT \
     --namespace cert-manager \
     --version v0.12.0 \
+    --wait \
     jetstack/cert-manager
 done
 ```
@@ -55,9 +56,9 @@ The recommended way to install multicluster-scheduler is with Helm (v3):
 helm repo add admiralty https://charts.admiralty.io
 helm repo update
 
-kubectl --context $CLUSTER1 create namespace admiralty
+kubectl --context "$CLUSTER1" create namespace admiralty
 helm install multicluster-scheduler admiralty/multicluster-scheduler \
-  --kube-context $CLUSTER1 \
+  --kube-context "$CLUSTER1" \
   --namespace admiralty \
   --version 0.7.0 \
   --set scheduler.enabled=true \
@@ -67,9 +68,9 @@ helm install multicluster-scheduler admiralty/multicluster-scheduler \
   --set agent.invitations[0].clusterName=c1 \
   --set agent.invitations[1].clusterName=c2
 
-kubectl --context $CLUSTER2 create namespace admiralty
+kubectl --context "$CLUSTER2" create namespace admiralty
 helm install multicluster-scheduler admiralty/multicluster-scheduler \
-  --kube-context $CLUSTER2 \
+  --kube-context "$CLUSTER2" \
   --namespace admiralty \
   --version 0.7.0 \
   --set agent.enabled=true \
@@ -94,10 +95,10 @@ chmod +x kubemcsa
 Then, for each member cluster, run `kubemcsa export` to generate a template for a secret containing a kubeconfig equivalent to the service account named `multicluster-scheduler-agent-for-scheduler` (that was created by Helm), and apply the template with kubectl in the scheduler's cluster:
 
 ```bash
-./kubemcsa export --context $CLUSTER1 -n admiralty multicluster-scheduler-agent-for-scheduler --as c1 \
-  | kubectl --context $CLUSTER1 -n admiralty apply -f -
-./kubemcsa export --context $CLUSTER2 -n admiralty multicluster-scheduler-agent-for-scheduler --as c2 \
-  | kubectl --context $CLUSTER1 -n admiralty apply -f -
+./kubemcsa export --context "$CLUSTER1" -n admiralty multicluster-scheduler-agent-for-scheduler --as c1 \
+  | kubectl --context "$CLUSTER1" -n admiralty apply -f -
+./kubemcsa export --context "$CLUSTER2" -n admiralty multicluster-scheduler-agent-for-scheduler --as c2 \
+  | kubectl --context "$CLUSTER1" -n admiralty apply -f -
 ```
 
 > Note: You may wonder why the scheduler needs a kubeconfig for cluster1, which is were it runs. We simply like symmetry and didn't want to make the configuration special in that case (when the scheduler's cluster is also a member cluster).
@@ -109,11 +110,11 @@ Then, for each member cluster, run `kubemcsa export` to generate a template for 
 After a minute, check that a virtual node named `admiralty` and node pool objects have been created in each cluster:
 
 ```bash
-kubectl --context $CLUSTER1 get node
-kubectl --context $CLUSTER2 get node
+kubectl --context "$CLUSTER1" get node
+kubectl --context "$CLUSTER2" get node
 
-kubectl --context $CLUSTER1 get nodepools # or np
-kubectl --context $CLUSTER2 get nodepools # or np
+kubectl --context "$CLUSTER1" get nodepools # or np
+kubectl --context "$CLUSTER2" get nodepools # or np
 ```
 
 ### Multi-Cluster Deployment
@@ -190,7 +191,7 @@ kubectl --context "$CLUSTER2" patch deployment nginx -p '{
     "template":{
       "spec": {
         "nodeSelector": {
-          "topology.kubernetes.io/region": "eu" # change me
+          "topology.kubernetes.io/region": "eu"
         }
       }
     }
@@ -215,24 +216,34 @@ kubectl --context "$CLUSTER2" delete deployment nginx
 Update your installation to only invite cluster2 in cluster1's `c1-for-c2` namespace, and remove all invitations in cluster2 (e.g., to represent a control-plane-only cluster):
 
 ```sh
-kubectl --context $CLUSTER1 create namespace c1-for-c2
-helm upgrade --reuse-values multicluster-scheduler admiralty/multicluster-scheduler \
-  --kube-context $CLUSTER1 \
+kubectl --context "$CLUSTER1" create namespace c1-for-c2
+cat <<EOF | helm upgrade multicluster-scheduler admiralty/multicluster-scheduler \
+  --kube-context "$CLUSTER1" \
   --namespace admiralty \
   --version 0.7.0 \
-  --set agent.invitations[1].namespaces[0]=c1-for-c2
+  --reuse-values -f -
+agent:
+  invitations:
+    - clusterName: c2
+      namespaces:
+        - c1-for-c2
+EOF
 
-kubectl --context $CLUSTER2 create namespace c1-for-c2
-helm upgrade --reuse-values multicluster-scheduler admiralty/multicluster-scheduler \
-  --kube-context $CLUSTER2 \
+kubectl --context "$CLUSTER2" create namespace c1-for-c2
+kubectl --context "$CLUSTER2" label namespace c1-for-c2 multicluster-scheduler=enabled
+cat <<EOF | helm upgrade multicluster-scheduler admiralty/multicluster-scheduler \
+  --kube-context "$CLUSTER2" \
   --namespace admiralty \
   --version 0.7.0 \
-  --set agent.invitations=
+  --reuse-values -f -
+agent:
+  invitations: []
+EOF
 ```
 
 Now, try to create the same multi-cluster deployment as above in the `default` namespace of cluster2. It will stay pending as there are no available clusters for it.
 
-Them, create the same multi-cluster deployment in the `c1-for-c2` namespace of cluster2. Pods will be created in cluster1.
+Then, create the same multi-cluster deployment in the `c1-for-c2` namespace of cluster2. Pods will be created in cluster1.
 
 ### Enforcing Placement
 
