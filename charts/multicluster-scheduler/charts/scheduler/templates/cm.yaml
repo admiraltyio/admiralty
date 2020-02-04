@@ -5,9 +5,13 @@ metadata:
   labels: {{ include "labels" . | nindent 4 }}
 data:
   config: |
-    apiVersion: config.admiralty.io/v1alpha1
+    apiVersion: config.admiralty.io/v1alpha2
     kind: Scheduler
-    useClusterNamespaces: {{ .Values.global.useClusterNamespaces }}
-          {{- with .Values.global.clusters }}
-    clusters: {{ toYaml . | nindent 6 }}
+    clusters:
+          {{- range .Values.clusters }}
+      - name: {{ .name | required "a cluster must have a name" }}
+        kubeconfig: /var/run/secrets/admiralty.io/serviceaccountimports/{{ .serviceAccountImportName | default .secretName | default .name }}/config
+          {{- if .context }}
+        context: {{ .context }}
+          {{- end }}
           {{- end }}

@@ -3,6 +3,7 @@ kind: Deployment
 metadata:
   name: nginx
 spec:
+  replicas: 10
   selector:
     matchLabels:
       app: nginx
@@ -13,12 +14,14 @@ spec:
       annotations:
         multicluster.admiralty.io/elect: ""
     spec:
+      #      nodeSelector:
+      #        foo: bar
       containers:
-      - name: nginx
-        image: nginx
-        resources:
-          requests:
-            cpu: 100m
-            memory: 32Mi
-        ports:
-        - containerPort: 80
+        - name: nginx
+          image: nginx
+          resources:
+            requests:
+              cpu: 100m
+              memory: 32Mi
+          ports:
+            - containerPort: 80

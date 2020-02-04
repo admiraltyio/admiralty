@@ -10,53 +10,55 @@ MCSA_URL="$MCSA_RELEASE_URL/install.yaml"
 setup() {
   # Install MCSA and bootstrap cluster1 and cluster2 to import from cluster1 (which will host the control plane)
   k1 apply -f "$MCSA_URL"
-  k2 apply -f "$MCSA_URL"
 
   ./kubemcsa bootstrap --target-kubeconfig kubeconfig-cluster1 --source-kubeconfig kubeconfig-cluster1
-  ./kubemcsa bootstrap --target-kubeconfig kubeconfig-cluster2 --source-kubeconfig kubeconfig-cluster1
+  ./kubemcsa bootstrap --target-kubeconfig kubeconfig-cluster1 --source-kubeconfig kubeconfig-cluster2
 
-  k1 label ns default multicluster-service-account=enabled --overwrite
-  k2 label ns default multicluster-service-account=enabled --overwrite
+  k1 create namespace admiralty
+  k2 create namespace admiralty
 
-  helm1 upgrade --install multicluster-scheduler charts/multicluster-scheduler -f test/e2e/with-mcsa/values-cluster1.yaml
-  helm2 upgrade --install multicluster-scheduler charts/multicluster-scheduler -f test/e2e/with-mcsa/values-cluster2.yaml
+  k1 label ns admiralty multicluster-service-account=enabled --overwrite
+
+  helm1 install multicluster-scheduler charts/multicluster-scheduler -n admiralty -f test/e2e/with-mcsa/values-cluster1.yaml
+  helm2 install multicluster-scheduler charts/multicluster-scheduler -n admiralty -f test/e2e/with-mcsa/values-cluster2.yaml
 
   cat <<EOF | k1 create -f -
 apiVersion: multicluster.admiralty.io/v1alpha1
 kind: ServiceAccountImport
 metadata:
-  name: remote
+  name: c1
 spec:
   clusterName: cluster1
-  namespace: default
-  name: c1
+  namespace: admiralty
+  name: multicluster-scheduler-agent-for-scheduler
 EOF
 
-  cat <<EOF | k2 create -f -
+  cat <<EOF | k1 create -f -
 apiVersion: multicluster.admiralty.io/v1alpha1
 kind: ServiceAccountImport
 metadata:
-  name: remote
-spec:
-  clusterName: cluster1
-  namespace: default
   name: c2
+spec:
+  clusterName: cluster2
+  namespace: admiralty
+  name: multicluster-scheduler-agent-for-scheduler
 EOF
 
-  webhook_ready 1 default multicluster-scheduler-agent multicluster-scheduler-agent multicluster-scheduler-agent-cert
-  webhook_ready 2 default multicluster-scheduler-agent multicluster-scheduler-agent multicluster-scheduler-agent-cert
+  webhook_ready 1 admiralty multicluster-scheduler-agent multicluster-scheduler-agent multicluster-scheduler-agent-cert
+  webhook_ready 2 admiralty multicluster-scheduler-agent multicluster-scheduler-agent multicluster-scheduler-agent-cert
 }
 
 tear_down() {
-  helm1 delete multicluster-scheduler
-  helm2 delete multicluster-scheduler
+  helm1 delete multicluster-scheduler -n admiralty
+  helm2 delete multicluster-scheduler -n admiralty
 
-  k1 delete sai remote
-  k2 delete sai remote
+  k1 delete sai c1 -n admiralty
+  k1 delete sai c2 -n admiralty
 
-  k1 label ns default multicluster-service-account-
-  k2 label ns default multicluster-service-account-
+  k1 label ns admiralty multicluster-service-account-
 
-  k2 delete -f "$MCSA_URL"
+  k1 delete namespace admiralty
+  k2 delete namespace admiralty
+
   k1 delete -f "$MCSA_URL"
 }

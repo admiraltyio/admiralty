@@ -20,6 +20,26 @@
 
 -->
 
+## v0.7.0
+
+This release simplifies the design of multicluster-scheduler to enable new features: removes observations and decisions (and all the finalizers that came with them), replaces _federations_ (two-way sharing) by _invitations_ (one-way sharing, namespaced), adds support for node selectors.
+
+### Breaking Changes
+
+- Because the scheduler now watches and creates resources in the member clusters directly, rather than via observations and decisions, those clusters' Kubernetes APIs must be routable from the scheduler. If your clusters are private, please file an issue. We could fix that with tunnels.
+- The multi-federation feature was removed and replaced by invitations.
+- "Cluster namespaces" (namespaces in the scheduler's cluster that held observations and decisions) are now irrelevant.
+
+### New Features
+
+- Support for standard Kubernetes node selectors. If a multi-cluster pod has a node selector, multicluster-scheduler will ensure that the target cluster has nodes that match the selector.
+- Invitations. Each agent specifies which clusters are allowed to create/update/delete delegate pods and services in its cluster and optionally in which namespaces. The scheduler respects invitations in its decisions, and isn't even authorized to bypass them.
+
+### Bugfixes
+
+- Fix [#17](https://github.com/admiraltyio/multicluster-scheduler/issues/17). The agent pod could not be restarted because it had a finalizer AND was responsible for removing its own finalizer. The agent doesn't have a finalizer anymore (because we got rid of observations).
+- Fix [#16](https://github.com/admiraltyio/multicluster-scheduler/issues/16). Proxy pods were stuck in `Terminating` phase. That's because they had a non-zero graceful deletion period. On a normal node, it would be the kubelet's responsibility to delete them with a period of 0 once all containers are stopped. On a virtual-kubelet node, it is the implementation's responsibility to do that. Our solution is to mutate the graceful deletion period of proxy pods to 0 at admission, because the cross-cluster garbage collection pattern with finalizers is sufficient to ensure that they are deleted only after their delegates are deleted (and the delegates' containers are stopped).
+
 ## v0.6.0
 
 ### New Features

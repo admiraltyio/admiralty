@@ -1,131 +1,138 @@
 /*
-Copyright 2018 The Multicluster-Scheduler Authors.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
+ * Copyright 2020 The Multicluster-Scheduler Authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
 package schedule
 
 import (
+	"context"
 	"fmt"
 
 	"admiralty.io/multicluster-controller/pkg/cluster"
 	"admiralty.io/multicluster-controller/pkg/controller"
-	"admiralty.io/multicluster-controller/pkg/patterns/decorator"
-	"admiralty.io/multicluster-scheduler/pkg/apis/multicluster/v1alpha1"
-	"admiralty.io/multicluster-scheduler/pkg/common"
-	schedulerconfig "admiralty.io/multicluster-scheduler/pkg/config/scheduler"
-	"github.com/ghodss/yaml"
+	"admiralty.io/multicluster-controller/pkg/patterns"
+	"admiralty.io/multicluster-controller/pkg/patterns/gc"
+	"admiralty.io/multicluster-controller/pkg/reconcile"
+	"admiralty.io/multicluster-scheduler/pkg/model/proxypod"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/kubernetes"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-func NewController(c *cluster.Cluster, s Scheduler, schedCfg *schedulerconfig.Config) (*controller.Controller, error) {
+func NewController(clusters []*cluster.Cluster, kClients map[string]kubernetes.Interface, impersonatingKClients map[string]map[string]kubernetes.Interface, s Scheduler) (*controller.Controller, error) {
+	clients := make(map[string]client.Client, len(clusters))
 	pendingDecisions := make(pendingDecisions)
-	client, err := c.GetDelegatingClient()
-	if err != nil {
-		return nil, fmt.Errorf("getting delegating client: %v", err)
-	}
-	return decorator.NewController(c, &v1alpha1.PodObservation{}, applier{
-		schedCfg: schedCfg,
-		scheduler: schedulerShim{
-			schedCfg:         schedCfg,
-			client:           client,
-			pendingDecisions: pendingDecisions,
-			scheduler:        s,
-		},
+
+	r := reconciler{
+		clients:          clients,
+		kClients:         kClients,
 		pendingDecisions: pendingDecisions,
-	}, controller.WatchOptions{Namespaces: schedCfg.Namespaces})
+		scheduler: schedulerShim{
+			clients:               clients,
+			impersonatingKClients: impersonatingKClients,
+			pendingDecisions:      pendingDecisions,
+			scheduler:             s,
+		},
+	}
+
+	co := controller.New(r, controller.Options{})
+
+	for _, clu := range clusters {
+		cli, err := clu.GetDelegatingClient()
+		if err != nil {
+			return nil, fmt.Errorf("getting delegating client for cluster %s: %v", clu.Name, err)
+		}
+		clients[clu.Name] = cli
+
+		if err := co.WatchResourceReconcileObject(clu, &corev1.Pod{}, controller.WatchOptions{}); err != nil {
+			return nil, fmt.Errorf("setting up watch for pods in cluster %s: %v", clu.Name, err)
+		}
+	}
+
+	return co, nil
 }
 
-type applier struct {
-	schedCfg         *schedulerconfig.Config
+type reconciler struct {
+	clients          map[string]client.Client
+	kClients         map[string]kubernetes.Interface
 	scheduler        SchedulerShim
 	pendingDecisions pendingDecisions
 	// Note: this makes the reconciler NOT compatible with MaxConccurentReconciles > 1
 	// TODO add mutex if we want concurrent reconcilers
 }
 
-func (r applier) NeedUpdate(obj interface{}) (bool, error) {
-	podObs := obj.(*v1alpha1.PodObservation)
-	pod := podObs.Status.LiveState
-	if _, ok := pod.Annotations[common.AnnotationKeyElect]; !ok {
-		// not a proxy pod
+func (r reconciler) Reconcile(req reconcile.Request) (reconcile.Result, error) {
+	srcClusterName := req.Context
 
-		// but it could be a delegate pod, in which case we want to remove the corresponding pod decision from the pending map
-		k := key{
-			clusterName: r.schedCfg.GetObservationClusterName(podObs),
-			namespace:   pod.Namespace,
-			name:        pod.Name,
+	pod := &corev1.Pod{}
+	if err := r.clients[srcClusterName].Get(context.Background(), req.NamespacedName, pod); err != nil {
+		if !errors.IsNotFound(err) {
+			return reconcile.Result{}, fmt.Errorf("cannot get %s: %v",
+				r.objectErrorString(req.Name, req.Namespace, srcClusterName), err)
 		}
-		delete(r.pendingDecisions, k)
-
-		return false, nil
+		return reconcile.Result{}, nil
 	}
 
-	clusterName := pod.Annotations[common.AnnotationKeyClusterName]
-	if clusterName != "" {
+	if !proxypod.IsProxy(pod) {
+		// could be a delegate pod, in which case we want to remove the corresponding pod decision from the pending map
+		delete(r.pendingDecisions, types.UID(pod.Labels[gc.LabelParentUID]))
+
+		return reconcile.Result{}, nil
+	}
+
+	if proxypod.IsScheduled(pod) {
 		// already scheduled
 		// bind controller will check if allowed
-		return false, nil
+		return reconcile.Result{}, nil
 	}
 
-	return true, nil
-}
-
-func (r applier) Mutate(obj interface{}) error {
-	podObs := obj.(*v1alpha1.PodObservation)
-	pod := podObs.Status.LiveState
-	srcPodManifest, ok := pod.Annotations[common.AnnotationKeySourcePodManifest]
-	if !ok {
-		return fmt.Errorf("no source pod manifest on proxy pod")
-	}
-	srcPod := &corev1.Pod{}
-	if err := yaml.Unmarshal([]byte(srcPodManifest), srcPod); err != nil {
-		return fmt.Errorf("cannot unmarshal source pod manifest: %v", err)
-	}
-
-	srcClusterName := r.schedCfg.GetObservationClusterName(podObs)
-	srcPod.ClusterName = srcClusterName // so basic scheduler's Schedule() can default to source cluster
-	// if no cluster can accommodate the delegate pod, Schedule() sets clusterName to srcPod.ClusterName
-	clusterName, err := r.scheduler.Schedule(srcPod)
+	srcPod, err := proxypod.GetSourcePod(pod)
 	if err != nil {
-		// TODO: pod observations pending cluster if not enough resources and node pools not elastic
-		// rather than send back to original cluster
-		// basic scheduler's Schedule() handles error already, but a different implementation could return an error
-		runtime.HandleError(fmt.Errorf("cannot schedule proxy pod observation %s in namespace %s (handled: scheduling to original cluster instead): %v", podObs.Name, podObs.Namespace, err))
-		clusterName = srcClusterName
+		return reconcile.Result{}, fmt.Errorf("cannot get source pod from proxy %s: %v",
+			r.objectErrorString(pod.Name, pod.Namespace, srcClusterName), err)
 	}
 
-	srcPod.ClusterName = clusterName // set ClusterName because scheduler expects it on pending decisions
-	r.pendingDecisions[key{
-		clusterName: clusterName,
-		namespace:   pod.Namespace,
-		name:        pod.Name,
-	}] = srcPod
+	targetClusterName := proxypod.GetTargetClusterName(pod)
+	if targetClusterName == "" {
+		var err error
+		targetClusterName, err = r.scheduler.Schedule(srcPod, srcClusterName)
+		if err != nil {
+			return reconcile.Result{}, fmt.Errorf("cannot schedule proxy %s: %v",
+				r.objectErrorString(pod.Name, pod.Namespace, srcClusterName), err)
+		}
+	}
 
-	podObs.Status.LiveState.Annotations[common.AnnotationKeyClusterName] = clusterName
-	return nil
+	srcPod.ClusterName = targetClusterName // set ClusterName because scheduler shim expects it on pending decisions
+	r.pendingDecisions[pod.UID] = srcPod   // TODO fix unlikely UID collision across clusters
+
+	if err := proxypod.LocalBind(pod, targetClusterName, r.kClients[srcClusterName]); err != nil && !patterns.IsOptimisticLockError(err) {
+		return reconcile.Result{}, fmt.Errorf("cannot bind proxy %s: %v",
+			r.objectErrorString(pod.Name, pod.Namespace, srcClusterName), err)
+	}
+
+	return reconcile.Result{}, nil
 }
 
-type pendingDecisions map[key]*corev1.Pod
-
-type key struct {
-	clusterName string
-	namespace   string
-	name        string
+func (r *reconciler) objectErrorString(name, namespace, clusterName string) string {
+	return fmt.Sprintf("pod %s in namespace %s in cluster %s", name, namespace, clusterName)
 }
+
+type pendingDecisions map[types.UID]*corev1.Pod
 
 type SchedulerShim interface {
-	Schedule(pod *corev1.Pod) (string, error)
+	Schedule(pod *corev1.Pod, srcClusterName string) (targetClusterName string, err error)
 }

@@ -1,22 +1,24 @@
 /*
-Copyright 2018 The Multicluster-Scheduler Authors.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
+ * Copyright 2020 The Multicluster-Scheduler Authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
 package scheduler
 
 import (
+	"fmt"
+
 	"admiralty.io/multicluster-scheduler/pkg/apis/multicluster/v1alpha1"
 	"admiralty.io/multicluster-scheduler/pkg/controllers/nodepool"
 	"gopkg.in/inf.v0"
@@ -65,8 +67,7 @@ func (s *Scheduler) Schedule(pod *corev1.Pod) (string, error) {
 	if clusterName != "" {
 		return clusterName, nil
 	}
-	// For now, if no cluster can accommodate the delegate pod, let the original cluster deal with it.
-	return pod.ClusterName, nil
+	return "", fmt.Errorf("no cluster can accommodate the delegate pod")
 }
 
 type schedule map[string]*inf.Dec

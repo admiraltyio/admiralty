@@ -1,3 +1,19 @@
+/*
+ * Copyright 2020 The Multicluster-Scheduler Authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package proxypod
 
 import (
@@ -11,6 +27,8 @@ import (
 )
 
 // TODO test webhook namespace selector
+
+var zero int64 = 0
 
 var testCases = map[string]struct {
 	pod        corev1.Pod
@@ -27,20 +45,26 @@ var testCases = map[string]struct {
 			},
 		},
 		corev1.Pod{
-			ObjectMeta: v1.ObjectMeta{Annotations: map[string]string{
-				common.AnnotationKeyElect:             "",
-				common.AnnotationKeySourcePodManifest: "HACK", // yaml serialization computed in test code
-			}},
+			ObjectMeta: v1.ObjectMeta{
+				Annotations: map[string]string{
+					common.AnnotationKeyElect:             "",
+					common.AnnotationKeySourcePodManifest: "HACK", // yaml serialization computed in test code
+				},
+				Labels: map[string]string{
+					common.LabelKeyHasFinalizer: "true",
+				},
+			},
 			Spec: corev1.PodSpec{
 				Containers: []corev1.Container{{
 					Name:  "nginx",
 					Image: "nginx",
 				}},
-				NodeName: "admiralty",
 				Tolerations: []corev1.Toleration{{
 					Key:   "virtual-kubelet.io/provider",
 					Value: "admiralty",
 				}},
+				SchedulerName:                 "admiralty",
+				TerminationGracePeriodSeconds: &zero,
 			},
 		},
 	},
@@ -62,34 +86,6 @@ var testCases = map[string]struct {
 			},
 		},
 	},
-	"federation name": {
-		corev1.Pod{
-			ObjectMeta: v1.ObjectMeta{Annotations: map[string]string{
-				common.AnnotationKeyElect:          "",
-				common.AnnotationKeyFederationName: "f1",
-			}},
-			Spec: corev1.PodSpec{Containers: []corev1.Container{{
-				Name:  "nginx",
-				Image: "nginx",
-			}}}},
-		corev1.Pod{
-			ObjectMeta: v1.ObjectMeta{Annotations: map[string]string{
-				common.AnnotationKeyElect:             "",
-				common.AnnotationKeyFederationName:    "f1",
-				common.AnnotationKeySourcePodManifest: "HACK", // yaml serialization computed in test code
-			}},
-			Spec: corev1.PodSpec{
-				Containers: []corev1.Container{{
-					Name:  "nginx",
-					Image: "nginx",
-				}},
-				NodeName: "admiralty",
-				Tolerations: []corev1.Toleration{{
-					Key:   "virtual-kubelet.io/provider",
-					Value: "admiralty",
-				}},
-			}},
-	},
 	"keep labels and annotations (in general, object meta)": {
 		corev1.Pod{
 			ObjectMeta: v1.ObjectMeta{
@@ -110,18 +106,19 @@ var testCases = map[string]struct {
 					common.AnnotationKeySourcePodManifest: "HACK", // yaml serialization computed in test code
 					"k1":                                  "v1",
 				},
-				Labels: map[string]string{"k2": "v2"},
+				Labels: map[string]string{"k2": "v2", common.LabelKeyHasFinalizer: "true"},
 			},
 			Spec: corev1.PodSpec{
 				Containers: []corev1.Container{{
 					Name:  "nginx",
 					Image: "nginx",
 				}},
-				NodeName: "admiralty",
 				Tolerations: []corev1.Toleration{{
 					Key:   "virtual-kubelet.io/provider",
 					Value: "admiralty",
 				}},
+				SchedulerName:                 "admiralty",
+				TerminationGracePeriodSeconds: &zero,
 			},
 		},
 	},

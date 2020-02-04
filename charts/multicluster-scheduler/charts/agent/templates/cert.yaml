@@ -8,6 +8,10 @@ spec:
   dnsNames:
     - {{ include "fullname" . }}.{{ .Release.Namespace }}.svc
     - {{ include "fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local
+        {{- if .Values.global.debug }}
+  ipAddresses:
+    - 172.17.0.1
+        {{- end }}
   secretName: {{ include "fullname" . }}-cert
   issuerRef:
     name: {{ include "fullname" . }}

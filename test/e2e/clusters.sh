@@ -18,7 +18,7 @@ setup_clusters() {
 }
 
 tear_down_clusters() {
-  for CLUSTER in cluster1 cluster2 cluster3; do
+  for CLUSTER in cluster1 cluster2; do
     rm -f kubeconfig-$CLUSTER
     kind delete cluster --name $CLUSTER # if exists
   done

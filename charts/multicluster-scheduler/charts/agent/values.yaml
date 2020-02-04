@@ -1,12 +1,10 @@
-clusterName: "" # irrelevant if global.useClusterNamespaces (remote namespace used as clusterName then)
+invitations: []
+#  - clusterName: ""
+#    namespaces: []
 
-remotes:
-  - secretName: remote
-#  - serviceAccountImportName: "" # alternatively, you can import and automount remote service accounts with multicluster-service-account
-#  - secretName: "" # name of a Secret in the same namespace containing a kubeconfig to connect to a remote Kubernetes API server
-#    key: "" # (default: config) Key of the Secret data field containing the kubeconfig
-#    context: "" # (default: the kubeconfig's current context) If the kubeconfig contains multiple contexts, you may want to specify which one to use.
-#    clusterName: "" # override agent.clusterName for this remote only; sometimes clusters have different names depending on the remote (again, irrelevant if useClusterNamespaces)
+webhook:
+  port: 9443
+  certDir: /tmp/k8s-webhook-server/serving-certs
 
 image:
   repository: "quay.io/admiralty/multicluster-scheduler-agent"

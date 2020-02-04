@@ -1,18 +1,18 @@
 /*
-Copyright 2018 The Multicluster-Scheduler Authors.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
+ * Copyright 2020 The Multicluster-Scheduler Authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
 package main
 
@@ -24,11 +24,9 @@ import (
 	"admiralty.io/multicluster-controller/pkg/cluster"
 	mcmgr "admiralty.io/multicluster-controller/pkg/manager"
 	"admiralty.io/multicluster-scheduler/pkg/apis"
-	"admiralty.io/multicluster-scheduler/pkg/config/agent"
-	"admiralty.io/multicluster-scheduler/pkg/controllers/feedback"
+	configv1alpha2 "admiralty.io/multicluster-scheduler/pkg/apis/config/v1alpha2"
+	agentconfig "admiralty.io/multicluster-scheduler/pkg/config/agent"
 	"admiralty.io/multicluster-scheduler/pkg/controllers/nodepool"
-	"admiralty.io/multicluster-scheduler/pkg/controllers/receive"
-	"admiralty.io/multicluster-scheduler/pkg/controllers/send"
 	"admiralty.io/multicluster-scheduler/pkg/controllers/svcreroute"
 	"admiralty.io/multicluster-scheduler/pkg/vk/node"
 	"admiralty.io/multicluster-scheduler/pkg/webhooks/proxypod"
@@ -51,6 +49,8 @@ import (
 func main() {
 	stopCh := signals.SetupSignalHandler()
 
+	agentCfg := agentconfig.New()
+
 	agentClientCfg, _, err := config.ConfigAndNamespaceForContext("")
 	if err != nil {
 		log.Fatalf("cannot load member cluster config: %v", err)
@@ -58,8 +58,10 @@ func main() {
 	log.Printf("Local API server URL: %s\n", agentClientCfg.Host)
 
 	startControllers(stopCh, agentClientCfg)
-	startWebhook(stopCh, agentClientCfg)
+	startWebhook(stopCh, agentClientCfg, agentCfg.Webhook)
 	startVirtualKubelet(stopCh, agentClientCfg)
+
+	<-stopCh
 }
 
 func startControllers(stopCh <-chan struct{}, agentClientCfg *rest.Config) {
@@ -82,44 +84,6 @@ func startControllers(stopCh <-chan struct{}, agentClientCfg *rest.Config) {
 	}
 	m.AddController(co)
 
-	agentConfig := agent.New()
-
-	for _, remote := range agentConfig.Remotes {
-		log.Printf("Remote Kubernetes API server address: %s\n", remote.ClientConfig.Host)
-		log.Printf("Remote namespace: %s\n", remote.Namespace)
-
-		// member cluster can be known by different names depending on the remote
-		agentCluster := agentCluster.CloneWithName(remote.ClusterName)
-
-		remoteCluster := cluster.New("remote", remote.ClientConfig,
-			cluster.Options{CacheOptions: cluster.CacheOptions{Namespace: remote.Namespace}})
-		if err := apis.AddToScheme(remoteCluster.GetScheme()); err != nil {
-			log.Fatalf("adding APIs to scheduler cluster's scheme: %v", err)
-		}
-
-		for liveType, obsType := range send.AllObservations {
-			co, err := send.NewController(agentCluster, remoteCluster, remote.Namespace, liveType, obsType)
-			if err != nil {
-				log.Fatalf("cannot create send controller: %v", err)
-			}
-			m.AddController(co)
-		}
-
-		for decType, delType := range receive.AllDecisions {
-			co, err := receive.NewController(agentCluster, remoteCluster, remote.Namespace, decType, delType)
-			if err != nil {
-				log.Fatalf("cannot create receive controller: %v", err)
-			}
-			m.AddController(co)
-		}
-
-		co, err := feedback.NewController(agentCluster, remoteCluster, remote.Namespace)
-		if err != nil {
-			log.Fatalf("cannot create feedback controller: %v", err)
-		}
-		m.AddController(co)
-	}
-
 	go func() {
 		if err := m.Start(stopCh); err != nil {
 			log.Fatalf("while or after starting multi-cluster manager: %v", err)
@@ -127,8 +91,8 @@ func startControllers(stopCh <-chan struct{}, agentClientCfg *rest.Config) {
 	}()
 }
 
-func startWebhook(stopCh <-chan struct{}, agentClientCfg *rest.Config) {
-	webhookMgr, err := manager.New(agentClientCfg, manager.Options{Port: 9443})
+func startWebhook(stopCh <-chan struct{}, agentClientCfg *rest.Config, whCfg configv1alpha2.Webhook) {
+	webhookMgr, err := manager.New(agentClientCfg, manager.Options{Port: whCfg.Port, CertDir: whCfg.CertDir, MetricsBindAddress: "0"})
 	if err != nil {
 		log.Fatalf("cannot create webhook manager: %v", err)
 	}
@@ -150,14 +114,9 @@ func startVirtualKubelet(stopCh <-chan struct{}, agentClientCfg *rest.Config) {
 		cancel()
 	}()
 
-	nodeCfg := &node.Opts{}
-	nodeCfg.BindFlags()
-
 	var logLevel string
 	flag.StringVar(&logLevel, "log-level", "info", `set the log level, e.g. "debug", "info", "warn", "error"`)
-
 	klog.InitFlags(nil)
-
 	flag.Parse()
 
 	vklog.L = logruslogger.FromLogrus(logrus.NewEntry(logrus.StandardLogger()))
@@ -174,7 +133,9 @@ func startVirtualKubelet(stopCh <-chan struct{}, agentClientCfg *rest.Config) {
 		vklog.G(ctx).Fatal(err)
 	}
 
-	if err := node.Run(ctx, *nodeCfg, k); err != nil && errors.Cause(err) != context.Canceled {
-		vklog.G(ctx).Fatal(err)
-	}
+	go func() {
+		if err := node.Run(ctx, node.Opts{NodeName: "admiralty"}, k); err != nil && errors.Cause(err) != context.Canceled {
+			vklog.G(ctx).Fatal(err)
+		}
+	}()
 }

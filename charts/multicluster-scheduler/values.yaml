@@ -1,18 +1,7 @@
 global:
   nameOverride: ""
   fullnameOverride: ""
-
-  useClusterNamespaces: false
-
-  clusters:
-  #  - name: c1
-  #    clusterNamespace: "" # (default: namespace where multicluster-scheduler is deployed)
-  #    memberships:
-  #      - federationName: default
-  #  - name: c2
-  #    clusterNamespace: "" # (default: namespace where multicluster-scheduler is deployed)
-  #    memberships:
-  #      - federationName: default
+  debug: false
 
   postDeleteJob:
     image:
@@ -46,15 +35,12 @@ global:
   # User, DO NOT override!
   chart:
     name: multicluster-scheduler
-    version: "0.6.0"
-    appVersion: "0.6.0"
+    version: "0.7.0"
+    appVersion: "0.7.0"
 
 agent:
   enabled: false
   # see subchart's values.yaml for additional variables
 
 scheduler:
-  enabled: false
-
-clusters:
   enabled: false

@@ -1,3 +1,4 @@
+{{- if not .Values.global.debug }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -12,7 +13,6 @@ spec:
     metadata:
       annotations:
         checksum/config: {{ include (print $.Template.BasePath "/cm.yaml") . | sha256sum }}
-        multicluster.admiralty.io/service-account-import.name: "{{ range $i, $r := .Values.remotes }}{{ if $r.serviceAccountImportName }}{{ if gt $i 0 }},{{ end }}{{ $r.serviceAccountImportName }}{{ end }}{{ end }}"
       labels: {{ include "labels" . | nindent 8 }}
     spec:
       containers:
@@ -21,18 +21,11 @@ spec:
           ports:
             - containerPort: 9443
           volumeMounts:
+            - name: config
+              mountPath: /etc/admiralty
             - mountPath: /tmp/k8s-webhook-server/serving-certs
               name: cert
               readOnly: true
-            - name: config
-              mountPath: /etc/admiralty
-                      {{- range .Values.remotes }}
-                  {{- if .secretName }}
-            - name: {{ .secretName }}
-              mountPath: /var/run/secrets/admiralty.io/serviceaccountimports/{{ .secretName }}
-              readOnly: true
-                      {{- end }}
-                      {{- end }}
                 {{- with .Values.image.pullPolicy }}
           imagePullPolicy: {{ . }}
                 {{- end }}
@@ -41,23 +34,13 @@ spec:
             {{- end }}
       serviceAccountName: {{ include "fullname" . }}
       volumes:
+        - name: config
+          configMap:
+            name: {{ include "fullname" . }}
         - name: cert
           secret:
             defaultMode: 420
             secretName: {{ include "fullname" . }}-cert
-        - name: config
-          configMap:
-            name: {{ include "fullname" . }}
-                  {{- range .Values.remotes }}
-              {{- if .secretName }}
-        - name: {{ .secretName }}
-          secret:
-            secretName: {{ .secretName }}
-            items:
-              - key: {{ default "config" .key }}
-                path: config
-                        {{- end }}
-                  {{- end }}
             {{- with .Values.image.pullSecretName }}
       imagePullSecrets:
         - name: {{ . }}
@@ -73,4 +56,5 @@ spec:
             {{- end }}
             {{- with .Values.tolerations }}
       tolerations: {{ toYaml . | nindent 8 }}
+            {{- end }}
         {{- end }}

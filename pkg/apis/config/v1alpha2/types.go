@@ -14,4 +14,29 @@
  * limitations under the License.
  */
 
-package config
+package v1alpha2
+
+import (
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+)
+
+type Scheduler struct {
+	metav1.TypeMeta `json:",inline"`
+	Clusters        []Cluster `json:"clusters"`
+}
+
+type Cluster struct {
+	Name       string `json:"name"`
+	Kubeconfig string `json:"kubeconfig"`
+	Context    string `json:"context"`
+}
+
+type Agent struct {
+	metav1.TypeMeta `json:",inline"`
+	Webhook         Webhook `json:"webhook"`
+}
+
+type Webhook struct {
+	Port    int    `json:"port"`
+	CertDir string `json:"certDir"`
+}

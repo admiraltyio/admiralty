@@ -14,22 +14,75 @@ rules:
       - watch
       - create
       - update
-      - patch
       - delete
   - apiGroups:
       - ""
     resources:
-      - pods
-      - services
       - nodes
     verbs:
       - get
       - list
       - watch
-      - create
+      - create # vk
       - update
-      - patch
       - delete
+  - apiGroups:
+      - ""
+    resources:
+      - nodes/status
+    verbs:
+      - patch # vk
+  - apiGroups:
+      - ""
+    resources:
+      - services
+    verbs:
+      - get
+      - list
+      - watch
+      - update
+  - apiGroups:
+      - ""
+    resources:
+      - pods
+      - endpoints
+    verbs:
+      - get
+      - list
+      - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "fullname" . }}-for-scheduler
+  labels: {{ include "labels" . | nindent 4 }}
+rules:
+  - apiGroups:
+      - multicluster.admiralty.io
+    resources:
+      - nodepools
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - ""
+    resources:
+      - nodes
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - ""
+    resources:
+      - pods
+      - services
+    verbs:
+      - get
+      - list
+      - watch
+      - update
   - apiGroups:
       - ""
     resources:
@@ -39,47 +92,32 @@ rules:
   - apiGroups:
       - ""
     resources:
-      - endpoints
-      - replicasets
-      - persistentvolumes
-      - persistentvolumeclaims
-      - replicationcontrollers
+      - pods/binding
     verbs:
-      - get
-      - list
-      - watch
-      - update
-  - apiGroups:
-      - apps
-    resources:
-      - replicasets
-      - statefulsets
-    verbs:
-      - get
-      - list
-      - watch
-      - update
-  - apiGroups:
-      - policy
-    resources:
-      - poddisruptionbudgets
-    verbs:
-      - get
-      - list
-      - watch
-      - update
-  - apiGroups:
-      - storage.k8s.io
-    resources:
-      - storageclasses
-    verbs:
-      - get
-      - list
-      - watch
-      - update
+      - create
   - apiGroups:
       - ""
     resources:
-      - nodes/status
+      - "users"
     verbs:
-      - patch
+      - "impersonate"
+    resourceNames:
+            {{- range .Values.invitations }}
+      - "admiralty:{{ .clusterName }}"
+        {{- end }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "fullname" . }}-for-cluster
+  labels: {{ include "labels" . | nindent 4 }}
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - pods
+      - services
+    verbs:
+      - create
+      - update
+      - delete

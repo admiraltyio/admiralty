@@ -8,10 +8,14 @@ metadata:
 webhooks:
   - clientConfig:
       caBundle: Cg==
+            {{- if .Values.global.debug }}
+      url: "https://172.17.0.1:{{ .Values.webhook.port }}/mutate-v1-pod"
+            {{- else }}
       service:
         name: {{ include "fullname" . }}
         namespace: {{ .Release.Namespace }}
         path: /mutate-v1-pod
+          {{- end }}
     failurePolicy: Fail
     name: {{ include "fullname" . }}.multicluster.admiralty.io
     namespaceSelector:

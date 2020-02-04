@@ -1,131 +1,119 @@
 /*
-Copyright 2018 The Multicluster-Scheduler Authors.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
+ * Copyright 2020 The Multicluster-Scheduler Authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
 package bind
 
 import (
-	"fmt"
+	"reflect"
 	"strings"
 
 	"admiralty.io/multicluster-controller/pkg/cluster"
 	"admiralty.io/multicluster-controller/pkg/controller"
 	"admiralty.io/multicluster-controller/pkg/patterns/gc"
-	"admiralty.io/multicluster-scheduler/pkg/apis/multicluster/v1alpha1"
 	"admiralty.io/multicluster-scheduler/pkg/common"
-	schedulerconfig "admiralty.io/multicluster-scheduler/pkg/config/scheduler"
-	"github.com/ghodss/yaml"
+	"admiralty.io/multicluster-scheduler/pkg/model/proxypod"
 	"github.com/go-test/deep"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func NewController(c *cluster.Cluster, schedCfg *schedulerconfig.Config) (*controller.Controller, error) {
-	// we can optimize GC's getChild if we know that children can only be in one namespace
-	// (there could actually be a further optimization since we know which cluster, hence which namespace, when we list)
-	// besides, RBAC requires a namespaced list when not in clusterNamespace mode
-	childNamespace := ""
-	if len(schedCfg.Namespaces) == 1 {
-		childNamespace = schedCfg.Namespaces[0]
-	}
-	return gc.NewController(c, c, gc.Options{
-		ParentPrototype: &v1alpha1.PodObservation{},
-		ChildPrototype:  &v1alpha1.PodDecision{},
-		ParentWatchOptions: controller.WatchOptions{
-			Namespaces: schedCfg.Namespaces,
-			CustomPredicate: func(obj interface{}) bool {
-				podObs := obj.(*v1alpha1.PodObservation)
-				if podObs.Status.LiveState.Annotations == nil {
-					return false
-				}
-				_, isProxy := podObs.Status.LiveState.Annotations[common.AnnotationKeyElect]
-				clusterName, isScheduled := podObs.Status.LiveState.Annotations[common.AnnotationKeyClusterName]
-				srcClusterName := schedCfg.GetObservationClusterName(podObs)
-				_, isAllowed := schedCfg.PairedClustersByCluster[srcClusterName][clusterName]
-				return isProxy && isScheduled && isAllowed
-			},
+func NewController(clusters []*cluster.Cluster) (*controller.Controller, error) {
+	return gc.NewController(clusters, clusters, gc.Options{
+		ParentPrototype: &corev1.Pod{},
+		ChildPrototype:  &corev1.Pod{},
+		ParentWatchOptions: controller.WatchOptions{CustomPredicate: func(obj interface{}) bool {
+			pod := obj.(*corev1.Pod)
+			return proxypod.IsProxy(pod) && proxypod.IsScheduled(pod)
+		}},
+		Applier: applier{},
+		GetImpersonatorForChildWriter: func(clusterName string) string {
+			return "admiralty:" + clusterName
 		},
-		ChildNamespace:             childNamespace,
-		Applier:                    applier{schedCfg: schedCfg},
-		MakeExpectedChildWhenFound: true,
 	})
 }
 
-type applier struct {
-	schedCfg *schedulerconfig.Config
-}
+type applier struct{}
 
 var _ gc.Applier = applier{}
 
-func (a applier) MakeChild(parent interface{}, expectedChild interface{}) error {
-	proxyPodObs := parent.(*v1alpha1.PodObservation)
-	delegatePodDec := expectedChild.(*v1alpha1.PodDecision)
+func (a applier) ChildClusterName(parent interface{}) (string, error) {
+	proxyPod := parent.(*corev1.Pod)
+	clusterName := proxypod.GetScheduledClusterName(proxyPod)
+	return clusterName, nil
+}
 
-	delegatePod, err := a.makeDelegatePod(proxyPodObs)
+func (a applier) MutateParent(parent interface{}, childFound bool, child interface{}) (needUpdate bool, needStatusUpdate bool, err error) {
+	if !childFound {
+		return false, false, nil
+	}
+
+	proxyPod := parent.(*corev1.Pod)
+	delegatePod := child.(*corev1.Pod)
+
+	mcProxyPodAnnotations, otherProxyPodAnnotations := filterAnnotations(proxyPod.Annotations)
+	_, otherDelegatePodAnnotations := filterAnnotations(delegatePod.Annotations)
+
+	needUpdate = !reflect.DeepEqual(otherProxyPodAnnotations, otherDelegatePodAnnotations)
+	if needUpdate {
+		for k, v := range otherDelegatePodAnnotations {
+			mcProxyPodAnnotations[k] = v
+		}
+		proxyPod.Annotations = mcProxyPodAnnotations
+	}
+
+	// we can't group annotation and status updates into an update,
+	// because general update ignores status
+
+	needStatusUpdate = deep.Equal(proxyPod.Status, delegatePod.Status) != nil
+	if needStatusUpdate {
+		proxyPod.Status = delegatePod.Status
+	}
+
+	return needUpdate, needStatusUpdate, nil
+}
+
+func (a applier) MakeChild(parent interface{}, expectedChild interface{}) error {
+	proxyPod := parent.(*corev1.Pod)
+	delegatePod := expectedChild.(*corev1.Pod)
+
+	p, err := a.makeDelegatePod(proxyPod)
 	if err != nil {
 		return err
 	}
 
-	delegatePodDec.Spec.Template.ObjectMeta = delegatePod.ObjectMeta
-	delegatePodDec.Spec.Template.Spec = delegatePod.Spec
-
-	clusterName := proxyPodObs.Status.LiveState.Annotations[common.AnnotationKeyClusterName]
-	delegatePodDec.Namespace = a.schedCfg.NamespaceForCluster[clusterName]
-	delegatePodDec.Annotations = map[string]string{common.AnnotationKeyClusterName: clusterName}
+	p.DeepCopyInto(delegatePod)
 	return nil
 }
 
-func (a applier) ChildNeedsUpdate(_ interface{}, child interface{}, expectedChild interface{}) (bool, error) {
-	delegatePodDec := child.(*v1alpha1.PodDecision)
-	expectedDelegatePodDec := expectedChild.(*v1alpha1.PodDecision)
-
-	if diff := deep.Equal(delegatePodDec.Spec.Template.ObjectMeta, expectedDelegatePodDec.Spec.Template.ObjectMeta); diff != nil {
-		return true, nil
-	}
-	if diff := deep.Equal(delegatePodDec.Spec.Template.Spec, expectedDelegatePodDec.Spec.Template.Spec); diff != nil {
-		return true, nil
-	}
+func (a applier) MutateChild(_, _, _ interface{}) (needUpdate bool, err error) {
 	return false, nil
 }
 
-func (a applier) MutateChild(_ interface{}, child interface{}, expectedChild interface{}) error {
-	delegatePodDec := child.(*v1alpha1.PodDecision)
-	expectedDelegatePodDec := expectedChild.(*v1alpha1.PodDecision)
-
-	delegatePodDec.Spec.Template.ObjectMeta = expectedDelegatePodDec.Spec.Template.ObjectMeta
-	delegatePodDec.Spec.Template.Spec = expectedDelegatePodDec.Spec.Template.Spec
-	return nil
-}
-
-func (a applier) makeDelegatePod(proxyPodObs *v1alpha1.PodObservation) (*corev1.Pod, error) {
-	proxyPod := proxyPodObs.Status.LiveState
-	srcPodManifest, ok := proxyPod.Annotations[common.AnnotationKeySourcePodManifest]
-	if !ok {
-		return nil, fmt.Errorf("no source pod manifest on proxy pod")
-	}
-	srcPod := &corev1.Pod{}
-	if err := yaml.Unmarshal([]byte(srcPodManifest), srcPod); err != nil {
-		return nil, fmt.Errorf("cannot unmarshal source pod manifest: %v", err)
+func (a applier) makeDelegatePod(proxyPod *corev1.Pod) (*corev1.Pod, error) {
+	srcPod, err := proxypod.GetSourcePod(proxyPod)
+	if err != nil {
+		return nil, err
 	}
 
 	annotations := make(map[string]string)
 	for k, v := range srcPod.Annotations {
-		if !strings.HasPrefix(k, common.KeyPrefix) || k == common.AnnotationKeyFederationName {
+		if !strings.HasPrefix(k, common.KeyPrefix) {
 			// we don't want to mc-schedule the delegate pod with elect,
 			// and the target cluster name and source pod manifest are now redundant
-			// we only keep the federation name and user annotations
+			// we only keep the user annotations
 			annotations[k] = v
 		}
 	}
@@ -141,9 +129,6 @@ func (a applier) makeDelegatePod(proxyPodObs *v1alpha1.PodObservation) (*corev1.
 		newKey := common.KeyPrefix + keySplit[len(keySplit)-1]
 		labels[newKey] = v
 	}
-	labels[common.LabelKeyProxyPodClusterName] = a.schedCfg.GetObservationClusterName(proxyPodObs)
-	labels[common.LabelKeyProxyPodNamespace] = proxyPod.Namespace
-	labels[common.LabelKeyProxyPodName] = proxyPod.Name
 
 	delegatePod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -186,4 +171,17 @@ func removeServiceAccount(pod *corev1.Pod) {
 	if j > -1 {
 		pod.Spec.Volumes = append(pod.Spec.Volumes[:j], pod.Spec.Volumes[j+1:]...)
 	}
+}
+
+func filterAnnotations(annotations map[string]string) (map[string]string, map[string]string) {
+	mcAnnotations := make(map[string]string)
+	otherAnnotations := make(map[string]string)
+	for k, v := range annotations {
+		if strings.HasPrefix(k, common.KeyPrefix) {
+			mcAnnotations[k] = v
+		} else {
+			otherAnnotations[k] = v
+		}
+	}
+	return mcAnnotations, otherAnnotations
 }

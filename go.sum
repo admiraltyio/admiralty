@@ -1,5 +1,7 @@
 admiralty.io/multicluster-controller v0.4.0 h1:kkQfOWarnyHQuuloNu+4gOT/3lBR68i5+Rdb/YMb4LU=
 admiralty.io/multicluster-controller v0.4.0/go.mod h1:0rJqDLJ2DhrGcjnYTV1QIKuNHAd1aNd5ZqDTwijOjYQ=
+admiralty.io/multicluster-controller v0.5.0 h1:xBPjBkcN9Z0pjaKZUP3tMzeD2ov4D+oYVQz/b8+YF1E=
+admiralty.io/multicluster-controller v0.5.0/go.mod h1:0rJqDLJ2DhrGcjnYTV1QIKuNHAd1aNd5ZqDTwijOjYQ=
 admiralty.io/multicluster-service-account v0.6.1 h1:uIdAjUYHKBT3nmAh+EXOTMxtUiV5KuviIN1CGUKRlX0=
 admiralty.io/multicluster-service-account v0.6.1/go.mod h1:V6XeGFNGhtgzFVnI+49Ur5pLWzwJQmAKLt+IiK4gvxI=
 bitbucket.org/bertimus9/systemstat v0.0.0-20180207000608-0eeff89b0690/go.mod h1:Ulb78X89vxKYgdL24HMTiXYHlyHEvruOj1ZPlqeNEZM=

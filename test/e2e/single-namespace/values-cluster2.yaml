@@ -1,5 +1,12 @@
+global:
+  postDeleteJob:
+    securityContext:
+      runAsUser: 1000
+
 agent:
   enabled: true
-  clusterName: c2
+  invitations:
+    - clusterName: c1
+    - clusterName: c2
   securityContext:
     runAsUser: 1000

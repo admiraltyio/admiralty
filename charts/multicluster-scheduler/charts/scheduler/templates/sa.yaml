@@ -1,5 +1,0 @@
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: {{ include "fullname" . }}
-  labels: {{ include "labels" . | nindent 4 }}

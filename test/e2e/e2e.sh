@@ -10,7 +10,7 @@ source test/e2e/cert-manager.sh
 source test/e2e/clusters.sh $VERSION
 source test/e2e/test_argo.sh
 
-for T in single-namespace cluster-namespaces with-mcsa; do # TODO multi-federation
+for T in single-namespace with-mcsa; do
   setup_clusters
   setup_argo
   setup_cert_manager

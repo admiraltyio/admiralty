@@ -3,7 +3,7 @@ module admiralty.io/multicluster-scheduler
 go 1.13
 
 require (
-	admiralty.io/multicluster-controller v0.4.0
+	admiralty.io/multicluster-controller v0.5.0
 	admiralty.io/multicluster-service-account v0.6.1
 	contrib.go.opencensus.io/exporter/jaeger v0.2.0
 	contrib.go.opencensus.io/exporter/ocagent v0.6.0

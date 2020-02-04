@@ -1,18 +1,18 @@
 /*
-Copyright 2019 The Multicluster-Scheduler Authors.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
+ * Copyright 2020 The Multicluster-Scheduler Authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
 package globalsvc
 
@@ -23,151 +23,142 @@ import (
 	"admiralty.io/multicluster-controller/pkg/cluster"
 	"admiralty.io/multicluster-controller/pkg/controller"
 	"admiralty.io/multicluster-controller/pkg/patterns"
-	"admiralty.io/multicluster-controller/pkg/patterns/gc"
 	"admiralty.io/multicluster-controller/pkg/reconcile"
 	"admiralty.io/multicluster-controller/pkg/reference"
-	"admiralty.io/multicluster-scheduler/pkg/apis/multicluster/v1alpha1"
 	"admiralty.io/multicluster-scheduler/pkg/common"
-	schedulerconfig "admiralty.io/multicluster-scheduler/pkg/config/scheduler"
 	"github.com/go-test/deep"
+	v1 "k8s.io/api/authorization/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/selection"
+	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-func NewController(scheduler *cluster.Cluster, schedCfg *schedulerconfig.Config) (*controller.Controller, error) {
-	client, err := scheduler.GetDelegatingClient()
-	if err != nil {
-		return nil, fmt.Errorf("getting delegating client for scheduler cluster: %v", err)
-	}
+func NewController(clusters []*cluster.Cluster, kClients map[string]map[string]kubernetes.Interface) (*controller.Controller, error) {
+	r := &reconciler{kClients: kClients}
 
-	co := controller.New(&reconciler{
-		client:   client,
-		schedCfg: schedCfg,
-	}, controller.Options{})
+	co := controller.New(r, controller.Options{})
 
-	if err := co.WatchResourceReconcileObjectOverrideContext(scheduler, &v1alpha1.ServiceObservation{}, controller.WatchOptions{
-		Namespaces: schedCfg.Namespaces,
-		CustomPredicate: func(obj interface{}) bool {
-			svcObs := obj.(*v1alpha1.ServiceObservation)
-			svc := svcObs.Status.LiveState
-			return svc.Annotations["io.cilium/global-service"] == "true" &&
-				svc.Labels[common.LabelKeyIsDelegate] != "true" // no need to globalyze a delegate service (result of other service's globalyzation)
-		},
-	}, ""); err != nil {
-		return nil, fmt.Errorf("setting up proxy service observation watch: %v", err)
-	}
-	if err := co.WatchResourceReconcileController(scheduler, &v1alpha1.ServiceDecision{}, controller.WatchOptions{
-		Namespaces: schedCfg.Namespaces,
-	}); err != nil {
-		return nil, fmt.Errorf("setting up delegate service decision watch: %v", err)
+	r.clients = make(map[string]client.Client, len(clusters))
+	for _, clu := range clusters {
+		cli, err := clu.GetDelegatingClient()
+		if err != nil {
+			return nil, fmt.Errorf("getting delegating client for cluster %s: %v", clu.Name, err)
+		}
+		r.clients[clu.Name] = cli
+
+		s := labels.NewSelector()
+		req, err := labels.NewRequirement("io.cilium/global-service", selection.Equals, []string{"true"})
+		if err != nil {
+			return nil, err
+		}
+		s = s.Add(*req)
+		req, err = labels.NewRequirement(common.LabelKeyIsDelegate, selection.NotEquals, []string{"true"}) // no need to globalyze a delegate service (result of other service's globalyzation)
+		if err != nil {
+			return nil, err
+		}
+		s = s.Add(*req)
+		if err := co.WatchResourceReconcileObject(clu, &corev1.Service{}, controller.WatchOptions{AnnotationSelector: s}); err != nil {
+			return nil, fmt.Errorf("setting up proxy service watch: %v", err)
+		}
+
+		s = labels.NewSelector()
+		req, err = labels.NewRequirement("io.cilium/global-service", selection.Equals, []string{"true"})
+		if err != nil {
+			return nil, err
+		}
+		s = s.Add(*req)
+		req, err = labels.NewRequirement(common.LabelKeyIsDelegate, selection.Equals, []string{"true"})
+		if err != nil {
+			return nil, err
+		}
+		s = s.Add(*req)
+		if err := co.WatchResourceReconcileController(clu, &corev1.Service{}, controller.WatchOptions{AnnotationSelector: s}); err != nil {
+			return nil, fmt.Errorf("setting up delegate service watch: %v", err)
+		}
 	}
 
 	return co, nil
 }
 
 type reconciler struct {
-	client   client.Client
-	schedCfg *schedulerconfig.Config
+	clients  map[string]client.Client
+	kClients map[string]map[string]kubernetes.Interface
 }
 
 func (r *reconciler) Reconcile(req reconcile.Request) (reconcile.Result, error) {
-	svcObs := &v1alpha1.ServiceObservation{}
-	if err := r.client.Get(context.Background(), req.NamespacedName, svcObs); err != nil {
+	srcClusterName := req.Context
+	svc := &corev1.Service{}
+	if err := r.clients[srcClusterName].Get(context.Background(), req.NamespacedName, svc); err != nil {
 		if !errors.IsNotFound(err) {
-			return reconcile.Result{}, fmt.Errorf("cannot get service observation %s in namespace %s: %v", req.Name, req.Namespace, err)
+			return reconcile.Result{}, fmt.Errorf("cannot get service %s in namespace %s in cluster %s: %v", req.Name, req.Namespace, srcClusterName, err)
 		}
-		// ServiceObservation was deleted
+		// Service was deleted
 		return reconcile.Result{}, nil
 	}
 
-	svc := svcObs.Status.LiveState
+	for targetClusterName, cli := range r.clients {
+		if targetClusterName == srcClusterName {
+			continue
+		}
 
-	srcClusterName := r.schedCfg.GetObservationClusterName(svcObs)
-
-	var clusters map[string]struct{}
-	fedName := svc.Annotations[common.AnnotationKeyFederationName]
-	if fedName == "" {
-		clusters = r.schedCfg.PairedClustersByCluster[srcClusterName]
-	} else {
-		clusters = r.schedCfg.ClustersByFederation[fedName]
-	}
-
-	for clusterName := range clusters {
-		if clusterName == srcClusterName {
+		sar := &v1.SelfSubjectAccessReview{
+			Spec: v1.SelfSubjectAccessReviewSpec{
+				ResourceAttributes: &v1.ResourceAttributes{
+					Namespace: svc.Namespace,
+					Verb:      "create",
+					Version:   "v1",
+					Resource:  "services",
+				},
+			},
+		}
+		sar, err := r.kClients[srcClusterName][targetClusterName].AuthorizationV1().SelfSubjectAccessReviews().Create(sar)
+		if err != nil {
+			return reconcile.Result{}, err
+		}
+		if !sar.Status.Allowed {
 			continue
 		}
 
 		delSvc := makeDelegateService(svc)
 
-		svcDecNamespace := r.schedCfg.NamespaceForCluster[clusterName]
-
-		l := &v1alpha1.ServiceDecisionList{}
-		s := labels.SelectorFromValidatedSet(labels.Set{
-			gc.LabelParentName:      svcObs.Name,
-			gc.LabelParentNamespace: svcObs.Namespace,
-		})
-		err := r.client.List(context.Background(), l, &client.ListOptions{Namespace: svcDecNamespace, LabelSelector: s})
-		if err != nil {
-			return reconcile.Result{}, fmt.Errorf(
-				"cannot list service decisions in namespace %s with label selector %s: %v",
-				svcDecNamespace, s, err)
-		}
-		if len(l.Items) > 1 {
-			return reconcile.Result{}, fmt.Errorf(
-				"duplicate service decisions found in namespace %s with label selector %s: %v",
-				svcDecNamespace, s, err)
-		} else if len(l.Items) == 0 {
-			svcDec := &v1alpha1.ServiceDecision{}
-			// we use generate name to avoid (unlikely) conflicts
-			genName := fmt.Sprintf("%s-%s-", svcObs.Namespace, svcObs.Name)
-			if len(genName) > 253 {
-				genName = genName[0:253]
-			}
-			svcDec.GenerateName = genName
-			svcDec.Namespace = svcDecNamespace
-			svcDec.Labels = labels.Set{
-				gc.LabelParentName:      svcObs.Name,
-				gc.LabelParentNamespace: svcObs.Namespace,
-			}
-			svcDec.Annotations = map[string]string{common.AnnotationKeyClusterName: clusterName}
-			svcDec.Spec.Template.ObjectMeta = delSvc.ObjectMeta
-			svcDec.Spec.Template.Spec = delSvc.Spec
-
-			ref := reference.NewMulticlusterOwnerReference(svcObs, svc.GroupVersionKind(), "")
-			if err := reference.SetMulticlusterControllerReference(svcDec, ref); err != nil {
-				return reconcile.Result{}, fmt.Errorf(
-					"cannot set controller reference on service decision %s (name not yet generated) "+
-						"in namespace %s for owner %s in namespace %s: %v",
-					genName, svcDecNamespace, svcObs.Name, svcObs.Namespace, err)
+		foundDelSvc := &corev1.Service{}
+		if err := cli.Get(context.Background(), req.NamespacedName, foundDelSvc); err != nil {
+			if !errors.IsNotFound(err) {
+				return reconcile.Result{}, fmt.Errorf("cannot get delegate service %s in namespace %s in cluster %s: %v", req.Name, req.Namespace, targetClusterName, err)
 			}
 
-			if err := r.client.Create(context.Background(), svcDec); err != nil {
+			ref := reference.NewMulticlusterOwnerReference(svc, svc.GroupVersionKind(), srcClusterName)
+			if err := reference.SetMulticlusterControllerReference(delSvc, ref); err != nil {
+				return reconcile.Result{}, fmt.Errorf("cannot set controller reference on delegate service %s in namespace %s in cluster %s: %v", req.Name, req.Namespace, targetClusterName, err)
+			}
+
+			_, err := r.kClients[srcClusterName][targetClusterName].CoreV1().Services(delSvc.Namespace).Create(delSvc)
+			if err != nil {
 				if !errors.IsAlreadyExists(err) {
-					return reconcile.Result{}, fmt.Errorf(
-						"cannot create service decision %s (name not yet generated) in namespace %s: %v",
-						genName, svcDecNamespace, err)
+					return reconcile.Result{}, fmt.Errorf("cannot create delegate service %s in namespace %s in cluster %s: %v", req.Name, req.Namespace, targetClusterName, err)
 				}
 			}
 
 			continue
 		}
 
-		svcDec := &l.Items[0]
-		delSvc.Spec.ClusterIP = svcDec.Spec.Template.Spec.ClusterIP
+		delSvc.Spec.ClusterIP = foundDelSvc.Spec.ClusterIP
 
-		if deep.Equal(svcDec.Spec.Template.ObjectMeta, delSvc.ObjectMeta) == nil ||
-			deep.Equal(svcDec.Spec.Template.Spec, delSvc.Spec) == nil {
+		if deep.Equal(delSvc.Labels, foundDelSvc.Labels) == nil &&
+			deep.Equal(delSvc.Annotations, foundDelSvc.Annotations) == nil &&
+			deep.Equal(delSvc.Spec, foundDelSvc.Spec) == nil {
 			// no need to update
 			continue
 		}
 
-		svcDec.Spec.Template.ObjectMeta = delSvc.ObjectMeta
-		svcDec.Spec.Template.Spec = delSvc.Spec
-		if err := r.client.Update(context.Background(), svcDec); err != nil && !patterns.IsOptimisticLockError(err) {
-			return reconcile.Result{}, fmt.Errorf("cannot update delegate service decision %s in namespace %s: %v",
-				svcDec.Name, svcDec.Namespace, err)
+		foundDelSvc.ObjectMeta = delSvc.ObjectMeta
+		foundDelSvc.Spec = delSvc.Spec
+		_, err = r.kClients[srcClusterName][targetClusterName].CoreV1().Services(delSvc.Namespace).Update(foundDelSvc)
+		if err != nil && !patterns.IsOptimisticLockError(err) {
+			return reconcile.Result{}, fmt.Errorf("cannot update delegate service %s in namespace %s in cluster %s: %v", req.Name, req.Namespace, targetClusterName, err)
 		}
 	}
 

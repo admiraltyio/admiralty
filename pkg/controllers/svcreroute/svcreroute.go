@@ -1,18 +1,18 @@
 /*
-Copyright 2019 The Multicluster-Scheduler Authors.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
+ * Copyright 2020 The Multicluster-Scheduler Authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
 package svcreroute
 
@@ -26,6 +26,7 @@ import (
 	"admiralty.io/multicluster-controller/pkg/patterns"
 	"admiralty.io/multicluster-controller/pkg/reconcile"
 	"admiralty.io/multicluster-scheduler/pkg/common"
+	"admiralty.io/multicluster-scheduler/pkg/model/proxypod"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
@@ -107,9 +108,18 @@ func (r *reconciler) Reconcile(req reconcile.Request) (reconcile.Result, error) 
 	if svc.Annotations["io.cilium/global-service"] != "true" {
 		needUpdate = true
 		if svc.Annotations == nil {
-			svc.Annotations = make(map[string]string)
+			svc.Annotations = make(map[string]string, 1)
 		}
 		svc.Annotations["io.cilium/global-service"] = "true"
+	}
+
+	// add label for post-delete hook to remove finalizers
+	if svc.Labels[common.LabelKeyHasFinalizer] != "true" {
+		needUpdate = true
+		if svc.Labels == nil {
+			svc.Labels = make(map[string]string, 1)
+		}
+		svc.Labels[common.LabelKeyHasFinalizer] = "true"
 	}
 
 	if !needUpdate {
@@ -136,7 +146,7 @@ func (r *reconciler) shouldReroute(ep *corev1.Endpoints) (bool, error) {
 					// Pod was deleted, check next endpoint
 					continue
 				}
-				_, isProxy := pod.Annotations[common.AnnotationKeyElect]
+				isProxy := proxypod.IsProxy(pod)
 				return isProxy, nil
 			}
 			// we only support pod-only endpoints
