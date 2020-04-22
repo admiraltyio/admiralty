@@ -1,6 +1,4 @@
-k1() { KUBECONFIG=kubeconfig-cluster1 kubectl "$@"; }
-k2() { KUBECONFIG=kubeconfig-cluster2 kubectl "$@"; }
-k3() { KUBECONFIG=kubeconfig-cluster3 kubectl "$@"; }
-helm1() { KUBECONFIG=kubeconfig-cluster1 helm "$@"; }
-helm2() { KUBECONFIG=kubeconfig-cluster2 helm "$@"; }
-helm3() { KUBECONFIG=kubeconfig-cluster3 helm "$@"; }
+#!/usr/bin/env bash
+
+k() { KUBECONFIG=kubeconfig-cluster$1 kubectl "${@:2}"; }
+h() { KUBECONFIG=kubeconfig-cluster$1 helm "${@:2}"; }

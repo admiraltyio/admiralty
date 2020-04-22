@@ -20,6 +20,25 @@
 
 -->
 
+## v0.8.0
+
+This release removes the central scheduler, replaced by a decentralized algorithm creating candidate pods in all targets (of which only one becomes the proxy pod's delegate). See the [proposal](proposals/decentralized.md) for details.
+
+### New Features
+
+- Advanced scheduling: all Kubernetes standard scheduling constraints are now respected, not just node selectors, but affinities, etc., because the candidate scheduler uses the Kubernetes [scheduling framework](https://github.com/kubernetes/enhancements/blob/master/keps/sig-scheduling/20180409-scheduling-framework.md).
+- There's now one virtual node per target, making it possible to drain clusters, e.g., for blue/green cluster upgrades.
+- Delegate pods are now controlled by intermediate pod chaperons. This was a technical requirement of the new scheduling algorithm, with the added benefit that if a delegate pod dies (e.g., is evicted) while its cluster is offline, a new pod will be created to replace it.
+
+### Breaking Changes
+
+- _Invitations_ have been removed. The user is responsible for creating service accounts for sources in target clusters. Only the `multicluster-scheduler-source` cluster role is provided, which can be bound to service accounts with cluster-scoped or namespaced role bindings.
+- You can no longer enforce placement with the `multicluster.admiralty.io/clustername` annotation. Use a more idiomatic node selector instead.
+
+### Internals
+
+- We've started internalizing controller runtime logic (for the new feedback and pod chaperon controllers), progressively decoupling multicluster-scheduler from [controller-runtime](https://github.com/kubernetes-sigs/controller-runtime) and [multicluster-controller](https://github.com/admiraltyio/multicluster-controller), to be more agile.
+
 ## v0.7.0
 
 This release simplifies the design of multicluster-scheduler to enable new features: removes observations and decisions (and all the finalizers that came with them), replaces _federations_ (two-way sharing) by _invitations_ (one-way sharing, namespaced), adds support for node selectors.

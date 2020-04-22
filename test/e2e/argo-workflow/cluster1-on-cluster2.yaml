@@ -1,0 +1,7 @@
+kind: User
+apiVersion: klum.cattle.io/v1alpha1
+metadata:
+  name: cluster1
+spec:
+  clusterRoles:
+    - multicluster-scheduler-source

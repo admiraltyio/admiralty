@@ -20,14 +20,21 @@ import (
 	"context"
 	"flag"
 	"log"
+	"time"
 
 	"admiralty.io/multicluster-controller/pkg/cluster"
 	mcmgr "admiralty.io/multicluster-controller/pkg/manager"
 	"admiralty.io/multicluster-scheduler/pkg/apis"
-	configv1alpha2 "admiralty.io/multicluster-scheduler/pkg/apis/config/v1alpha2"
 	agentconfig "admiralty.io/multicluster-scheduler/pkg/config/agent"
-	"admiralty.io/multicluster-scheduler/pkg/controllers/nodepool"
+	"admiralty.io/multicluster-scheduler/pkg/controller"
+	"admiralty.io/multicluster-scheduler/pkg/controllers/chaperon"
+	"admiralty.io/multicluster-scheduler/pkg/controllers/feedback"
+	"admiralty.io/multicluster-scheduler/pkg/controllers/globalsvc"
 	"admiralty.io/multicluster-scheduler/pkg/controllers/svcreroute"
+	"admiralty.io/multicluster-scheduler/pkg/generated/clientset/versioned"
+	clientset "admiralty.io/multicluster-scheduler/pkg/generated/clientset/versioned"
+	informers "admiralty.io/multicluster-scheduler/pkg/generated/informers/externalversions"
+	"admiralty.io/multicluster-scheduler/pkg/generated/informers/externalversions/multicluster/v1alpha1"
 	"admiralty.io/multicluster-scheduler/pkg/vk/node"
 	"admiralty.io/multicluster-scheduler/pkg/webhooks/proxypod"
 	"admiralty.io/multicluster-service-account/pkg/config"
@@ -35,6 +42,8 @@ import (
 	"github.com/sirupsen/logrus"
 	vklog "github.com/virtual-kubelet/virtual-kubelet/log"
 	logruslogger "github.com/virtual-kubelet/virtual-kubelet/log/logrus"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	kubeinformers "k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	"k8s.io/client-go/rest"
@@ -51,36 +60,119 @@ func main() {
 
 	agentCfg := agentconfig.New()
 
-	agentClientCfg, _, err := config.ConfigAndNamespaceForContext("")
-	if err != nil {
-		log.Fatalf("cannot load member cluster config: %v", err)
-	}
-	log.Printf("Local API server URL: %s\n", agentClientCfg.Host)
+	cfg, _, err := config.ConfigAndNamespaceForKubeconfigAndContext("", "")
+	utilruntime.Must(err)
 
-	startControllers(stopCh, agentClientCfg)
-	startWebhook(stopCh, agentClientCfg, agentCfg.Webhook)
-	startVirtualKubelet(stopCh, agentClientCfg)
+	k, err := kubernetes.NewForConfig(cfg)
+	utilruntime.Must(err)
+
+	startOldStyleControllers(stopCh, agentCfg, cfg, k)
+	startWebhook(stopCh, agentCfg, cfg)
+
+	if len(agentCfg.Targets) > 0 || agentCfg.Raw.TargetSelf {
+		startControllers(stopCh, agentCfg, cfg)
+		startVirtualKubelet(stopCh, agentCfg, k)
+	}
 
 	<-stopCh
 }
 
-func startControllers(stopCh <-chan struct{}, agentClientCfg *rest.Config) {
-	m := mcmgr.New()
+func startOldStyleControllers(stopCh <-chan struct{}, agentCfg agentconfig.Config, cfg *rest.Config, k *kubernetes.Clientset) {
+	customClient, err := versioned.NewForConfig(cfg)
+	utilruntime.Must(err)
 
-	agentCluster := cluster.New("local", agentClientCfg, cluster.Options{})
-	if err := apis.AddToScheme(agentCluster.GetScheme()); err != nil {
-		log.Fatalf("adding APIs to member cluster's scheme: %v", err)
+	kubeInformerFactory := kubeinformers.NewSharedInformerFactory(k, time.Second*30)
+	customInformerFactory := informers.NewSharedInformerFactory(customClient, time.Second*30)
+
+	n := len(agentCfg.Targets)
+	if agentCfg.Raw.TargetSelf {
+		n++
+	}
+	targetCustomClients := make(map[string]clientset.Interface, n)
+	targetCustomInformerFactories := make(map[string]informers.SharedInformerFactory, n)
+	targetPodChaperonInformers := make(map[string]v1alpha1.PodChaperonInformer, n)
+	for _, target := range agentCfg.Targets {
+		c, err := versioned.NewForConfig(target.ClientConfig)
+		targetCustomClients[target.Name] = c
+		utilruntime.Must(err)
+		f := informers.NewSharedInformerFactory(c, time.Second*30)
+		targetCustomInformerFactories[target.Name] = f
+		targetPodChaperonInformers[target.Name] = f.Multicluster().V1alpha1().PodChaperons()
+	}
+	if agentCfg.Raw.TargetSelf {
+		targetCustomClients[agentCfg.Raw.ClusterName] = customClient
+		targetPodChaperonInformers[agentCfg.Raw.ClusterName] = customInformerFactory.Multicluster().V1alpha1().PodChaperons()
 	}
 
-	co, err := nodepool.NewController(agentCluster)
+	podInformer := kubeInformerFactory.Core().V1().Pods()
+	podChaperonInformer := customInformerFactory.Multicluster().V1alpha1().PodChaperons()
+
+	chapCtrl := chaperon.NewController(k, customClient, podInformer, podChaperonInformer)
+	var feedbackCtrl *controller.Controller
+	if n > 0 {
+		feedbackCtrl = feedback.NewController(k, targetCustomClients, podInformer, targetPodChaperonInformers)
+	}
+
+	kubeInformerFactory.Start(stopCh)
+	customInformerFactory.Start(stopCh)
+	for _, f := range targetCustomInformerFactories {
+		f.Start(stopCh)
+	}
+
+	go func() {
+		if err = chapCtrl.Run(2, stopCh); err != nil {
+			klog.Fatalf("Error running controller: %s", err.Error())
+		}
+	}()
+	if feedbackCtrl != nil {
+		go func() {
+			if err = feedbackCtrl.Run(2, stopCh); err != nil {
+				klog.Fatalf("Error running controller: %s", err.Error())
+			}
+		}()
+	}
+}
+
+func startControllers(stopCh <-chan struct{}, agentCfg agentconfig.Config, cfg *rest.Config) {
+	m := mcmgr.New()
+
+	o := cluster.Options{}
+	resync := 30 * time.Second
+	o.Resync = &resync
+	src := cluster.New(agentCfg.Raw.ClusterName, cfg, cluster.Options{})
+	if err := apis.AddToScheme(src.GetScheme()); err != nil {
+		log.Fatalf("adding APIs to member cluster's scheme: %v", err)
+	}
+	sourceClusters := []*cluster.Cluster{src}
+
+	n := len(agentCfg.Targets)
+	if agentCfg.Raw.TargetSelf {
+		n++
+	}
+	targetClusters := make([]*cluster.Cluster, n)
+	for i, target := range agentCfg.Targets {
+		o := cluster.Options{}
+		o.Namespace = target.Namespace
+		o.Resync = &resync
+		t := cluster.New(target.Name, target.ClientConfig, o)
+		if err := apis.AddToScheme(t.GetScheme()); err != nil {
+			log.Fatalf("adding APIs to member cluster's scheme: %v", err)
+		}
+		targetClusters[i] = t
+	}
+	if agentCfg.Raw.TargetSelf {
+		targetClusters[n-1] = src
+	}
+
+	co, err := svcreroute.NewController(src)
 	if err != nil {
-		log.Fatalf("cannot create nodepool controller: %v", err)
+		log.Fatalf("cannot create svcreroute controller: %v", err)
 	}
 	m.AddController(co)
 
-	co, err = svcreroute.NewController(agentCluster)
+	co, err = globalsvc.NewController(sourceClusters, targetClusters)
 	if err != nil {
-		log.Fatalf("cannot create svcreroute controller: %v", err)
+		log.Fatalf("cannot create feedback controller: %v", err)
 	}
 	m.AddController(co)
 
@@ -91,23 +183,19 @@ func startControllers(stopCh <-chan struct{}, agentClientCfg *rest.Config) {
 	}()
 }
 
-func startWebhook(stopCh <-chan struct{}, agentClientCfg *rest.Config, whCfg configv1alpha2.Webhook) {
-	webhookMgr, err := manager.New(agentClientCfg, manager.Options{Port: whCfg.Port, CertDir: whCfg.CertDir, MetricsBindAddress: "0"})
-	if err != nil {
-		log.Fatalf("cannot create webhook manager: %v", err)
-	}
+func startWebhook(stopCh <-chan struct{}, agentCfg agentconfig.Config, cfg *rest.Config) {
+	webhookMgr, err := manager.New(cfg, manager.Options{Port: agentCfg.Raw.Webhook.Port, CertDir: agentCfg.Raw.Webhook.CertDir, MetricsBindAddress: "0"})
+	utilruntime.Must(err)
 
 	hookServer := webhookMgr.GetWebhookServer()
 	hookServer.Register("/mutate-v1-pod", &webhook.Admission{Handler: &proxypod.Handler{}})
 
 	go func() {
-		if err := webhookMgr.Start(stopCh); err != nil {
-			log.Fatalf("while or after starting webhook manager: %v", err)
-		}
+		utilruntime.Must(webhookMgr.Start(stopCh))
 	}()
 }
 
-func startVirtualKubelet(stopCh <-chan struct{}, agentClientCfg *rest.Config) {
+func startVirtualKubelet(stopCh <-chan struct{}, agentCfg agentconfig.Config, k kubernetes.Interface) {
 	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
 		<-stopCh
@@ -128,14 +216,19 @@ func startVirtualKubelet(stopCh <-chan struct{}, agentClientCfg *rest.Config) {
 		logrus.SetLevel(lvl)
 	}
 
-	k, err := kubernetes.NewForConfig(agentClientCfg)
-	if err != nil {
-		vklog.G(ctx).Fatal(err)
+	for _, target := range agentCfg.Targets {
+		n := "admiralty-" + target.Name
+		go func(nodeName string) {
+			if err := node.Run(ctx, node.Opts{NodeName: n}, k); err != nil && errors.Cause(err) != context.Canceled {
+				vklog.G(ctx).Fatal(err)
+			}
+		}(n)
 	}
-
-	go func() {
-		if err := node.Run(ctx, node.Opts{NodeName: "admiralty"}, k); err != nil && errors.Cause(err) != context.Canceled {
-			vklog.G(ctx).Fatal(err)
-		}
-	}()
+	if agentCfg.Raw.TargetSelf {
+		go func() {
+			if err := node.Run(ctx, node.Opts{NodeName: "admiralty-" + agentCfg.Raw.ClusterName}, k); err != nil && errors.Cause(err) != context.Canceled {
+				vklog.G(ctx).Fatal(err)
+			}
+		}()
+	}
 }

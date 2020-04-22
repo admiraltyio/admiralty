@@ -1,0 +1,14 @@
+{{- if not .Values.debug.controllerManager }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "fullname" . }}
+  labels: {{ include "labels" . | nindent 4 }}
+spec:
+  selector: {{ include "selectorLabels" . | nindent 4 }}
+    component: controller-manager
+  ports:
+    - port: 443
+      protocol: TCP
+      targetPort: {{ .Values.webhook.port }}
+        {{- end }}

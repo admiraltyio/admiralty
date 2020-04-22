@@ -21,13 +21,12 @@ import (
 
 	"admiralty.io/multicluster-scheduler/pkg/common"
 	corev1 "k8s.io/api/core/v1"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/yaml"
 )
 
 func IsProxy(pod *corev1.Pod) bool {
-	return pod.Spec.SchedulerName == "admiralty"
+	_, isProxy := pod.Annotations[common.AnnotationKeyElect]
+	return isProxy
 }
 
 func GetSourcePod(proxyPod *corev1.Pod) (*corev1.Pod, error) {
@@ -42,32 +41,13 @@ func GetSourcePod(proxyPod *corev1.Pod) (*corev1.Pod, error) {
 	return srcPod, nil
 }
 
-func GetTargetClusterName(proxyPod *corev1.Pod) string {
-	return proxyPod.Annotations[common.AnnotationKeyClusterName]
-}
-
-func LocalBind(proxyPod *corev1.Pod, targetClusterName string, client kubernetes.Interface) error {
-	proxyPod.Annotations[common.AnnotationKeyClusterName] = targetClusterName
-	_, err := client.CoreV1().Pods(proxyPod.Namespace).Update(proxyPod)
-	if err != nil {
-		return err
-	}
-
-	b := &corev1.Binding{
-		ObjectMeta: v1.ObjectMeta{Name: proxyPod.Name, UID: proxyPod.UID},
-		Target:     corev1.ObjectReference{Kind: "Node", Name: "admiralty"},
-	}
-	if err := client.CoreV1().Pods(proxyPod.Namespace).Bind(b); err != nil {
-		return err
-	}
-
-	return nil
-}
-
 func IsScheduled(proxyPod *corev1.Pod) bool {
 	return proxyPod.Spec.NodeName != ""
 }
 
 func GetScheduledClusterName(proxyPod *corev1.Pod) string {
-	return proxyPod.Annotations[common.AnnotationKeyClusterName]
+	if !IsScheduled(proxyPod) {
+		return ""
+	}
+	return proxyPod.Spec.NodeName[10:]
 }

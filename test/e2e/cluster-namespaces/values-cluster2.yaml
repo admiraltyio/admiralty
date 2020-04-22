@@ -1,7 +1,0 @@
-global:
-  useClusterNamespaces: true
-
-agent:
-  enabled: true
-  securityContext:
-    runAsUser: 1000

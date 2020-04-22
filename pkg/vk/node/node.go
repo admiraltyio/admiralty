@@ -17,7 +17,9 @@
 package node
 
 import (
+	"admiralty.io/multicluster-scheduler/pkg/common"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -26,9 +28,9 @@ func NodeFromOpts(c Opts) *v1.Node {
 		ObjectMeta: metav1.ObjectMeta{
 			Name: c.NodeName,
 			Labels: map[string]string{
-				"type":                        "virtual-kubelet",
-				"virtual-kubelet.io/provider": "admiralty",
-				"kubernetes.io/role":          "agent",
+				"type": "virtual-kubelet",
+				common.LabelAndTaintKeyVirtualKubeletProvider: common.VirtualKubeletProviderName,
+				"kubernetes.io/role":                          "agent",
 				//"kubernetes.io/hostname": c.NodeName,
 				"alpha.service-controller.kubernetes.io/exclude-balancer": "true",
 			},
@@ -36,23 +38,27 @@ func NodeFromOpts(c Opts) *v1.Node {
 		Spec: v1.NodeSpec{
 			Taints: []v1.Taint{
 				{
-					Key:    "virtual-kubelet.io/provider",
-					Value:  "admiralty",
+					Key:    common.LabelAndTaintKeyVirtualKubeletProvider,
+					Value:  common.VirtualKubeletProviderName,
 					Effect: v1.TaintEffectNoSchedule,
 				},
 				{
-					Key:    "virtual-kubelet.io/provider",
-					Value:  "admiralty",
+					Key:    common.LabelAndTaintKeyVirtualKubeletProvider,
+					Value:  common.VirtualKubeletProviderName,
 					Effect: v1.TaintEffectNoExecute,
 				},
 			},
 		},
 		Status: v1.NodeStatus{
-			//Capacity: v1.ResourceList{
-			//	"cpu":    resource.MustParse(c.CPU),
-			//	"memory": resource.MustParse(c.Memory),
-			//	"pods":   resource.MustParse(c.Pods),
-			//},
+			Capacity: v1.ResourceList{
+				// TODO: configure or change dynamically to always be greater than what's available
+				// delegate scheduler plugin actually ensures resources are available in target cluster
+				// but proxy scheduling would fail if capacity wasn't set here
+				// (maybe configure proxy scheduler to not run capacity check?)
+				"cpu":    resource.MustParse("100000"),
+				"memory": resource.MustParse("100000Gi"),
+				"pods":   resource.MustParse("100000"),
+			},
 			Conditions: []v1.NodeCondition{
 				{
 					Type:               v1.NodeReady,

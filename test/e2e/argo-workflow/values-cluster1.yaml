@@ -1,0 +1,17 @@
+clusterName: c1
+targetSelf: true
+targets:
+  - name: c2
+
+agent:
+  securityContext:
+    runAsUser: 1000
+
+postDeleteJob:
+  securityContext:
+    runAsUser: 1000
+
+debug:
+  controllerManager: false
+  proxyScheduler: false
+  candidateScheduler: false

@@ -17,8 +17,6 @@
 package main
 
 import (
-	"os"
-
 	"admiralty.io/multicluster-scheduler/pkg/common"
 	"admiralty.io/multicluster-service-account/pkg/config"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -38,12 +36,8 @@ func main() {
 
 	p := patchAll{k, patch}
 
-	role := os.Args[1]
-	switch role {
-	case "agent":
-		p.patchPods()
-		p.patchServices()
-	}
+	p.patchPods()
+	p.patchServices()
 }
 
 type patchAll struct {

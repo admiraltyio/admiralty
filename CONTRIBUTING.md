@@ -1,5 +1,7 @@
 # Contributing
 
+[Chat with us.](https://mattermost.admiralty.io)
+
 ## DCO Sign-Off
 
 All authors retain copyright to their work. However, we ask that you certify the origin of your work. Each commit must be signed off, e.g., using the `--signoff` option to `git commit`. The `Author` and `Signed-off-by` lines of the git commit message must match. By doing this, you certify the following (from https://developercertificate.org/):

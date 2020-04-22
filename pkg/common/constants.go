@@ -17,12 +17,17 @@
 package common
 
 var (
+	ProxySchedulerName     = "admiralty-proxy"
+	CandidateSchedulerName = "admiralty-candidate"
+
+	LabelAndTaintKeyVirtualKubeletProvider = "virtual-kubelet.io/provider"
+	VirtualKubeletProviderName             = "admiralty"
+
 	KeyPrefix = "multicluster.admiralty.io/"
 
 	// annotations on source pod (by user) and proxy pods (copied by mutating admission webhook)
 
-	AnnotationKeyElect       = KeyPrefix + "elect"
-	AnnotationKeyClusterName = KeyPrefix + "clustername"
+	AnnotationKeyElect = KeyPrefix + "elect"
 
 	// annotations on proxy pods (by mutating admission webhook)
 
@@ -30,11 +35,21 @@ var (
 
 	AnnotationKeySourcePodManifest = KeyPrefixSourcePod + "manifest"
 
-	// labels on delegate services (by global service controller)
+	// annotations on delegate pod chaperons (by scheduler plugins)
 
-	LabelKeyIsDelegate = KeyPrefix + "is-delegate"
+	AnnotationKeyIsReserved      = KeyPrefix + "is-reserved"
+	AnnotationKeyIsUnschedulable = KeyPrefix + "is-unschedulable"
+	AnnotationKeyIsAllowed       = KeyPrefix + "is-allowed"
+	AnnotationKeyIsBound         = KeyPrefix + "is-bound"
+	AnnotationKeyBindingFailed   = KeyPrefix + "binding-failed"
+
+	// annotations on delegate services (by global service controller)
+
+	AnnotationKeyIsDelegate = KeyPrefix + "is-delegate"
 
 	// labels on proxy pods and services (used by post-delete hook to clean up finalizers)
 
 	LabelKeyHasFinalizer = KeyPrefix + "has-finalizer"
+
+	LabelKeyParentName = KeyPrefix + "parent-name"
 )

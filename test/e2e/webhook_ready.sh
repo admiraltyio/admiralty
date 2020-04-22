@@ -11,12 +11,12 @@ webhook_ready() {
   secret_name=$5
 
   echo "waiting for webhook deployment to be available..."
-  k$cluster_id wait --for condition=available --timeout=120s deployment $deployment_name -n $namespace
+  k $cluster_id wait --for condition=available --timeout=120s deployment $deployment_name -n $namespace
 
   echo -n "waiting for webhook configuration CA bundle to match secret..."
   while :; do
-    secret_cert=$(k$cluster_id get secret $secret_name -n $namespace -o json | jq -r '.data["ca.crt"]')
-    webhook_cert=$(k$cluster_id get mutatingwebhookconfiguration $config_name -n $namespace -o json | jq -r .webhooks[0].clientConfig.caBundle)
+    secret_cert=$(k $cluster_id get secret $secret_name -n $namespace -o json | jq -r '.data["ca.crt"]')
+    webhook_cert=$(k $cluster_id get mutatingwebhookconfiguration $config_name -n $namespace -o json | jq -r .webhooks[0].clientConfig.caBundle)
     if [ "$secret_cert" == "$webhook_cert" ]; then
       echo
       break

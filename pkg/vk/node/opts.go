@@ -16,21 +16,7 @@
 
 package node
 
-import (
-	"flag"
-)
-
-const (
-	DefaultNodeName        = "admiralty"
-	DefaultEnableNodeLease = false
-)
-
 type Opts struct {
 	NodeName        string
 	EnableNodeLease bool
-}
-
-func (c *Opts) BindFlags() {
-	flag.StringVar(&c.NodeName, "nodename", DefaultNodeName, "")
-	flag.BoolVar(&c.EnableNodeLease, "enable-node-lease", DefaultEnableNodeLease, "use node leases (1.13) for node heartbeats")
 }

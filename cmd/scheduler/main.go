@@ -17,68 +17,37 @@
 package main
 
 import (
-	"log"
+	"math/rand"
+	"os"
+	"time"
 
-	"admiralty.io/multicluster-controller/pkg/cluster"
-	"admiralty.io/multicluster-controller/pkg/manager"
-	"admiralty.io/multicluster-scheduler/pkg/apis"
-	schedulerconfig "admiralty.io/multicluster-scheduler/pkg/config/scheduler"
-	"admiralty.io/multicluster-scheduler/pkg/controllers/bind"
-	"admiralty.io/multicluster-scheduler/pkg/controllers/globalsvc"
-	"admiralty.io/multicluster-scheduler/pkg/controllers/schedule"
-	"admiralty.io/multicluster-scheduler/pkg/scheduler"
-	"k8s.io/client-go/kubernetes"
-	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
-	"k8s.io/client-go/rest"
-	"k8s.io/sample-controller/pkg/signals"
+	"admiralty.io/multicluster-scheduler/pkg/scheduler_plugins/candidate"
+	"admiralty.io/multicluster-scheduler/pkg/scheduler_plugins/proxy"
+	"github.com/spf13/pflag"
+	cliflag "k8s.io/component-base/cli/flag"
+	"k8s.io/component-base/logs"
+	scheduler "k8s.io/kubernetes/cmd/kube-scheduler/app"
 )
 
 func main() {
-	schedCfg := schedulerconfig.New()
+	rand.Seed(time.Now().UnixNano())
 
-	m := manager.New()
+	// BEWARE candidate and proxy must run in different processes, because a scheduler only processes one pod at a time
+	// and proxy waits on candidates in filter plugin
 
-	clusters := make([]*cluster.Cluster, len(schedCfg.Clusters), len(schedCfg.Clusters))
-	kClients := make(map[string]kubernetes.Interface)
-	impersonatingKClients := make(map[string]map[string]kubernetes.Interface)
-	for i, c := range schedCfg.Clusters {
-		clu := cluster.New(c.Name, c.ClientConfig, cluster.Options{})
-		if err := apis.AddToScheme(clu.GetScheme()); err != nil {
-			log.Fatalf("adding APIs to member cluster's scheme: %v", err)
-		}
-		clusters[i] = clu
+	command := scheduler.NewSchedulerCommand(
+		scheduler.WithPlugin(candidate.Name, candidate.New),
+		scheduler.WithPlugin(proxy.Name, proxy.New))
 
-		kClients[c.Name] = kubernetes.NewForConfigOrDie(c.ClientConfig)
+	// TODO: once we switch everything over to Cobra commands, we can go back to calling
+	// utilflag.InitFlags() (by removing its pflag.Parse() call). For now, we have to set the
+	// normalize func and add the go flag set by hand.
+	pflag.CommandLine.SetNormalizeFunc(cliflag.WordSepNormalizeFunc)
+	// utilflag.InitFlags()
+	logs.InitLogs()
+	defer logs.FlushLogs()
 
-		impersonatingKClients[c.Name] = make(map[string]kubernetes.Interface)
-		for _, targetC := range schedCfg.Clusters {
-			cfg := rest.CopyConfig(targetC.ClientConfig)
-			cfg.Impersonate = rest.ImpersonationConfig{
-				UserName: "admiralty:" + c.Name,
-			}
-			impersonatingKClients[c.Name][targetC.Name] = kubernetes.NewForConfigOrDie(cfg)
-		}
-	}
-
-	co, err := schedule.NewController(clusters, kClients, impersonatingKClients, scheduler.New())
-	if err != nil {
-		log.Fatalf("cannot create schedule controller: %v", err)
-	}
-	m.AddController(co)
-
-	co, err = globalsvc.NewController(clusters, impersonatingKClients)
-	if err != nil {
-		log.Fatalf("cannot create globalsvc controller: %v", err)
-	}
-	m.AddController(co)
-
-	co, err = bind.NewController(clusters)
-	if err != nil {
-		log.Fatalf("cannot create bind controller: %v", err)
-	}
-	m.AddController(co)
-
-	if err := m.Start(signals.SetupSignalHandler()); err != nil {
-		log.Fatalf("while or after starting manager: %v", err)
+	if err := command.Execute(); err != nil {
+		os.Exit(1)
 	}
 }

@@ -27,35 +27,36 @@ import (
 	"admiralty.io/multicluster-controller/pkg/reference"
 	"admiralty.io/multicluster-scheduler/pkg/common"
 	"github.com/go-test/deep"
-	v1 "k8s.io/api/authorization/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
-	"k8s.io/client-go/kubernetes"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-func NewController(clusters []*cluster.Cluster, kClients map[string]map[string]kubernetes.Interface) (*controller.Controller, error) {
-	r := &reconciler{kClients: kClients}
+// TODO use gc pattern
+
+func NewController(sources []*cluster.Cluster, targets []*cluster.Cluster) (*controller.Controller, error) {
+	r := &reconciler{}
 
 	co := controller.New(r, controller.Options{})
 
-	r.clients = make(map[string]client.Client, len(clusters))
-	for _, clu := range clusters {
+	r.sources = make(map[string]client.Client, len(sources))
+	for _, clu := range sources {
 		cli, err := clu.GetDelegatingClient()
 		if err != nil {
 			return nil, fmt.Errorf("getting delegating client for cluster %s: %v", clu.Name, err)
 		}
-		r.clients[clu.Name] = cli
+		r.sources[clu.Name] = cli
 
+		// note we're using the labels package to build an annotation selector
 		s := labels.NewSelector()
 		req, err := labels.NewRequirement("io.cilium/global-service", selection.Equals, []string{"true"})
 		if err != nil {
 			return nil, err
 		}
 		s = s.Add(*req)
-		req, err = labels.NewRequirement(common.LabelKeyIsDelegate, selection.NotEquals, []string{"true"}) // no need to globalyze a delegate service (result of other service's globalyzation)
+		req, err = labels.NewRequirement(common.AnnotationKeyIsDelegate, selection.DoesNotExist, nil) // no need to globalyze a delegate service (result of other service's globalyzation)
 		if err != nil {
 			return nil, err
 		}
@@ -63,14 +64,24 @@ func NewController(clusters []*cluster.Cluster, kClients map[string]map[string]k
 		if err := co.WatchResourceReconcileObject(clu, &corev1.Service{}, controller.WatchOptions{AnnotationSelector: s}); err != nil {
 			return nil, fmt.Errorf("setting up proxy service watch: %v", err)
 		}
+	}
 
-		s = labels.NewSelector()
-		req, err = labels.NewRequirement("io.cilium/global-service", selection.Equals, []string{"true"})
+	r.targets = make(map[string]client.Client, len(targets))
+	for _, clu := range targets {
+		cli, err := clu.GetDelegatingClient()
+		if err != nil {
+			return nil, fmt.Errorf("getting delegating client for cluster %s: %v", clu.Name, err)
+		}
+		r.targets[clu.Name] = cli
+
+		// note we're using the labels package to build an annotation selector
+		s := labels.NewSelector()
+		req, err := labels.NewRequirement("io.cilium/global-service", selection.Equals, []string{"true"})
 		if err != nil {
 			return nil, err
 		}
 		s = s.Add(*req)
-		req, err = labels.NewRequirement(common.LabelKeyIsDelegate, selection.Equals, []string{"true"})
+		req, err = labels.NewRequirement(common.AnnotationKeyIsDelegate, selection.Exists, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -84,14 +95,16 @@ func NewController(clusters []*cluster.Cluster, kClients map[string]map[string]k
 }
 
 type reconciler struct {
-	clients  map[string]client.Client
-	kClients map[string]map[string]kubernetes.Interface
+	sources map[string]client.Client
+	targets map[string]client.Client
 }
 
 func (r *reconciler) Reconcile(req reconcile.Request) (reconcile.Result, error) {
+	ctx := context.Background()
+
 	srcClusterName := req.Context
 	svc := &corev1.Service{}
-	if err := r.clients[srcClusterName].Get(context.Background(), req.NamespacedName, svc); err != nil {
+	if err := r.sources[srcClusterName].Get(ctx, req.NamespacedName, svc); err != nil {
 		if !errors.IsNotFound(err) {
 			return reconcile.Result{}, fmt.Errorf("cannot get service %s in namespace %s in cluster %s: %v", req.Name, req.Namespace, srcClusterName, err)
 		}
@@ -99,33 +112,19 @@ func (r *reconciler) Reconcile(req reconcile.Request) (reconcile.Result, error) 
 		return reconcile.Result{}, nil
 	}
 
-	for targetClusterName, cli := range r.clients {
+	for targetClusterName, cli := range r.targets {
 		if targetClusterName == srcClusterName {
-			continue
-		}
-
-		sar := &v1.SelfSubjectAccessReview{
-			Spec: v1.SelfSubjectAccessReviewSpec{
-				ResourceAttributes: &v1.ResourceAttributes{
-					Namespace: svc.Namespace,
-					Verb:      "create",
-					Version:   "v1",
-					Resource:  "services",
-				},
-			},
-		}
-		sar, err := r.kClients[srcClusterName][targetClusterName].AuthorizationV1().SelfSubjectAccessReviews().Create(sar)
-		if err != nil {
-			return reconcile.Result{}, err
-		}
-		if !sar.Status.Allowed {
 			continue
 		}
 
 		delSvc := makeDelegateService(svc)
 
 		foundDelSvc := &corev1.Service{}
-		if err := cli.Get(context.Background(), req.NamespacedName, foundDelSvc); err != nil {
+		if err := cli.Get(ctx, req.NamespacedName, foundDelSvc); err != nil {
+			if errors.IsForbidden(err) {
+				// target might not authorize this namespace
+				continue
+			}
 			if !errors.IsNotFound(err) {
 				return reconcile.Result{}, fmt.Errorf("cannot get delegate service %s in namespace %s in cluster %s: %v", req.Name, req.Namespace, targetClusterName, err)
 			}
@@ -135,8 +134,12 @@ func (r *reconciler) Reconcile(req reconcile.Request) (reconcile.Result, error) 
 				return reconcile.Result{}, fmt.Errorf("cannot set controller reference on delegate service %s in namespace %s in cluster %s: %v", req.Name, req.Namespace, targetClusterName, err)
 			}
 
-			_, err := r.kClients[srcClusterName][targetClusterName].CoreV1().Services(delSvc.Namespace).Create(delSvc)
-			if err != nil {
+			if err := cli.Create(ctx, delSvc); err != nil {
+				if errors.IsForbidden(err) {
+					// target might not authorize this namespace
+					// already checked for Get (double-check for Create)
+					continue
+				}
 				if !errors.IsAlreadyExists(err) {
 					return reconcile.Result{}, fmt.Errorf("cannot create delegate service %s in namespace %s in cluster %s: %v", req.Name, req.Namespace, targetClusterName, err)
 				}
@@ -154,11 +157,18 @@ func (r *reconciler) Reconcile(req reconcile.Request) (reconcile.Result, error) 
 			continue
 		}
 
-		foundDelSvc.ObjectMeta = delSvc.ObjectMeta
+		foundDelSvc.Labels = delSvc.Labels
+		foundDelSvc.Annotations = delSvc.Annotations
 		foundDelSvc.Spec = delSvc.Spec
-		_, err = r.kClients[srcClusterName][targetClusterName].CoreV1().Services(delSvc.Namespace).Update(foundDelSvc)
-		if err != nil && !patterns.IsOptimisticLockError(err) {
-			return reconcile.Result{}, fmt.Errorf("cannot update delegate service %s in namespace %s in cluster %s: %v", req.Name, req.Namespace, targetClusterName, err)
+		if err := cli.Update(ctx, foundDelSvc); err != nil {
+			if errors.IsForbidden(err) {
+				// target might not authorize this namespace
+				// already checked for Get/Create (double-check for Update)
+				continue
+			}
+			if !patterns.IsOptimisticLockError(err) {
+				return reconcile.Result{}, fmt.Errorf("cannot update delegate service %s in namespace %s in cluster %s: %v", req.Name, req.Namespace, targetClusterName, err)
+			}
 		}
 	}
 
@@ -175,13 +185,13 @@ func makeDelegateService(svc *corev1.Service) *corev1.Service {
 	for k, v := range svc.Labels {
 		labels[k] = v
 	}
-	labels[common.LabelKeyIsDelegate] = "true"
 	delSvc.Labels = labels
 
 	annotations := make(map[string]string)
 	for k, v := range svc.Annotations { // including "io.cilium/global-service"
 		annotations[k] = v
 	}
+	annotations[common.AnnotationKeyIsDelegate] = ""
 	delSvc.Annotations = annotations
 
 	delSvc.Spec = *svc.Spec.DeepCopy()

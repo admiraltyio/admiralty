@@ -31,7 +31,11 @@ bin
 # build artifacts
 _out
 
-# test binaries and kubeconfigs
+# test binaries
 argo
 kubemcsa
-kubeconfig-cluster*
+
+# test kubeconfigs
+kubeconfig*
+
+scratch/

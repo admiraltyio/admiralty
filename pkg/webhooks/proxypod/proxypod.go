@@ -81,15 +81,17 @@ func (m mutator) mutate(pod *corev1.Pod) error {
 		pod.Annotations[common.AnnotationKeySourcePodManifest] = string(srcPodManifest)
 	}
 
+	pod.Spec.NodeSelector = map[string]string{common.LabelAndTaintKeyVirtualKubeletProvider: common.VirtualKubeletProviderName}
+
 	// Even though we don't rely on taints and tolerations to schedule PROXY pods,
 	// we don't want our pod to be evicted by the taint eviction manager later on.
 	pod.Spec.Tolerations = []corev1.Toleration{{
-		Key:   "virtual-kubelet.io/provider",
-		Value: "admiralty",
+		Key:   common.LabelAndTaintKeyVirtualKubeletProvider,
+		Value: common.VirtualKubeletProviderName,
 	}}
 
 	// remove other scheduling constraints (will be respected in target cluster, from source pod manifest)
-	pod.Spec.SchedulerName = "admiralty"
+	pod.Spec.SchedulerName = common.ProxySchedulerName
 	pod.Spec.NodeSelector = nil
 	pod.Spec.Affinity = nil
 	pod.Spec.TopologySpreadConstraints = nil

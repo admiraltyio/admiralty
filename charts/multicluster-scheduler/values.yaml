@@ -1,18 +1,33 @@
-global:
-  nameOverride: ""
-  fullnameOverride: ""
-  debug: false
+nameOverride: ""
+fullnameOverride: ""
 
-  postDeleteJob:
+
+clusterName: ""
+targetSelf: false
+targets: []
+#  - name: ""
+#    serviceAccountImportName: "" # alternatively, you can import and automount remote service accounts with multicluster-service-account
+#    namespaced: false
+#  - name: ""
+#    secretName: "" # name of a Secret in the same namespace containing a kubeconfig to connect to a remote Kubernetes API server
+#    key: "" # (default: config) Key of the Secret data field containing the kubeconfig
+#    context: "" # (default: the kubeconfig's current context) If the kubeconfig contains multiple contexts, you may want to specify which one to use.
+#    namespaced: false
+
+webhook:
+  port: 9443
+  certDir: /tmp/k8s-webhook-server/serving-certs
+
+
+agent:
+  controllerManager:
     image:
-      repository: "quay.io/admiralty/multicluster-scheduler-remove-finalizers"
-      tag: "" # (default: .Values.global.chart.appVersion)
-    #  pullPolicy: IfNotPresent
-    #  pullSecretName: ""
-    nodeSelector: {}
+      repository: "quay.io/admiralty/multicluster-scheduler-agent"
+      tag: "" # (default: .Chart.AppVersion)
+      pullPolicy: IfNotPresent
     resources: {}
-    # We usually recommend not to specify default resources and to leave this as a conscious
-    # choice for the user. This also increases chances charts run on environments with little
+      # We usually recommend not to specify default resources and to leave this as a conscious
+      # choice for the user. This also increases chances charts run on environments with little
     # resources, such as Minikube. If you do want to specify resources, uncomment the following
     # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
     # limits:
@@ -21,26 +36,61 @@ global:
     # requests:
     #   cpu: 100m
     #   memory: 128Mi
-    securityContext: {}
-    # capabilities:
-    #   drop:
-    #   - ALL
-    # readOnlyRootFilesystem: true
-    # runAsNonRoot: true
-    affinity: {}
-    tolerations: []
+  scheduler:
+    image:
+      repository: "quay.io/admiralty/multicluster-scheduler-scheduler"
+      tag: "" # (default: .Chart.AppVersion)
+      pullPolicy: IfNotPresent
+    resources: {}
+      # We usually recommend not to specify default resources and to leave this as a conscious
+      # choice for the user. This also increases chances charts run on environments with little
+      # resources, such as Minikube. If you do want to specify resources, uncomment the following
+    # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+    # limits:
+    #   cpu: 100m
+    #   memory: 128Mi
+    # requests:
+    #   cpu: 100m
+    #   memory: 128Mi
+  nodeSelector: {}
+  securityContext: {}
+  # capabilities:
+  #   drop:
+  #   - ALL
+  # readOnlyRootFilesystem: true
+  # runAsNonRoot: true
+  affinity: {}
+  tolerations: []
 
-  # HACK .Chart isn't passed down to child charts
-  # so we cherry-pick the fields that they need as globals
-  # User, DO NOT override!
-  chart:
-    name: multicluster-scheduler
-    version: "0.7.0"
-    appVersion: "0.7.0"
 
-agent:
-  enabled: false
-  # see subchart's values.yaml for additional variables
+postDeleteJob:
+  image:
+    repository: "quay.io/admiralty/multicluster-scheduler-remove-finalizers"
+    tag: "" # (default: .Chart.AppVersion)
+    pullPolicy: IfNotPresent
+  nodeSelector: {}
+  resources: {}
+  # We usually recommend not to specify default resources and to leave this as a conscious
+  # choice for the user. This also increases chances charts run on environments with little
+  # resources, such as Minikube. If you do want to specify resources, uncomment the following
+  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+  # limits:
+  #   cpu: 100m
+  #   memory: 128Mi
+  # requests:
+  #   cpu: 100m
+  #   memory: 128Mi
+  securityContext: {}
+  # capabilities:
+  #   drop:
+  #   - ALL
+  # readOnlyRootFilesystem: true
+  # runAsNonRoot: true
+  affinity: {}
+  tolerations: []
 
-scheduler:
-  enabled: false
+#imagePullSecretName: ""
+debug:
+  controllerManager: false
+  proxyScheduler: false
+  candidateScheduler: false

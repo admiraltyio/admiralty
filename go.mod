@@ -5,28 +5,23 @@ go 1.13
 require (
 	admiralty.io/multicluster-controller v0.5.0
 	admiralty.io/multicluster-service-account v0.6.1
-	contrib.go.opencensus.io/exporter/jaeger v0.2.0
-	contrib.go.opencensus.io/exporter/ocagent v0.6.0
-	github.com/docker/spdystream v0.0.0-20181023171402-6480d4af844c // indirect
-	github.com/elazarl/goproxy v0.0.0-20191011121108-aa519ddbe484 // indirect
 	github.com/ghodss/yaml v1.0.0
 	github.com/go-logr/zapr v0.1.1 // indirect
 	github.com/go-test/deep v1.0.1
+	github.com/golang/groupcache v0.0.0-20190702054246-869f871628b6 // indirect
 	github.com/imdario/mergo v0.3.7 // indirect
-	github.com/mitchellh/go-homedir v1.1.0
 	github.com/pkg/errors v0.8.1
 	github.com/sirupsen/logrus v1.4.2
-	github.com/spf13/cobra v0.0.5
 	github.com/spf13/pflag v1.0.5
 	github.com/virtual-kubelet/virtual-kubelet v1.2.1
-	go.opencensus.io v0.22.2
 	go.uber.org/atomic v1.4.0 // indirect
 	go.uber.org/multierr v1.2.0 // indirect
-	gopkg.in/inf.v0 v0.9.1
+	google.golang.org/genproto v0.0.0-20190716160619-c506a9f90610 // indirect
 	k8s.io/api v0.17.0
 	k8s.io/apimachinery v0.17.0
 	k8s.io/client-go v10.0.0+incompatible
 	k8s.io/code-generator v0.17.0
+	k8s.io/component-base v0.17.0
 	k8s.io/klog v1.0.0
 	k8s.io/kubernetes v1.17.0
 	k8s.io/sample-controller v0.17.0
