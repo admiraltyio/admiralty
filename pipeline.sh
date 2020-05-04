@@ -9,5 +9,8 @@ echo "build"
 build/build.sh "$VERSION"
 echo "e2e test"
 test/e2e/e2e.sh "$VERSION"
-echo "release"
-release/release.sh "$VERSION"
+echo "release images"
+release/images.sh "$VERSION"
+echo "release chart"
+release/chart.sh
+# TODO: create release on GitHub
