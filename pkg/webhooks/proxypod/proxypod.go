@@ -105,8 +105,20 @@ func (m mutator) mutate(pod *corev1.Pod) error {
 	var grace int64 = 0
 	pod.Spec.TerminationGracePeriodSeconds = &grace
 
+	// add finalizer because we can't add it when we create delegates in proxy scheduler
+	// (pod updates confuse the scheduler)
+	hasFinalizer := false
+	for _, f := range pod.Finalizers {
+		if f == common.CrossClusterGarbageCollectionFinalizer {
+			hasFinalizer = true
+			break
+		}
+	}
+	if !hasFinalizer {
+		pod.Finalizers = append(pod.Finalizers, common.CrossClusterGarbageCollectionFinalizer)
+	}
+
 	// add label for post-delete hook to remove finalizers
-	// TODO? move this to gc pattern
 	if pod.Labels == nil {
 		pod.Labels = make(map[string]string, 1)
 	}

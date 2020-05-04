@@ -175,7 +175,7 @@ func (c *reconciler) Handle(obj interface{}) (requeueAfter *time.Duration, err e
 
 	j := -1
 	for i, f := range proxyPod.Finalizers {
-		if f == "multicluster.admiralty.io/multiclusterForegroundDeletion" {
+		if f == common.CrossClusterGarbageCollectionFinalizer {
 			j = i
 			break
 		}
@@ -221,7 +221,7 @@ func (c *reconciler) Handle(obj interface{}) (requeueAfter *time.Duration, err e
 		}
 	} else if !proxyPodHasFinalizer {
 		podCopy := proxyPod.DeepCopy()
-		podCopy.Finalizers = append(podCopy.Finalizers, "multicluster.admiralty.io/multiclusterForegroundDeletion")
+		podCopy.Finalizers = append(podCopy.Finalizers, common.CrossClusterGarbageCollectionFinalizer)
 		var err error
 		if proxyPod, err = c.kubeclientset.CoreV1().Pods(namespace).Update(podCopy); err != nil {
 			if patterns.IsOptimisticLockError(err) {

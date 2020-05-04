@@ -26,7 +26,7 @@ import (
 )
 
 func main() {
-	patch := `{"metadata":{"$deleteFromPrimitiveList/finalizers":["multicluster.admiralty.io/multiclusterForegroundDeletion"]}}`
+	patch := `{"metadata":{"$deleteFromPrimitiveList/finalizers":[` + common.CrossClusterGarbageCollectionFinalizer + `]}}`
 
 	cfg, _, err := config.ConfigAndNamespace()
 	utilruntime.Must(err)
@@ -50,7 +50,7 @@ func (p patchAll) patchPods() {
 	utilruntime.Must(err)
 	for _, o := range l.Items {
 		for _, f := range o.Finalizers {
-			if f == "multicluster.admiralty.io/multiclusterForegroundDeletion" {
+			if f == common.CrossClusterGarbageCollectionFinalizer {
 				_, err := p.k.CoreV1().Pods(o.Namespace).Patch(o.Name, types.StrategicMergePatchType, []byte(p.patch))
 				utilruntime.Must(err)
 				break
@@ -64,7 +64,7 @@ func (p patchAll) patchServices() {
 	utilruntime.Must(err)
 	for _, o := range l.Items {
 		for _, f := range o.Finalizers {
-			if f == "multicluster.admiralty.io/multiclusterForegroundDeletion" {
+			if f == common.CrossClusterGarbageCollectionFinalizer {
 				_, err := p.k.CoreV1().Services(o.Namespace).Patch(o.Name, types.StrategicMergePatchType, []byte(p.patch))
 				utilruntime.Must(err)
 				break

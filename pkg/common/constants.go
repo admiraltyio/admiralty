@@ -52,4 +52,8 @@ var (
 	LabelKeyHasFinalizer = KeyPrefix + "has-finalizer"
 
 	LabelKeyParentName = KeyPrefix + "parent-name"
+
+	// finalizer for cross-cluster garbage collection
+
+	CrossClusterGarbageCollectionFinalizer = KeyPrefix + "multiclusterForegroundDeletion"
 )
