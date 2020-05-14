@@ -24,19 +24,6 @@ import (
 
 	"admiralty.io/multicluster-controller/pkg/cluster"
 	mcmgr "admiralty.io/multicluster-controller/pkg/manager"
-	"admiralty.io/multicluster-scheduler/pkg/apis"
-	agentconfig "admiralty.io/multicluster-scheduler/pkg/config/agent"
-	"admiralty.io/multicluster-scheduler/pkg/controller"
-	"admiralty.io/multicluster-scheduler/pkg/controllers/chaperon"
-	"admiralty.io/multicluster-scheduler/pkg/controllers/feedback"
-	"admiralty.io/multicluster-scheduler/pkg/controllers/globalsvc"
-	"admiralty.io/multicluster-scheduler/pkg/controllers/svcreroute"
-	"admiralty.io/multicluster-scheduler/pkg/generated/clientset/versioned"
-	clientset "admiralty.io/multicluster-scheduler/pkg/generated/clientset/versioned"
-	informers "admiralty.io/multicluster-scheduler/pkg/generated/informers/externalversions"
-	"admiralty.io/multicluster-scheduler/pkg/generated/informers/externalversions/multicluster/v1alpha1"
-	"admiralty.io/multicluster-scheduler/pkg/vk/node"
-	"admiralty.io/multicluster-scheduler/pkg/webhooks/proxypod"
 	"admiralty.io/multicluster-service-account/pkg/config"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -51,6 +38,20 @@ import (
 	"k8s.io/sample-controller/pkg/signals"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
+
+	"admiralty.io/multicluster-scheduler/pkg/apis"
+	agentconfig "admiralty.io/multicluster-scheduler/pkg/config/agent"
+	"admiralty.io/multicluster-scheduler/pkg/controller"
+	"admiralty.io/multicluster-scheduler/pkg/controllers/chaperon"
+	"admiralty.io/multicluster-scheduler/pkg/controllers/feedback"
+	"admiralty.io/multicluster-scheduler/pkg/controllers/globalsvc"
+	"admiralty.io/multicluster-scheduler/pkg/controllers/svcreroute"
+	"admiralty.io/multicluster-scheduler/pkg/generated/clientset/versioned"
+	clientset "admiralty.io/multicluster-scheduler/pkg/generated/clientset/versioned"
+	informers "admiralty.io/multicluster-scheduler/pkg/generated/informers/externalversions"
+	"admiralty.io/multicluster-scheduler/pkg/generated/informers/externalversions/multicluster/v1alpha1"
+	"admiralty.io/multicluster-scheduler/pkg/vk/node"
+	"admiralty.io/multicluster-scheduler/pkg/webhooks/proxypod"
 )
 
 // TODO standardize logging
@@ -95,7 +96,7 @@ func startOldStyleControllers(stopCh <-chan struct{}, agentCfg agentconfig.Confi
 		c, err := versioned.NewForConfig(target.ClientConfig)
 		targetCustomClients[target.Name] = c
 		utilruntime.Must(err)
-		f := informers.NewSharedInformerFactory(c, time.Second*30)
+		f := informers.NewSharedInformerFactoryWithOptions(c, time.Second*30, informers.WithNamespace(target.Namespace))
 		targetCustomInformerFactories[target.Name] = f
 		targetPodChaperonInformers[target.Name] = f.Multicluster().V1alpha1().PodChaperons()
 	}
