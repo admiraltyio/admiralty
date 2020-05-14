@@ -22,15 +22,8 @@ import (
 	"time"
 
 	"admiralty.io/multicluster-controller/pkg/patterns/gc"
-	"admiralty.io/multicluster-scheduler/pkg/apis/multicluster/v1alpha1"
-	"admiralty.io/multicluster-scheduler/pkg/common"
-	agentconfig "admiralty.io/multicluster-scheduler/pkg/config/agent"
-	"admiralty.io/multicluster-scheduler/pkg/generated/clientset/versioned"
-	"admiralty.io/multicluster-scheduler/pkg/model/delegatepod"
-	"admiralty.io/multicluster-scheduler/pkg/model/proxypod"
 	"admiralty.io/multicluster-service-account/pkg/config"
 	v1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -39,6 +32,13 @@ import (
 	"k8s.io/klog"
 	framework "k8s.io/kubernetes/pkg/scheduler/framework/v1alpha1"
 	"k8s.io/kubernetes/pkg/scheduler/nodeinfo"
+
+	"admiralty.io/multicluster-scheduler/pkg/apis/multicluster/v1alpha1"
+	"admiralty.io/multicluster-scheduler/pkg/common"
+	agentconfig "admiralty.io/multicluster-scheduler/pkg/config/agent"
+	"admiralty.io/multicluster-scheduler/pkg/generated/clientset/versioned"
+	"admiralty.io/multicluster-scheduler/pkg/model/delegatepod"
+	"admiralty.io/multicluster-scheduler/pkg/model/proxypod"
 )
 
 type Plugin struct {
@@ -111,10 +111,8 @@ func (pl *Plugin) Filter(ctx context.Context, state *framework.CycleState, pod *
 	if err := wait.PollImmediateUntil(time.Second, func() (bool, error) {
 		c, err := pl.getCandidate(pod, targetClusterName)
 		if err != nil {
-			if errors.IsForbidden(err) {
-				isUnschedulable = true
-				return true, nil
-			}
+			// may be forbidden, or namespace doesn't exist, or target cluster is unavailable
+			// handled below as unschedulable
 			return false, err
 		}
 		// create candidate if not exists
@@ -126,10 +124,8 @@ func (pl *Plugin) Filter(ctx context.Context, state *framework.CycleState, pod *
 
 			_, err = pl.targets[targetClusterName].MulticlusterV1alpha1().PodChaperons(c.Namespace).Create(c)
 			if err != nil {
-				if errors.IsForbidden(err) {
-					isUnschedulable = true
-					return true, nil
-				}
+				// may be forbidden, or namespace doesn't exist, or target cluster is unavailable
+				// handled below as unschedulable
 				return false, err
 			}
 
@@ -143,7 +139,7 @@ func (pl *Plugin) Filter(ctx context.Context, state *framework.CycleState, pod *
 		return isReserved || isUnschedulable, nil
 	}, ctx.Done()); err != nil {
 		// error or timeout or scheduling cycle done
-		return framework.NewStatus(framework.Error, err.Error())
+		return framework.NewStatus(framework.UnschedulableAndUnresolvable, err.Error())
 	}
 
 	if isUnschedulable {
