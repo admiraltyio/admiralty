@@ -8,6 +8,7 @@ Multicluster-Scheduler is a system of Kubernetes controllers that intelligently 
 
 ## Prerequisites
 
+- Kubernetes v1.17 or 1.18 (unless you build from source on a fork k8s.io/kubernetes, cf. [#19](https://github.com/admiraltyio/multicluster-scheduler/issues/19))
 - [cert-manager](https://cert-manager.io/docs/installation/kubernetes/) v0.11+ in each member cluster
 
 ## Installation

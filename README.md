@@ -25,6 +25,8 @@ Note: you can easily create two clusters on your machine with [kind](https://kin
 
 #### Prerequisites
 
+> **Important!** Multicluster-scheduler requires Kubernetes v1.17 or 1.18 (unless you build from source on a fork k8s.io/kubernetes, cf. [#19](https://github.com/admiraltyio/multicluster-scheduler/issues/19)).
+
 Cert-manager v0.11+ must be installed in each cluster:
 
 ```sh
