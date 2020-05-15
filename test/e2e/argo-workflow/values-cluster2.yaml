@@ -1,6 +1,10 @@
 clusterName: c2
 
-agent:
+controllerManager:
+  securityContext:
+    runAsUser: 1000
+
+scheduler:
   securityContext:
     runAsUser: 1000
 

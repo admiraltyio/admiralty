@@ -1,7 +1,6 @@
 nameOverride: ""
 fullnameOverride: ""
 
-
 clusterName: ""
 targetSelf: false
 targets: []
@@ -14,44 +13,24 @@ targets: []
 #    context: "" # (default: the kubeconfig's current context) If the kubeconfig contains multiple contexts, you may want to specify which one to use.
 #    namespaced: false
 
-webhook:
-  port: 9443
-  certDir: /tmp/k8s-webhook-server/serving-certs
+#imagePullSecretName: ""
 
-
-agent:
-  controllerManager:
-    image:
-      repository: "quay.io/admiralty/multicluster-scheduler-agent"
-      tag: "" # (default: .Chart.AppVersion)
-      pullPolicy: IfNotPresent
-    resources: {}
-      # We usually recommend not to specify default resources and to leave this as a conscious
-      # choice for the user. This also increases chances charts run on environments with little
-    # resources, such as Minikube. If you do want to specify resources, uncomment the following
-    # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
-    # limits:
-    #   cpu: 100m
-    #   memory: 128Mi
-    # requests:
-    #   cpu: 100m
-    #   memory: 128Mi
-  scheduler:
-    image:
-      repository: "quay.io/admiralty/multicluster-scheduler-scheduler"
-      tag: "" # (default: .Chart.AppVersion)
-      pullPolicy: IfNotPresent
-    resources: {}
-      # We usually recommend not to specify default resources and to leave this as a conscious
-      # choice for the user. This also increases chances charts run on environments with little
-      # resources, such as Minikube. If you do want to specify resources, uncomment the following
-    # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
-    # limits:
-    #   cpu: 100m
-    #   memory: 128Mi
-    # requests:
-    #   cpu: 100m
-    #   memory: 128Mi
+controllerManager:
+  image:
+    repository: "quay.io/admiralty/multicluster-scheduler-agent"
+    tag: "" # (default: .Chart.AppVersion)
+    pullPolicy: IfNotPresent
+  resources: {}
+    # We usually recommend not to specify default resources and to leave this as a conscious
+  # choice for the user. This also increases chances charts run on environments with little
+  # resources, such as Minikube. If you do want to specify resources, uncomment the following
+  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+  # limits:
+  #   cpu: 100m
+  #   memory: 128Mi
+  # requests:
+  #   cpu: 100m
+  #   memory: 128Mi
   nodeSelector: {}
   securityContext: {}
   # capabilities:
@@ -62,6 +41,31 @@ agent:
   affinity: {}
   tolerations: []
 
+scheduler:
+  image:
+    repository: "quay.io/admiralty/multicluster-scheduler-scheduler"
+    tag: "" # (default: .Chart.AppVersion)
+    pullPolicy: IfNotPresent
+  resources: {}
+    # We usually recommend not to specify default resources and to leave this as a conscious
+    # choice for the user. This also increases chances charts run on environments with little
+  # resources, such as Minikube. If you do want to specify resources, uncomment the following
+  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+  # limits:
+  #   cpu: 100m
+  #   memory: 128Mi
+  # requests:
+  #   cpu: 100m
+  #   memory: 128Mi
+  nodeSelector: {}
+  securityContext: {}
+  # capabilities:
+  #   drop:
+  #   - ALL
+  # readOnlyRootFilesystem: true
+  # runAsNonRoot: true
+  affinity: {}
+  tolerations: []
 
 postDeleteJob:
   image:
@@ -89,8 +93,11 @@ postDeleteJob:
   affinity: {}
   tolerations: []
 
-#imagePullSecretName: ""
 debug:
   controllerManager: false
   proxyScheduler: false
   candidateScheduler: false
+
+webhook:
+  port: 9443
+  certDir: /tmp/k8s-webhook-server/serving-certs

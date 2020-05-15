@@ -108,18 +108,22 @@ Don't forget to label multicluster-scheduler's namespace (e.g., "admiralty") wit
 | targets[].key | string | `"config"` | if using a custom kubeconfig secret, override the secret key |
 | targets[].context | string | `""` | if using a custom kubeconfig secret, with multiple contexts, override the kubeconfig's current context |
 | imagePullSecretName | string | `""` |  |
-| agent.image.repository | string | `"quay.io/admiralty/multicluster-scheduler-agent"` |  |
-| agent.controllerManager.image.tag | string | `"0.8.0"` |  |
-| agent.controllerManager.image.pullPolicy | string | `"IfNotPresent"` |  |
-| agent.controllerManager.resources | object | `{}` |  |
-| agent.scheduler.image.repository | string | `"quay.io/admiralty/multicluster-scheduler-scheduler"` |  |
-| agent.scheduler.image.tag | string | `"0.8.0"` |  |
-| agent.scheduler.image.pullPolicy | string | `"IfNotPresent"` |  |
-| agent.scheduler.resources | object | `{}` |  |
-| agent.nodeSelector | object | `{}` |  |
-| agent.securityContext | object | `{}` |  |
-| agent.affinity | object | `{}` |  |
-| agent.tolerations | array | `[]` |  |
+| controllerManager.image.repository | string | `"quay.io/admiralty/multicluster-scheduler-agent"` |  |
+| controllerManager.image.tag | string | `"0.8.0"` |  |
+| controllerManager.image.pullPolicy | string | `"IfNotPresent"` |  |
+| controllerManager.resources | object | `{}` |  |
+| controllerManager.nodeSelector | object | `{}` |  |
+| controllerManager.securityContext | object | `{}` |  |
+| controllerManager.affinity | object | `{}` |  |
+| controllerManager.tolerations | array | `[]` |  |
+| scheduler.image.repository | string | `"quay.io/admiralty/multicluster-scheduler-scheduler"` |  |
+| scheduler.image.tag | string | `"0.8.0"` |  |
+| scheduler.image.pullPolicy | string | `"IfNotPresent"` |  |
+| scheduler.resources | object | `{}` |  |
+| scheduler.nodeSelector | object | `{}` |  |
+| scheduler.securityContext | object | `{}` |  |
+| scheduler.affinity | object | `{}` |  |
+| scheduler.tolerations | array | `[]` |  |
 | postDeleteJob.image.repository | string | `"quay.io/admiralty/multicluster-scheduler-remove-finalizers"` |  |
 | postDeleteJob.image.tag | string | `"0.8.0"` |  |
 | postDeleteJob.image.pullPolicy | string | `"IfNotPresent"` |  |
