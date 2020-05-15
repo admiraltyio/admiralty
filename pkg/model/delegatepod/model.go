@@ -20,11 +20,12 @@ import (
 	"strings"
 
 	"admiralty.io/multicluster-controller/pkg/patterns/gc"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	"admiralty.io/multicluster-scheduler/pkg/apis/multicluster/v1alpha1"
 	"admiralty.io/multicluster-scheduler/pkg/common"
 	"admiralty.io/multicluster-scheduler/pkg/model/proxypod"
-	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func MakeDelegatePod(proxyPod *corev1.Pod) (*v1alpha1.PodChaperon, error) {
@@ -81,7 +82,7 @@ func removeServiceAccount(podSpec *corev1.PodSpec) {
 		j := -1
 		for i, m := range c.VolumeMounts {
 			if m.MountPath == "/var/run/secrets/kubernetes.io/serviceaccount" {
-				saSecretName = m.Name
+				saSecretName = m.Name // should be the same secret name for all containers
 				j = i
 				break
 			}
@@ -91,6 +92,21 @@ func removeServiceAccount(podSpec *corev1.PodSpec) {
 			podSpec.Containers[i] = c
 		}
 	}
+	for i, c := range podSpec.InitContainers {
+		j := -1
+		for i, m := range c.VolumeMounts {
+			if m.MountPath == "/var/run/secrets/kubernetes.io/serviceaccount" {
+				saSecretName = m.Name // should be the same secret name for all containers
+				j = i
+				break
+			}
+		}
+		if j > -1 {
+			c.VolumeMounts = append(c.VolumeMounts[:j], c.VolumeMounts[j+1:]...)
+			podSpec.Containers[i] = c
+		}
+	}
+	// TODO... what about ephemeral containers
 	j := -1
 	for i, v := range podSpec.Volumes {
 		if v.Name == saSecretName {
