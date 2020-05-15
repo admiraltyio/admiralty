@@ -20,7 +20,7 @@ spec:
     spec:
       containers:
         - name: controller-manager
-          image: {{ .Values.agent.controllerManager.image.repository }}:{{ default .Chart.AppVersion .Values.agent.controllerManager.image.tag }}
+          image: {{ .Values.controllerManager.image.repository }}:{{ default .Chart.AppVersion .Values.controllerManager.image.tag }}
           ports:
               - containerPort: 9443
           volumeMounts:
@@ -36,8 +36,8 @@ spec:
               readOnly: true
                 {{- end }}
                 {{- end }}
-          imagePullPolicy: {{ .Values.agent.controllerManager.image.pullPolicy }}
-            {{- with .Values.resources }}
+          imagePullPolicy: {{ .Values.controllerManager.image.pullPolicy }}
+            {{- with .Values.controllerManager.resources }}
           resources: {{ toYaml . | nindent 12 }}
             {{- end }}
       serviceAccountName: {{ include "fullname" . }}
@@ -57,22 +57,22 @@ spec:
           items:
             - key: {{ default "config" .key }}
               path: config
-                {{- end }}
-                {{- end }}
-          {{- with .Values.imagePullSecretName }}
+            {{- end }}
+            {{- end }}
+        {{- with .Values.imagePullSecretName }}
       imagePullSecrets:
         - name: {{ . }}
           {{- end }}
-          {{- with .Values.nodeSelector }}
+          {{- with .Values.controllerManager.nodeSelector }}
       nodeSelector: {{ toYaml . | nindent 8 }}
         {{- end }}
-        {{- with .Values.securityContext }}
+        {{- with .Values.controllerManager.securityContext }}
       securityContext: {{ toYaml . | nindent 8 }}
         {{- end }}
-        {{- with .Values.affinity }}
+        {{- with .Values.controllerManager.affinity }}
       affinity: {{ toYaml . | nindent 8 }}
         {{- end }}
-        {{- with .Values.tolerations }}
+        {{- with .Values.controllerManager.tolerations }}
       tolerations: {{ toYaml . | nindent 8 }}
         {{- end }}
 ---
@@ -99,7 +99,7 @@ spec:
     spec:
       containers:
         - name: proxy-scheduler
-          image: {{ .Values.agent.scheduler.image.repository }}:{{ default .Chart.AppVersion .Values.agent.scheduler.image.tag }}
+          image: {{ .Values.scheduler.image.repository }}:{{ default .Chart.AppVersion .Values.scheduler.image.tag }}
           args: ["--config", "/etc/admiralty/proxy-scheduler-config"]
           volumeMounts:
             - name: config
@@ -111,8 +111,8 @@ spec:
               readOnly: true
                 {{- end }}
                 {{- end }}
-          imagePullPolicy: {{ .Values.agent.scheduler.image.pullPolicy }}
-            {{- with .Values.agent.scheduler.resources }}
+          imagePullPolicy: {{ .Values.scheduler.image.pullPolicy }}
+            {{- with .Values.scheduler.resources }}
           resources: {{ toYaml . | nindent 12 }}
             {{- end }}
       serviceAccountName: {{ include "fullname" . }}
@@ -134,16 +134,16 @@ spec:
       imagePullSecrets:
         - name: {{ . }}
           {{- end }}
-          {{- with .Values.nodeSelector }}
+          {{- with .Values.scheduler.nodeSelector }}
       nodeSelector: {{ toYaml . | nindent 8 }}
         {{- end }}
-        {{- with .Values.securityContext }}
+        {{- with .Values.scheduler.securityContext }}
       securityContext: {{ toYaml . | nindent 8 }}
         {{- end }}
-        {{- with .Values.affinity }}
+        {{- with .Values.scheduler.affinity }}
       affinity: {{ toYaml . | nindent 8 }}
         {{- end }}
-        {{- with .Values.tolerations }}
+        {{- with .Values.scheduler.tolerations }}
       tolerations: {{ toYaml . | nindent 8 }}
         {{- end }}
 ---
@@ -169,13 +169,13 @@ spec:
     spec:
       containers:
         - name: candidate-scheduler
-          image: {{ .Values.agent.scheduler.image.repository }}:{{ default .Chart.AppVersion .Values.agent.scheduler.image.tag }}
+          image: {{ .Values.scheduler.image.repository }}:{{ default .Chart.AppVersion .Values.scheduler.image.tag }}
           args: ["--config", "/etc/admiralty/candidate-scheduler-config"]
           volumeMounts:
             - name: config
               mountPath: /etc/admiralty
-          imagePullPolicy: {{ .Values.agent.scheduler.image.pullPolicy }}
-            {{- with .Values.agent.scheduler.resources }}
+          imagePullPolicy: {{ .Values.scheduler.image.pullPolicy }}
+            {{- with .Values.scheduler.resources }}
           resources: {{ toYaml . | nindent 12 }}
             {{- end }}
       serviceAccountName: {{ include "fullname" . }}
@@ -187,16 +187,16 @@ spec:
       imagePullSecrets:
         - name: {{ . }}
           {{- end }}
-          {{- with .Values.nodeSelector }}
+          {{- with .Values.scheduler.nodeSelector }}
       nodeSelector: {{ toYaml . | nindent 8 }}
         {{- end }}
-        {{- with .Values.securityContext }}
+        {{- with .Values.scheduler.securityContext }}
       securityContext: {{ toYaml . | nindent 8 }}
         {{- end }}
-        {{- with .Values.affinity }}
+        {{- with .Values.scheduler.affinity }}
       affinity: {{ toYaml . | nindent 8 }}
         {{- end }}
-        {{- with .Values.tolerations }}
+        {{- with .Values.scheduler.tolerations }}
       tolerations: {{ toYaml . | nindent 8 }}
         {{- end }}
         {{- end }}
