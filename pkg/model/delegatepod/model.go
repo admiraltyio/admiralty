@@ -103,7 +103,7 @@ func removeServiceAccount(podSpec *corev1.PodSpec) {
 		}
 		if j > -1 {
 			c.VolumeMounts = append(c.VolumeMounts[:j], c.VolumeMounts[j+1:]...)
-			podSpec.Containers[i] = c
+			podSpec.InitContainers[i] = c
 		}
 	}
 	// TODO... what about ephemeral containers
