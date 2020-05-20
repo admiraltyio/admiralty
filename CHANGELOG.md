@@ -20,6 +20,22 @@
 
 -->
 
+## v0.8.2
+
+Note: we're skipping v0.8.1 because the 0.8.1 image tag was erroneously used for a pre-release version.
+
+### Bugfixes
+
+- Fix [#20](https://github.com/admiraltyio/multicluster-scheduler/issues/20). Scheduling was failing altogether if the namespace didn't exist in one of the target clusters. That cluster is now simply filtered out.
+- Fix [#21](https://github.com/admiraltyio/multicluster-scheduler/issues/21). The feedback controller wasn't compatible with namespaced targets. It was trying to watch remote pod chaperons at the cluster level, which wasn't allowed by remote RBAC.
+- Fix [#25](https://github.com/admiraltyio/multicluster-scheduler/issues/25). The Helm chart values structure was broken, making it difficult to set resource requests/limits.
+- Fix [#26](https://github.com/admiraltyio/multicluster-scheduler/issues/26). Init containers weren't stripped from their service account token volume mounts as pods were delegated.
+- Fix a race condition that allowed candidate pod chaperons and their pods to be orphaned if scheduling failed. Finalizer is now added to proxy pods at admission vs. asynchronously by the feedback controller.
+
+### Breaking Changes
+
+- Some Helm chart values were broken (see above). As we fixed them, we reorganized all values, so some values that did work now work differently.
+
 ## v0.8.0
 
 This release removes the central scheduler, replaced by a decentralized algorithm creating candidate pods in all targets (of which only one becomes the proxy pod's delegate). See the [proposal](proposals/decentralized.md) for details.

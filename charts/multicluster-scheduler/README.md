@@ -46,9 +46,9 @@ Create a namespace for multicluster-scheduler and install the chart in it, using
 ```sh
 kubectl create namespace admiralty
 helm install multicluster-scheduler admiralty/multicluster-scheduler \
-  --version 0.8.0 \
+  --version 0.8.2 \
   -n admiralty \
-  -f values-scheduler.yaml
+  -f values.yaml
 ```
 
 Repeat for other clusters.
@@ -63,7 +63,7 @@ See [getting started guide](../../README.md#getting-started) for now.
 
 ## Post-Delete Hook
 
-Multicluster-scheduler uses [finalizers](https://kubernetes.io/docs/tasks/access-kubernetes-api/custom-resources/custom-resource-definitions/#finalizers) for [cross-cluster garbage collection](https://twitter.com/adrienjt/status/1199467878015066112). In particular, it adds finalizers to proxy pods and global services. The finalizers block the deletion of those objects until multicluster-scheduler's scheduler deletes their delegates in other clusters. If the scheduler stopped running and those finalizers weren't removed, object deletions would be blocked indefinitely. Therefore, when multicluster-scheduler is uninstalled, a Kubernetes job will run as a [Helm post-delete hook](https://helm.sh/docs/topics/charts_hooks/) to clean up the finalizers.
+Multicluster-scheduler uses [finalizers](https://kubernetes.io/docs/tasks/access-kubernetes-api/custom-resources/custom-resource-definitions/#finalizers) for [cross-cluster garbage collection](https://twitter.com/adrienjt/status/1199467878015066112). In particular, it adds finalizers to proxy pods and global services. The finalizers block the deletion of those objects until multicluster-scheduler deletes their delegates in other clusters. If multicluster-scheduler stopped running, and those finalizers weren't removed, object deletions would be blocked indefinitely. Therefore, when multicluster-scheduler is uninstalled, a Kubernetes job will run as a [Helm post-delete hook](https://helm.sh/docs/topics/charts_hooks/) to clean up the finalizers.
 
 ## Advanced Use Cases
 
@@ -109,7 +109,7 @@ Don't forget to label multicluster-scheduler's namespace (e.g., "admiralty") wit
 | targets[].context | string | `""` | if using a custom kubeconfig secret, with multiple contexts, override the kubeconfig's current context |
 | imagePullSecretName | string | `""` |  |
 | controllerManager.image.repository | string | `"quay.io/admiralty/multicluster-scheduler-agent"` |  |
-| controllerManager.image.tag | string | `"0.8.0"` |  |
+| controllerManager.image.tag | string | `"0.8.2"` |  |
 | controllerManager.image.pullPolicy | string | `"IfNotPresent"` |  |
 | controllerManager.resources | object | `{}` |  |
 | controllerManager.nodeSelector | object | `{}` |  |
@@ -117,7 +117,7 @@ Don't forget to label multicluster-scheduler's namespace (e.g., "admiralty") wit
 | controllerManager.affinity | object | `{}` |  |
 | controllerManager.tolerations | array | `[]` |  |
 | scheduler.image.repository | string | `"quay.io/admiralty/multicluster-scheduler-scheduler"` |  |
-| scheduler.image.tag | string | `"0.8.0"` |  |
+| scheduler.image.tag | string | `"0.8.2"` |  |
 | scheduler.image.pullPolicy | string | `"IfNotPresent"` |  |
 | scheduler.resources | object | `{}` |  |
 | scheduler.nodeSelector | object | `{}` |  |
@@ -125,7 +125,7 @@ Don't forget to label multicluster-scheduler's namespace (e.g., "admiralty") wit
 | scheduler.affinity | object | `{}` |  |
 | scheduler.tolerations | array | `[]` |  |
 | postDeleteJob.image.repository | string | `"quay.io/admiralty/multicluster-scheduler-remove-finalizers"` |  |
-| postDeleteJob.image.tag | string | `"0.8.0"` |  |
+| postDeleteJob.image.tag | string | `"0.8.2"` |  |
 | postDeleteJob.image.pullPolicy | string | `"IfNotPresent"` |  |
 | postDeleteJob.resources | object | `{}` |  |
 | postDeleteJob.nodeSelector | object | `{}` |  |

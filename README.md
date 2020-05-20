@@ -62,7 +62,7 @@ kubectl --context "$CLUSTER1" create namespace admiralty
 helm install multicluster-scheduler admiralty/multicluster-scheduler \
   --kube-context "$CLUSTER1" \
   --namespace admiralty \
-  --version 0.8.0 \
+  --version 0.8.2 \
   --set clusterName=c1 \
   --set targetSelf=true \
   --set targets[0].name=c2
@@ -71,7 +71,7 @@ kubectl --context "$CLUSTER2" create namespace admiralty
 helm install multicluster-scheduler admiralty/multicluster-scheduler \
   --kube-context "$CLUSTER2" \
   --namespace admiralty \
-  --version 0.8.0 \
+  --version 0.8.2 \
   --set clusterName=c2
 ```
 

@@ -57,8 +57,8 @@ spec:
           items:
             - key: {{ default "config" .key }}
               path: config
-            {{- end }}
-            {{- end }}
+          {{- end }}
+          {{- end }}
         {{- with .Values.imagePullSecretName }}
       imagePullSecrets:
         - name: {{ . }}
