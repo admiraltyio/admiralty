@@ -17,7 +17,10 @@ admiralty_setup() {
   if ! k $i get ns admiralty; then
     k $i create namespace admiralty
   fi
-  h $i upgrade --install multicluster-scheduler charts/multicluster-scheduler -n admiralty -f $VALUES
+  h $i upgrade --install multicluster-scheduler charts/multicluster-scheduler -n admiralty -f $VALUES \
+    --set controllerManager.image.tag=$VERSION \
+    --set scheduler.image.tag=$VERSION \
+    --set postDeleteJob.image.tag=$VERSION
   k $i delete pod --all -n admiralty
 
   k $i label ns default multicluster-scheduler=enabled --overwrite
