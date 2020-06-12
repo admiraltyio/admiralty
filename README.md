@@ -87,10 +87,10 @@ Note that the target cluster does not need any information about the source clus
 
 #### Source Cluster install
 
-> **Important!** This section assumes you have not yet installed multicluster-scheduler on the source cluster. If you already had, and just want to add an additional target cluster, continue from the [Adding an additional Target Cluster to an existing Source Cluster section](#adding-an-additional-target-cluster-to-an-existing-source-cluster), instead.
+> **Important!** This section assumes you have not yet installed multicluster-scheduler on the source cluster. If you already have, and just want to add an additional target cluster, continue from the [Adding an additional Target Cluster to an existing Source Cluster section](#adding-an-additional-target-cluster-to-an-existing-source-cluster), instead.
 
 While it is possible to install multicluster-scheduler on a source cluster without any known target clusters,
-it is recommended you first decided where you want to federeta to. In this example, we use the
+it is recommended you first decide which clusters it will target. In this example, we use the
 target cluster installed above, named "c2".
 
 The recommended way to install multicluster-scheduler on the source cluster is with Helm (v3):
