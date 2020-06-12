@@ -19,9 +19,9 @@ The first thing to understand is that there are two distinct kubernetes cluster 
 
 Admiralty has to be installed on both types of clusters for the federation to work.
 
-Note that if a single person manages both types of clusters, that is great, but Admiralty can also be used to join clusters operatd by several distinct administrattive groups.
+Note that if a single person manages both types of clusters, that is great, but Admiralty can also be used to join clusters operated by several distinct administrattive groups.
 
-For this documen we assume that you are a cluster admin for two clusters, associated with, e.g., the contexts "cluster1" and "cluster2" in your [kubeconfig](https://kubernetes.io/docs/tasks/access-application-cluster/configure-access-multiple-clusters/). We're going to install multicluster-scheduler in both clusters, and configure cluster1 as a source and target, and cluster2 as a target only. This topology is typical of a cloud bursting use case. Then, we will deploy a multi-cluster NGINX.
+For this document we assume that you are a cluster admin for two clusters, associated with, e.g., the contexts "cluster1" and "cluster2" in your [kubeconfig](https://kubernetes.io/docs/tasks/access-application-cluster/configure-access-multiple-clusters/). We're going to install multicluster-scheduler in both clusters, and configure cluster1 as a source and target, and cluster2 as a target only. This topology is typical of a cloud bursting use case. Then, we will deploy a multi-cluster NGINX.
 
 
 ```bash
@@ -29,7 +29,7 @@ CLUSTER1=cluster1 # change me
 CLUSTER2=cluster2 # change me
 ```
 
-If you can only access one of the two clusters, just follow the intructions relevant to your cluster. You can also remove the context part from all of the commands. Note that some parts need coordination between the admins of the two clusters; how messages are exchange in multi-admin setups is beyond the scope of this document.
+If you can only access one of the two clusters, just follow the intructions relevant to your cluster. In that case you can also remove the context part from all of the commands. Note that some parts need coordination between the admins of the two clusters; how messages are exchange in multi-admin setups is beyond the scope of this document.
 
 
 Note: you can easily create two clusters on your machine with [kind](https://kind.sigs.k8s.io/). For larger, more realistic clusters you may want to consider using [kubeadm](https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/install-kubeadm/).
