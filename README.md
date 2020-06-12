@@ -295,7 +295,10 @@ The easiest way is to retrieve the existing version of the configuration, and ap
 Note: You will need [jq](https://stedolan.github.io/jq/) for the command below to work.
 
 ```
-helm get values -n admiralty multicluster-scheduler -o json | \
+helm get values multicluster-scheduler \
+  --kube-context "$CLUSTER1" \
+  --namespace admiralty \
+  --output json | \
 jq '.targets += [{name: "c2"}]' | \
 helm upgrade multicluster-scheduler admiralty/multicluster-scheduler \
   --kube-context "$CLUSTER1" \
