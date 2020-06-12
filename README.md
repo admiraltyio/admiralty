@@ -12,14 +12,29 @@ Check out [Admiralty's blog post](https://admiralty.io/blog/running-argo-workflo
 
 ## Getting Started
 
-We assume that you are a cluster admin for two clusters, associated with, e.g., the contexts "cluster1" and "cluster2" in your kubeconfig. We're going to install multicluster-scheduler in both clusters, and configure cluster1 as a source and target, and cluster2 as a target only. This topology is typical of a cloud bursting use case. Then, we will deploy a multi-cluster NGINX.
+The first thing to understand is that there are two distinct kubernetes cluster types involved:
+
+1. Source kubernetes clusters
+1. Target kubernetes clusters
+
+Each kubernetes cluster can play either one of the roles.  Or even both roles at the same time. In this document, we will however clearly mark source and target clusters for ease of understanding.
+
+Admiralty has to be installed on both types of clusters for the federation to work.
+
+Note that if a single person manages both types of clusters, that is great, but Admiralty can also be used to join clusters operated by several distinct administrative groups.
+
+For this document we assume that you are a cluster admin for two clusters, associated with, e.g., the contexts "cluster1" and "cluster2" in your [kubeconfig](https://kubernetes.io/docs/tasks/access-application-cluster/configure-access-multiple-clusters/). We're going to install multicluster-scheduler in both clusters, and configure cluster1 as a source and target, and cluster2 as a target only. This topology is typical of a cloud bursting use case. Then, we will deploy a multi-cluster NGINX.
+
 
 ```bash
 CLUSTER1=cluster1 # change me
 CLUSTER2=cluster2 # change me
 ```
 
-Note: you can easily create two clusters on your machine with [kind](https://kind.sigs.k8s.io/).
+If you can only access one of the two clusters, just follow the intructions relevant to your cluster. In that case you can also remove the context part from all of the commands. Note that some parts need coordination between the admins of the two clusters; how messages are exchange in multi-admin setups is beyond the scope of this document.
+
+
+Note: you can easily create two clusters on your machine with [kind](https://kind.sigs.k8s.io/). For larger, more realistic clusters you may want to consider using [kubeadm](https://kubernetes.io/docs/setup/production-environment/tools/kubeadm/install-kubeadm/).
 
 ### Installation
 
@@ -50,9 +65,35 @@ done
 
 For cross-cluster service calls, we rely in this guide on a Cilium cluster mesh and global services. If you need this feature, [install Cilium](http://docs.cilium.io/en/stable/gettingstarted/#installation) and [set up a cluster mesh](http://docs.cilium.io/en/stable/gettingstarted/clustermesh/). If you install Cilium later, you may have to restart pods.
 
-#### Helm
+#### Target Cluster install
 
-The recommended way to install multicluster-scheduler is with Helm (v3):
+The recommended way to install multicluster-scheduler on the target cluster is with Helm (v3):
+
+```bash
+helm repo add admiralty https://charts.admiralty.io
+helm repo update
+
+kubectl --context "$CLUSTER2" create namespace admiralty
+helm install multicluster-scheduler admiralty/multicluster-scheduler \
+  --kube-context "$CLUSTER2" \
+  --namespace admiralty \
+  --version 0.8.2 \
+  --set clusterName=c2
+```
+
+Note that the target cluster does not need any information about the source cluster.
+
+> **Important!** The target cluster must be accessible from the network of any source cluster you plan to federate with.
+
+#### Source Cluster install
+
+> **Important!** This section assumes you have not yet installed multicluster-scheduler on the source cluster. If you already have, and just want to add an additional target cluster, continue from the [Adding an additional Target Cluster to an existing Source Cluster section](#adding-an-additional-target-cluster-to-an-existing-source-cluster), instead.
+
+While it is possible to install multicluster-scheduler on a source cluster without any known target clusters,
+it is recommended you first decide which clusters it will target. In this example, we use the
+target cluster installed above, named "c2".
+
+The recommended way to install multicluster-scheduler on the source cluster is with Helm (v3):
 
 ```bash
 helm repo add admiralty https://charts.admiralty.io
@@ -66,13 +107,6 @@ helm install multicluster-scheduler admiralty/multicluster-scheduler \
   --set clusterName=c1 \
   --set targetSelf=true \
   --set targets[0].name=c2
-
-kubectl --context "$CLUSTER2" create namespace admiralty
-helm install multicluster-scheduler admiralty/multicluster-scheduler \
-  --kube-context "$CLUSTER2" \
-  --namespace admiralty \
-  --version 0.8.2 \
-  --set clusterName=c2
 ```
 
 > **Important!** At this point, multicluster-scheduler will be stuck at ContainerCreating in cluster1, because it needs a secret from its remote target cluster2, see below. Note: when we move to defining targets at runtime with a CRD, this won't happen.
@@ -120,9 +154,12 @@ Then, run `kubemcsa export` to generate a template for a secret containing a kub
   | kubectl --context "$CLUSTER1" -n admiralty apply -f -
 ```
 
+Note: If you do not have access to both clusters, the admin of the target cluster (i.e. cluster2) can save the output of `kubemcsa export` into a file and deliver it to the admin of the source cluster (i.e. cluster1), who can then import it with `kubectl` from that file. 
+Since the information in that file will contain secrets, the exchange should happen in a secure (e.g. encrypted) manner. What tools to use for that purpose is beyond the scope of this document (we're working on a convenient way to do that).
+
 > **Important!** `kubemcsa export` combines a service account token with the Kubernetes API server addresses and associated certificates of the clusters found in your local kubeconfig. The addresses and certificates are routable and valid from your machine, but they need to be routable/valid from pods in the scheduler's cluster as well. For example, if you're using [kind](https://kind.sigs.k8s.io/), by default the address is `127.0.0.1:SOME_PORT`, because kind exposes API servers on random ports of your machine. However, `127.0.0.1` has a different meaning from the scheduler pod. On Linux, you can generate a kubeconfig with `kind get kubeconfig --internal` that will work from your machine and from pods, because it uses the master node container's IP in the overlay network (e.g., `172.17.0.x`), instead of `127.0.0.1`. Unfortunately, that won't work on Windows/Mac. In that case, you can either run the commands above from a container, or tweak the result of `kubemcsa export` before piping it into `kubectl apply`, to override the secret's `server` and `ca.crt` data fields (TODO: support overrides in `kubemcsa export`).
 
-#### Verification
+#### Verification on Source Cluster
 
 After a minute, check that virtual nodes named `admiralty-c1` and `admiralty-c2` have been created in cluster1:
 
@@ -130,13 +167,16 @@ After a minute, check that virtual nodes named `admiralty-c1` and `admiralty-c2`
 kubectl --context "$CLUSTER1" get node
 ```
 
-### Multi-Cluster Deployment
+### Multi-Cluster Deployment in Source Cluster
 
 Multicluster-scheduler's pod admission controller operates in namespaces labeled with `multicluster-scheduler=enabled`. In cluster1, label the `default` namespace:
 
 ```bash
 kubectl --context "$CLUSTER1" label namespace default multicluster-scheduler=enabled
 ```
+
+Note: While we use the "default" namespace in this example, any other namespace could be used as well.
+(but you will have to change the example accordingly, of course)
 
 Then, deploy NGINX in it with the election annotation on the pod template:
 
@@ -179,6 +219,10 @@ Things to check:
 kubectl --context "$CLUSTER1" get pods -o wide # (-o yaml for details)
 kubectl --context "$CLUSTER2" get pods -o wide # (-o yaml for details)
 ```
+
+Note: While launching and executing the pod requires only access to the source cluster (i.e. cluster1),
+the above check requires access to both the source and target clusters. If you do not have direct access to the target cluster,
+ask for help from someone who does.
 
 ### Advanced Scheduling
 
@@ -238,6 +282,34 @@ Now call the delegate pods in cluster2 from cluster1:
 ```bash
 kubectl --context "$CLUSTER1" run foo -it --rm --image alpine --command -- sh -c "apk add curl && curl nginx"
 ```
+
+### Adding an additional Target Cluster to an existing Source Cluster
+
+This section assumes you have already installed Admiralty on the source cluster (i.e. cluster1),
+and just want to add an additional target cluster to it; we will keep the cluster2 name for consistency.
+
+Assuming you installed multicluster-scheduler with Helm (v3), you must upgrade it with the same tool.
+
+The easiest way is to retrieve the existing version of the configuration, and append the new cluster name to the targets section.
+
+Note: You will need [jq](https://stedolan.github.io/jq/) for the command below to work.
+
+```
+helm get values multicluster-scheduler \
+  --kube-context "$CLUSTER1" \
+  --namespace admiralty \
+  --output json | \
+jq '.targets += [{name: "c2"}]' | \
+helm upgrade multicluster-scheduler admiralty/multicluster-scheduler \
+  --kube-context "$CLUSTER1" \
+  --namespace admiralty \
+  --version 0.8.2 \
+  -f -
+```
+
+> **Important!** At this point, multicluster-scheduler will be stuck at ContainerCreating in cluster1, because it needs a secret from its remote target cluster2, see [Service Account Exchange section](#service-account-exchange) above. Note: when we move to defining targets at runtime with a CRD, this won't happen.
+
+Continue with installation at the [Service Account Exchange section](#service-account-exchange) above.
 
 ## Community
 
