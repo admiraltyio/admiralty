@@ -85,7 +85,7 @@ Note that the target cluster installaion does not need any information about the
 
 #### Source Cluster install
 
-> **Important!** This section assumes you have not yet installed multicluster-scheduler on the source cluster. If you already had, and just want to add an additional target cluster, continue from the *Adding an additional Target Cluster to an existing Source Cluster* section, instead.
+> **Important!** This section assumes you have not yet installed multicluster-scheduler on the source cluster. If you already had, and just want to add an additional target cluster, continue from the [Adding an additional Target Cluster to an existing Source Cluster section](#adding-an-additional-target-cluster-to-an-existing-source-cluster), instead.
 
 While it is possible to install multicluster-scheduler on a source cluster without any known target clusters,
 it is recommended you first decided where you want to federeta to. In this example, we use the
