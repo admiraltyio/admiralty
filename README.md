@@ -63,9 +63,33 @@ done
 
 For cross-cluster service calls, we rely in this guide on a Cilium cluster mesh and global services. If you need this feature, [install Cilium](http://docs.cilium.io/en/stable/gettingstarted/#installation) and [set up a cluster mesh](http://docs.cilium.io/en/stable/gettingstarted/clustermesh/). If you install Cilium later, you may have to restart pods.
 
-#### Helm
+#### Target Cluster install
 
-The recommended way to install multicluster-scheduler is with Helm (v3):
+The recommended way to install multicluster-scheduler on the target cluster is with Helm (v3):
+
+```bash
+helm repo add admiralty https://charts.admiralty.io
+helm repo update
+
+kubectl --context "$CLUSTER2" create namespace admiralty
+helm install multicluster-scheduler admiralty/multicluster-scheduler \
+  --kube-context "$CLUSTER2" \
+  --namespace admiralty \
+  --version 0.8.2 \
+  --set clusterName=c2
+```
+
+Note that the target cluster installaion does not need any information about the source cluster.
+
+> **Important!** The target cluster must be accessible from the network of any source cluster you plan to federate with.
+
+#### Source Cluster install
+
+While it is possible to install Admiralty on a source cluster without any known target clusters,
+it is recommended you first decided where you want to federeta to. In this example, we use the
+target cluster installed above, named "c2".
+
+The recommended way to install multicluster-scheduler on the source cluster is with Helm (v3):
 
 ```bash
 helm repo add admiralty https://charts.admiralty.io
@@ -79,13 +103,6 @@ helm install multicluster-scheduler admiralty/multicluster-scheduler \
   --set clusterName=c1 \
   --set targetSelf=true \
   --set targets[0].name=c2
-
-kubectl --context "$CLUSTER2" create namespace admiralty
-helm install multicluster-scheduler admiralty/multicluster-scheduler \
-  --kube-context "$CLUSTER2" \
-  --namespace admiralty \
-  --version 0.8.2 \
-  --set clusterName=c2
 ```
 
 > **Important!** At this point, multicluster-scheduler will be stuck at ContainerCreating in cluster1, because it needs a secret from its remote target cluster2, see below. Note: when we move to defining targets at runtime with a CRD, this won't happen.
@@ -133,9 +150,12 @@ Then, run `kubemcsa export` to generate a template for a secret containing a kub
   | kubectl --context "$CLUSTER1" -n admiralty apply -f -
 ```
 
+Note: If you do not have access to both clusters, the admin of the target cluster (i.e. cluster2) can save the output of `kubemcsa export` into a file and deliver it to the admin of the source cluster (i.e. cluster1), who can then import it with `kubectl` from that file. 
+Since the information in that file will contain secrets, the exchange should happen in a secure (e.g. encrypted) manner. What tools to use fo that purpose is beyond the scope of this document.
+
 > **Important!** `kubemcsa export` combines a service account token with the Kubernetes API server addresses and associated certificates of the clusters found in your local kubeconfig. The addresses and certificates are routable and valid from your machine, but they need to be routable/valid from pods in the scheduler's cluster as well. For example, if you're using [kind](https://kind.sigs.k8s.io/), by default the address is `127.0.0.1:SOME_PORT`, because kind exposes API servers on random ports of your machine. However, `127.0.0.1` has a different meaning from the scheduler pod. On Linux, you can generate a kubeconfig with `kind get kubeconfig --internal` that will work from your machine and from pods, because it uses the master node container's IP in the overlay network (e.g., `172.17.0.x`), instead of `127.0.0.1`. Unfortunately, that won't work on Windows/Mac. In that case, you can either run the commands above from a container, or tweak the result of `kubemcsa export` before piping it into `kubectl apply`, to override the secret's `server` and `ca.crt` data fields (TODO: support overrides in `kubemcsa export`).
 
-#### Verification
+#### Verification on source cluster
 
 After a minute, check that virtual nodes named `admiralty-c1` and `admiralty-c2` have been created in cluster1:
 
@@ -143,13 +163,16 @@ After a minute, check that virtual nodes named `admiralty-c1` and `admiralty-c2`
 kubectl --context "$CLUSTER1" get node
 ```
 
-### Multi-Cluster Deployment
+### Multi-Cluster Deployment in source cluster
 
 Multicluster-scheduler's pod admission controller operates in namespaces labeled with `multicluster-scheduler=enabled`. In cluster1, label the `default` namespace:
 
 ```bash
 kubectl --context "$CLUSTER1" label namespace default multicluster-scheduler=enabled
 ```
+
+Note: While we use the "default" namespace in this example, any other namespace could be used as well.
+(but you will have to change the example accordingly, of course)
 
 Then, deploy NGINX in it with the election annotation on the pod template:
 
@@ -192,6 +215,10 @@ Things to check:
 kubectl --context "$CLUSTER1" get pods -o wide # (-o yaml for details)
 kubectl --context "$CLUSTER2" get pods -o wide # (-o yaml for details)
 ```
+
+Note: While launching and executing the pod requires only access to the source cluster (i.e. cluster1),
+the above check requires access to both the source and target clusters. If you do not have direct access to the target cluster,
+ask for help from someone who does.
 
 ### Advanced Scheduling
 
