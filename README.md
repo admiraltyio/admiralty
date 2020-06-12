@@ -292,30 +292,16 @@ Assuming you installed multicluster-scheduler with Helm (v3), you must upgrade i
 
 The easiest way is to retrieve the existing version of the configuration, and append the new cluster name to the targets section.
 
+Note: You will need [jq](https://stedolan.github.io/jq/) for the command below to work.
+
 ```
-$ diff -C 2 old_setup.yaml new_setup.yaml | tee add_c2.patch
-*** old_setup.yaml	2020-06-12 09:26:57.000000000 -0700
---- new_setup.yaml	2020-06-12 09:26:49.000000000 -0700
-***************
-*** 33,34 ****
---- 33,35 ----
-  targets:
-  - name: catinstall
-+ - name: c2
-```
-
-```bash
-helm get values -n admiralty multicluster-scheduler -o yaml > old_setup.yaml
-cp old_setup.yaml new_setup.yaml
-
-# edit or patch new_setup.yaml
-patch new_setup.yaml add_c2.patch 
-
-helm upgrade multicluster-scheduler admiralty/multicluster-scheduler \\
+helm get values -n admiralty multicluster-scheduler -o json | \
+jq '.targets += [{name: "c2"}]' | \
+helm upgrade multicluster-scheduler admiralty/multicluster-scheduler \
   --kube-context "$CLUSTER1" \
   --namespace admiralty \
   --version 0.8.2 \
-  -f new_setup.yaml
+  -f -
 ```
 
 > **Important!** At this point, multicluster-scheduler will be stuck at ContainerCreating in cluster1, because it needs a secret from its remote target cluster2, see [Service Account Exchange section](#service-account-exchange) above. Note: when we move to defining targets at runtime with a CRD, this won't happen.
