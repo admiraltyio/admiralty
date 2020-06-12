@@ -79,7 +79,7 @@ helm install multicluster-scheduler admiralty/multicluster-scheduler \
   --set clusterName=c2
 ```
 
-Note that the target cluster installaion does not need any information about the source cluster.
+Note that the target cluster does not need any information about the source cluster.
 
 > **Important!** The target cluster must be accessible from the network of any source cluster you plan to federate with.
 
