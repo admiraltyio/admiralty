@@ -19,7 +19,7 @@ The first thing to understand is that there are two distinct kubernetes cluster 
 
 Admiralty has to be installed on both types of clusters for the federation to work.
 
-Note that if a single person manages both types of clusters, that is great, but Admiralty can also be used to join clusters operated by several distinct administrattive groups.
+Note that if a single person manages both types of clusters, that is great, but Admiralty can also be used to join clusters operated by several distinct administrative groups.
 
 For this document we assume that you are a cluster admin for two clusters, associated with, e.g., the contexts "cluster1" and "cluster2" in your [kubeconfig](https://kubernetes.io/docs/tasks/access-application-cluster/configure-access-multiple-clusters/). We're going to install multicluster-scheduler in both clusters, and configure cluster1 as a source and target, and cluster2 as a target only. This topology is typical of a cloud bursting use case. Then, we will deploy a multi-cluster NGINX.
 
