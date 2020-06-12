@@ -283,7 +283,7 @@ Now call the delegate pods in cluster2 from cluster1:
 kubectl --context "$CLUSTER1" run foo -it --rm --image alpine --command -- sh -c "apk add curl && curl nginx"
 ```
 
-#### Adding an additional Target Cluster to an existing Source Cluster
+### Adding an additional Target Cluster to an existing Source Cluster
 
 This section assumes you have already installed Admiralty on the source cluster (i.e. cluster1),
 and just want to add an additional target cluster to it; we will keep the cluster2 name for consistency.
