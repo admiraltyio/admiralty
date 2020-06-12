@@ -14,8 +14,10 @@ Check out [Admiralty's blog post](https://admiralty.io/blog/running-argo-workflo
 
 The first thing to understand is that there are two distinct kubernetes cluster types involved:
 
-1. A source kubernetes cluster
-1. One or more target kubernetes clusters
+1. Source kubernetes clusters
+1. Target kubernetes clusters
+
+Each kubernetes cluster can play either one of the roles.  Or even both roles at the same time. In this document, we will however clearly mark source and target clusters for ease of understanding.
 
 Admiralty has to be installed on both types of clusters for the federation to work.
 
