@@ -85,7 +85,9 @@ Note that the target cluster installaion does not need any information about the
 
 #### Source Cluster install
 
-While it is possible to install Admiralty on a source cluster without any known target clusters,
+> **Important!** This section assumes you have not yet installed multicluster-scheduler on the source cluster. If you already had, and just want to add an additional target cluster, continue from the *Adding an additional Target Cluster to an existing Source Cluster* section, instead.
+
+While it is possible to install multicluster-scheduler on a source cluster without any known target clusters,
 it is recommended you first decided where you want to federeta to. In this example, we use the
 target cluster installed above, named "c2".
 
@@ -155,7 +157,7 @@ Since the information in that file will contain secrets, the exchange should hap
 
 > **Important!** `kubemcsa export` combines a service account token with the Kubernetes API server addresses and associated certificates of the clusters found in your local kubeconfig. The addresses and certificates are routable and valid from your machine, but they need to be routable/valid from pods in the scheduler's cluster as well. For example, if you're using [kind](https://kind.sigs.k8s.io/), by default the address is `127.0.0.1:SOME_PORT`, because kind exposes API servers on random ports of your machine. However, `127.0.0.1` has a different meaning from the scheduler pod. On Linux, you can generate a kubeconfig with `kind get kubeconfig --internal` that will work from your machine and from pods, because it uses the master node container's IP in the overlay network (e.g., `172.17.0.x`), instead of `127.0.0.1`. Unfortunately, that won't work on Windows/Mac. In that case, you can either run the commands above from a container, or tweak the result of `kubemcsa export` before piping it into `kubectl apply`, to override the secret's `server` and `ca.crt` data fields (TODO: support overrides in `kubemcsa export`).
 
-#### Verification on source cluster
+#### Verification on Source Cluster
 
 After a minute, check that virtual nodes named `admiralty-c1` and `admiralty-c2` have been created in cluster1:
 
@@ -163,7 +165,7 @@ After a minute, check that virtual nodes named `admiralty-c1` and `admiralty-c2`
 kubectl --context "$CLUSTER1" get node
 ```
 
-### Multi-Cluster Deployment in source cluster
+### Multi-Cluster Deployment in Source Cluster
 
 Multicluster-scheduler's pod admission controller operates in namespaces labeled with `multicluster-scheduler=enabled`. In cluster1, label the `default` namespace:
 
@@ -278,6 +280,45 @@ Now call the delegate pods in cluster2 from cluster1:
 ```bash
 kubectl --context "$CLUSTER1" run foo -it --rm --image alpine --command -- sh -c "apk add curl && curl nginx"
 ```
+
+#### Adding an additional Target Cluster to an existing Source Cluster
+
+This section assumes you have already installed Admiralty on the source cluster (i.e. cluster1),
+and just want to add an additional target cluster to it; we will keep the cluster2 name for consistency.
+
+Assuming you installed multicluster-scheduler with Helm (v3), you must upgrade it with the same tool.
+
+The easiest way is to retrieve the existing version of the configuration, and append the new cluster name to the targets section.
+
+```
+$ diff -C 2 old_setup.yaml new_setup.yaml | tee add_c2.patch
+*** old_setup.yaml	2020-06-12 09:26:57.000000000 -0700
+--- new_setup.yaml	2020-06-12 09:26:49.000000000 -0700
+***************
+*** 33,34 ****
+--- 33,35 ----
+  targets:
+  - name: catinstall
++ - name: c2
+```
+
+```bash
+helm get values -n admiralty multicluster-scheduler -o yaml > old_setup.yaml
+cp old_setup.yaml new_setup.yaml
+
+# edit or patch new_setup.yaml
+patch new_setup.yaml add_c2.patch 
+
+helm upgrade multicluster-scheduler admiralty/multicluster-scheduler \\
+  --kube-context "$CLUSTER1" \
+  --namespace admiralty \
+  --version 0.8.2 \
+  -f new_setup.yaml
+```
+
+> **Important!** At this point, multicluster-scheduler will be stuck at ContainerCreating in cluster1, because it needs a secret from its remote target cluster2, see [Service Account Exchange section](#service-account-exchange) above. Note: when we move to defining targets at runtime with a CRD, this won't happen.
+
+Continue with installation at the [Service Account Exchange section](#service-account-exchange) above.
 
 ## Community
 
