@@ -19,7 +19,6 @@ package delegatepod
 import (
 	"strings"
 
-	"admiralty.io/multicluster-controller/pkg/patterns/gc"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -55,7 +54,7 @@ func MakeDelegatePod(proxyPod *corev1.Pod) (*v1alpha1.PodChaperon, error) {
 		newKey := common.KeyPrefix + keySplit[len(keySplit)-1]
 		labels[newKey] = v
 	}
-	labels[gc.LabelParentUID] = string(proxyPod.UID)
+	labels[common.LabelKeyParentUID] = string(proxyPod.UID)
 	labels[common.LabelKeyParentName] = proxyPod.Name
 
 	delegatePod := &v1alpha1.PodChaperon{

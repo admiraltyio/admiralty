@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"time"
 
-	"admiralty.io/multicluster-controller/pkg/patterns/gc"
 	"admiralty.io/multicluster-service-account/pkg/config"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -69,7 +68,7 @@ func (pl *Plugin) getCandidate(proxyPod *v1.Pod, clusterName string) (*v1alpha1.
 	if !ok {
 		return nil, fmt.Errorf("no target for cluster name %s", clusterName)
 	}
-	l, err := target.MulticlusterV1alpha1().PodChaperons(proxyPod.Namespace).List(metav1.ListOptions{LabelSelector: gc.LabelParentUID + "=" + string(proxyPod.UID)})
+	l, err := target.MulticlusterV1alpha1().PodChaperons(proxyPod.Namespace).List(metav1.ListOptions{LabelSelector: common.LabelKeyParentUID + "=" + string(proxyPod.UID)})
 	if err != nil {
 		return nil, err
 	}
@@ -273,7 +272,7 @@ func (pl *Plugin) PostBind(ctx context.Context, state *framework.CycleState, p *
 		if clusterName == targetClusterName {
 			continue
 		}
-		err := target.MulticlusterV1alpha1().PodChaperons(p.Namespace).DeleteCollection(nil, metav1.ListOptions{LabelSelector: gc.LabelParentUID + "=" + string(p.UID)})
+		err := target.MulticlusterV1alpha1().PodChaperons(p.Namespace).DeleteCollection(nil, metav1.ListOptions{LabelSelector: common.LabelKeyParentUID + "=" + string(p.UID)})
 		utilruntime.HandleError(err)
 	}
 }
@@ -284,7 +283,7 @@ func (pl *Plugin) Unreserve(ctx context.Context, state *framework.CycleState, p 
 	}
 
 	//for _, target := range pl.targets {
-	//	err := target.MulticlusterV1alpha1().PodChaperons(p.Namespace).DeleteCollection(nil, metav1.ListOptions{LabelSelector: gc.LabelParentUID + "=" + string(p.UID)})
+	//	err := target.MulticlusterV1alpha1().PodChaperons(p.Namespace).DeleteCollection(nil, metav1.ListOptions{LabelSelector: common.LabelKeyParentUID + "=" + string(p.UID)})
 	//	utilruntime.HandleError(err)
 	//}
 }

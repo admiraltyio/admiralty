@@ -20,11 +20,14 @@ import (
 	"fmt"
 	"time"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog"
+
+	"admiralty.io/multicluster-scheduler/pkg/common"
 )
 
 type Reconciler interface {
@@ -43,7 +46,7 @@ type Controller struct {
 	workqueue workqueue.RateLimitingInterface
 }
 
-func New(name string, informersSynced []cache.InformerSynced, reconciler Reconciler) *Controller {
+func New(name string, reconciler Reconciler, informersSynced ...cache.InformerSynced) *Controller {
 	return &Controller{
 		name:            name,
 		informersSynced: informersSynced,
@@ -124,6 +127,67 @@ func (c *Controller) processNextWorkItem() bool {
 	return true
 }
 
-func (c *Controller) Enqueue(key interface{}) {
+func (c *Controller) EnqueueKey(key interface{}) {
 	c.workqueue.Add(key)
+}
+
+func (c *Controller) EnqueueObject(obj interface{}) {
+	var key string
+	var err error
+	if key, err = cache.MetaNamespaceKeyFunc(obj); err != nil {
+		utilruntime.HandleError(err)
+		return
+	}
+	c.workqueue.Add(key)
+}
+
+type GetOwner func(namespace string, name string) (metav1.Object, error)
+
+func (c *Controller) EnqueueController(ownerKind string, getOwner GetOwner) func(obj interface{}) {
+	return func(obj interface{}) {
+		object := obj.(metav1.Object)
+		if ownerRef := metav1.GetControllerOf(object); ownerRef != nil {
+			if ownerRef.Kind != ownerKind {
+				return
+			}
+
+			owner, err := getOwner(object.GetNamespace(), ownerRef.Name)
+			if err != nil {
+				klog.V(4).Infof("ignoring orphaned object '%s' of owner '%s'", object.GetSelfLink(), ownerRef.Name)
+				return
+			}
+
+			c.EnqueueObject(owner)
+			return
+		}
+	}
+}
+
+func (c *Controller) EnqueueRemoteController(ownerKind string, getOwner GetOwner) func(obj interface{}) {
+	return func(obj interface{}) {
+		object := obj.(metav1.Object)
+		l := object.GetLabels()
+		if parentUID, ok := l[common.LabelKeyParentUID]; ok {
+			parentNamespace := l[common.LabelKeyParentNamespace]
+			if parentNamespace == "" {
+				parentNamespace = object.GetNamespace()
+			}
+			parentName := l[common.LabelKeyParentName]
+			if parentName == "" {
+				parentName = object.GetName()
+			}
+			owner, err := getOwner(parentNamespace, parentName)
+			if err != nil {
+				return
+			}
+
+			if string(owner.GetUID()) != parentUID {
+				// TODO handle unlikely yet possible cross-cluster UID conflict with signing
+				return
+			}
+
+			c.EnqueueObject(owner)
+			return
+		}
+	}
 }

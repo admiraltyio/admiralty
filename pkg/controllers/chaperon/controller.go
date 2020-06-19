@@ -22,8 +22,6 @@ import (
 	"time"
 
 	"admiralty.io/multicluster-controller/pkg/patterns"
-	"admiralty.io/multicluster-scheduler/pkg/common"
-	"admiralty.io/multicluster-scheduler/pkg/controller"
 	"github.com/go-test/deep"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -39,6 +37,8 @@ import (
 	"k8s.io/klog"
 
 	multiclusterv1alpha1 "admiralty.io/multicluster-scheduler/pkg/apis/multicluster/v1alpha1"
+	"admiralty.io/multicluster-scheduler/pkg/common"
+	"admiralty.io/multicluster-scheduler/pkg/controller"
 	clientset "admiralty.io/multicluster-scheduler/pkg/generated/clientset/versioned"
 	customscheme "admiralty.io/multicluster-scheduler/pkg/generated/clientset/versioned/scheme"
 	informers "admiralty.io/multicluster-scheduler/pkg/generated/informers/externalversions/multicluster/v1alpha1"
@@ -64,26 +64,14 @@ const (
 	MessageResourceSynced = "PodChaperon synced successfully"
 )
 
-type Controller interface {
-	Enqueue(item interface{})
-}
-
 type reconciler struct {
-	// kubeclientset is a standard kubernetes clientset
-	kubeclientset kubernetes.Interface
-	// customclientset is a clientset for our own API group
+	kubeclientset   kubernetes.Interface
 	customclientset clientset.Interface
 
 	podsLister         corelisters.PodLister
-	podsSynced         cache.InformerSynced
 	podChaperonsLister listers.PodChaperonLister
-	podChaperonsSynced cache.InformerSynced
 
-	// recorder is an event recorder for recording Event resources to the
-	// Kubernetes API.
 	recorder record.EventRecorder
-
-	controller Controller
 }
 
 // NewController returns a new chaperon controller
@@ -93,9 +81,6 @@ func NewController(
 	podInformer coreinformers.PodInformer,
 	podChaperonInformer informers.PodChaperonInformer) *controller.Controller {
 
-	// Create event broadcaster
-	// Add custom types to the default Kubernetes Scheme so Events can be
-	// logged for custom types.
 	utilruntime.Must(customscheme.AddToScheme(scheme.Scheme))
 	klog.V(4).Info("Creating event broadcaster")
 	eventBroadcaster := record.NewBroadcaster()
@@ -107,36 +92,19 @@ func NewController(
 		kubeclientset:      kubeclientset,
 		customclientset:    customclientset,
 		podsLister:         podInformer.Lister(),
-		podsSynced:         podInformer.Informer().HasSynced,
 		podChaperonsLister: podChaperonInformer.Lister(),
-		podChaperonsSynced: podChaperonInformer.Informer().HasSynced,
 		recorder:           recorder,
 	}
 
-	klog.Info("Setting up event handlers")
-	// Set up an event handler for when PodChaperon resources change
-	podChaperonInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: r.enqueuePodChaperon,
-		UpdateFunc: func(old, new interface{}) {
-			r.enqueuePodChaperon(new)
-		},
-	})
-	// Set up an event handler for when Pod resources change. This
-	// handler will lookup the owner of the given Pod, and if it is
-	// owned by a PodChaperon resource will enqueue that PodChaperon resource for
-	// processing. This way, we don't need to implement custom logic for
-	// handling Pod resources. More info on this pattern:
-	// https://github.com/kubernetes/community/blob/8cafef897a22026d42f5e5bb3f104febe7e29830/contributors/devel/controllers.md
-	podInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: r.handleObject,
-		UpdateFunc: func(old, new interface{}) {
-			r.handleObject(new)
-		},
-		DeleteFunc: r.handleObject,
-	})
+	getPodChaperon := func(namespace, name string) (metav1.Object, error) {
+		return r.podChaperonsLister.PodChaperons(namespace).Get(name)
+	}
 
-	c := controller.New("chaperon", []cache.InformerSynced{podInformer.Informer().HasSynced, podChaperonInformer.Informer().HasSynced}, r)
-	r.controller = c
+	c := controller.New("chaperon", r, podInformer.Informer().HasSynced, podChaperonInformer.Informer().HasSynced)
+
+	podChaperonInformer.Informer().AddEventHandler(controller.HandleAddUpdateWith(c.EnqueueObject))
+	podInformer.Informer().AddEventHandler(controller.HandleAllWith(c.EnqueueController("PodChaperon", getPodChaperon)))
+
 	return c
 }
 
@@ -244,59 +212,6 @@ func (c *reconciler) Handle(obj interface{}) (requeueAfter *time.Duration, err e
 		c.recorder.Event(podChaperon, corev1.EventTypeNormal, SuccessSynced, MessageResourceSynced)
 	}
 	return nil, nil
-}
-
-// enqueuePodChaperon takes a PodChaperon resource and converts it into a namespace/name
-// string which is then put onto the work queue. This method should *not* be
-// passed resources of any type other than PodChaperon.
-func (c *reconciler) enqueuePodChaperon(obj interface{}) {
-	var key string
-	var err error
-	if key, err = cache.MetaNamespaceKeyFunc(obj); err != nil {
-		utilruntime.HandleError(err)
-		return
-	}
-	c.controller.Enqueue(key)
-}
-
-// handleObject will take any resource implementing metav1.Object and attempt
-// to find the PodChaperon resource that 'owns' it. It does this by looking at the
-// objects metadata.ownerReferences field for an appropriate OwnerReference.
-// It then enqueues that PodChaperon resource to be processed. If the object does not
-// have an appropriate OwnerReference, it will simply be skipped.
-func (c *reconciler) handleObject(obj interface{}) {
-	var object metav1.Object
-	var ok bool
-	if object, ok = obj.(metav1.Object); !ok {
-		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
-		if !ok {
-			utilruntime.HandleError(fmt.Errorf("error decoding object, invalid type"))
-			return
-		}
-		object, ok = tombstone.Obj.(metav1.Object)
-		if !ok {
-			utilruntime.HandleError(fmt.Errorf("error decoding object tombstone, invalid type"))
-			return
-		}
-		klog.V(4).Infof("Recovered deleted object '%s' from tombstone", object.GetName())
-	}
-	klog.V(4).Infof("Processing object: %s", object.GetName())
-	if ownerRef := metav1.GetControllerOf(object); ownerRef != nil {
-		// If this object is not owned by a PodChaperon, we should not do anything more
-		// with it.
-		if ownerRef.Kind != "PodChaperon" {
-			return
-		}
-
-		podChaperon, err := c.podChaperonsLister.PodChaperons(object.GetNamespace()).Get(ownerRef.Name)
-		if err != nil {
-			klog.V(4).Infof("ignoring orphaned object '%s' of podChaperon '%s'", object.GetSelfLink(), ownerRef.Name)
-			return
-		}
-
-		c.enqueuePodChaperon(podChaperon)
-		return
-	}
 }
 
 // newPod creates a new Pod for a PodChaperon resource. It also sets

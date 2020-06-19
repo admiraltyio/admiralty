@@ -22,15 +22,6 @@ import (
 	"time"
 
 	"admiralty.io/multicluster-controller/pkg/patterns"
-	"admiralty.io/multicluster-controller/pkg/patterns/gc"
-	multiclusterv1alpha1 "admiralty.io/multicluster-scheduler/pkg/apis/multicluster/v1alpha1"
-	"admiralty.io/multicluster-scheduler/pkg/common"
-	"admiralty.io/multicluster-scheduler/pkg/controller"
-	clientset "admiralty.io/multicluster-scheduler/pkg/generated/clientset/versioned"
-	customscheme "admiralty.io/multicluster-scheduler/pkg/generated/clientset/versioned/scheme"
-	informers "admiralty.io/multicluster-scheduler/pkg/generated/informers/externalversions/multicluster/v1alpha1"
-	listers "admiralty.io/multicluster-scheduler/pkg/generated/listers/multicluster/v1alpha1"
-	"admiralty.io/multicluster-scheduler/pkg/model/proxypod"
 	"github.com/go-test/deep"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -45,6 +36,15 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/klog"
+
+	multiclusterv1alpha1 "admiralty.io/multicluster-scheduler/pkg/apis/multicluster/v1alpha1"
+	"admiralty.io/multicluster-scheduler/pkg/common"
+	"admiralty.io/multicluster-scheduler/pkg/controller"
+	clientset "admiralty.io/multicluster-scheduler/pkg/generated/clientset/versioned"
+	customscheme "admiralty.io/multicluster-scheduler/pkg/generated/clientset/versioned/scheme"
+	informers "admiralty.io/multicluster-scheduler/pkg/generated/informers/externalversions/multicluster/v1alpha1"
+	listers "admiralty.io/multicluster-scheduler/pkg/generated/listers/multicluster/v1alpha1"
+	"admiralty.io/multicluster-scheduler/pkg/model/proxypod"
 )
 
 // this file is modified from k8s.io/sample-controller
@@ -59,27 +59,14 @@ const (
 	MessageResourceSynced = "proxy pod synced successfully"
 )
 
-type Controller interface {
-	Enqueue(item interface{})
-}
-
-// reconciler is the controller implementation for proxy pod resources
 type reconciler struct {
-	// kubeclientset is a standard kubernetes clientset
-	kubeclientset kubernetes.Interface
-	// customclientset is a clientset for our own API group
+	kubeclientset    kubernetes.Interface
 	customclientsets map[string]clientset.Interface
 
 	podsLister          corelisters.PodLister
-	podsSynced          cache.InformerSynced
 	podChaperonsListers map[string]listers.PodChaperonLister
-	podChaperonsSynced  []cache.InformerSynced
 
-	// recorder is an event recorder for recording Event resources to the
-	// Kubernetes API.
 	recorder record.EventRecorder
-
-	controller Controller
 }
 
 // NewController returns a new chaperon controller
@@ -89,9 +76,6 @@ func NewController(
 	podInformer coreinformers.PodInformer,
 	podChaperonInformers map[string]informers.PodChaperonInformer) *controller.Controller {
 
-	// Create event broadcaster
-	// Add custom types to the default Kubernetes Scheme so Events can be
-	// logged for custom types.
 	utilruntime.Must(customscheme.AddToScheme(scheme.Scheme))
 	klog.V(4).Info("Creating event broadcaster")
 	eventBroadcaster := record.NewBroadcaster()
@@ -117,32 +101,14 @@ func NewController(
 		i++
 	}
 
-	klog.Info("Setting up event handlers")
-	// Set up an event handler for when Pod resources change
-	podInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: r.enqueuePod,
-		UpdateFunc: func(old, new interface{}) {
-			r.enqueuePod(new)
-		},
-	})
-	// Set up an event handler for when PodChaperon resources change. This
-	// handler will lookup the owner of the given PodChaperon, and if it is
-	// owned by a Pod resource will enqueue that Pod resource for
-	// processing. This way, we don't need to implement custom logic for
-	// handling PodChaperon resources. More info on this pattern:
-	// https://github.com/kubernetes/community/blob/8cafef897a22026d42f5e5bb3f104febe7e29830/contributors/devel/controllers.md
+	getPod := func(namespace, name string) (metav1.Object, error) { return r.podsLister.Pods(namespace).Get(name) }
+	c := controller.New("feedback", r, informersSynced...)
+
+	podInformer.Informer().AddEventHandler(controller.HandleAddUpdateWith(c.EnqueueObject))
 	for _, informer := range podChaperonInformers {
-		informer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
-			AddFunc: r.handleObject,
-			UpdateFunc: func(old, new interface{}) {
-				r.handleObject(new)
-			},
-			DeleteFunc: r.handleObject,
-		})
+		informer.Informer().AddEventHandler(controller.HandleAllWith(c.EnqueueRemoteController("Pod", getPod)))
 	}
 
-	c := controller.New("feedback", informersSynced, r)
-	r.controller = c
 	return c
 }
 
@@ -184,7 +150,7 @@ func (c *reconciler) Handle(obj interface{}) (requeueAfter *time.Duration, err e
 
 	candidates := make(map[string]*multiclusterv1alpha1.PodChaperon)
 	for targetName, lister := range c.podChaperonsListers {
-		l, err := lister.PodChaperons(namespace).List(labels.SelectorFromSet(map[string]string{gc.LabelParentUID: string(proxyPod.UID)}))
+		l, err := lister.PodChaperons(namespace).List(labels.SelectorFromSet(map[string]string{common.LabelKeyParentUID: string(proxyPod.UID)}))
 		if err != nil {
 			return nil, err
 		}
@@ -286,58 +252,4 @@ func (c *reconciler) Handle(obj interface{}) (requeueAfter *time.Duration, err e
 		c.recorder.Event(proxyPod, corev1.EventTypeNormal, SuccessSynced, MessageResourceSynced)
 	}
 	return nil, nil
-}
-
-// enqueuePod takes a Pod resource and converts it into a namespace/name
-// string which is then put onto the work queue. This method should *not* be
-// passed resources of any type other than Pod.
-func (c *reconciler) enqueuePod(obj interface{}) {
-	var key string
-	var err error
-	if key, err = cache.MetaNamespaceKeyFunc(obj); err != nil {
-		utilruntime.HandleError(err)
-		return
-	}
-	pod := obj.(*corev1.Pod)
-	if proxypod.IsProxy(pod) {
-		c.controller.Enqueue(key)
-	}
-}
-
-// handleObject will take any resource implementing metav1.Object and attempt
-// to find the Pod resource that 'owns' it across clusters. It does this by looking at the
-// objects metadata.annotations field for an appropriate OwnerReference.
-// It then enqueues that Pod resource to be processed. If the object does not
-// have an appropriate OwnerReference, it will simply be skipped.
-func (c *reconciler) handleObject(obj interface{}) {
-	var object metav1.Object
-	var ok bool
-	if object, ok = obj.(metav1.Object); !ok {
-		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
-		if !ok {
-			utilruntime.HandleError(fmt.Errorf("error decoding object, invalid type"))
-			return
-		}
-		object, ok = tombstone.Obj.(metav1.Object)
-		if !ok {
-			utilruntime.HandleError(fmt.Errorf("error decoding object tombstone, invalid type"))
-			return
-		}
-		klog.V(4).Infof("Recovered deleted object '%s' from tombstone", object.GetName())
-	}
-	klog.V(4).Infof("Processing object: %s", object.GetName())
-	if parentName, ok := object.GetLabels()[common.LabelKeyParentName]; ok {
-		pod, err := c.podsLister.Pods(object.GetNamespace()).Get(parentName)
-		if err != nil {
-			return
-		}
-
-		if string(pod.UID) != object.GetLabels()[gc.LabelParentUID] {
-			// TODO handle unlikely yet possible cross-cluster UID conflict with signing
-			return
-		}
-
-		c.enqueuePod(pod)
-		return
-	}
 }

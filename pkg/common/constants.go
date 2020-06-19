@@ -51,7 +51,9 @@ var (
 
 	LabelKeyHasFinalizer = KeyPrefix + "has-finalizer"
 
-	LabelKeyParentName = KeyPrefix + "parent-name"
+	LabelKeyParentUID       = KeyPrefix + "parent-uid"
+	LabelKeyParentName      = KeyPrefix + "parent-name"
+	LabelKeyParentNamespace = KeyPrefix + "parent-namespace"
 
 	// finalizer for cross-cluster garbage collection
 
