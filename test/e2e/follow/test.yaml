@@ -1,0 +1,36 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: follow
+data:
+  MY_CONFIG: foo
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: follow
+stringData:
+  MY_SECRET: bar
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: follow
+spec:
+  template:
+    metadata:
+      annotations:
+        multicluster.admiralty.io/elect: ""
+    spec:
+      nodeSelector:
+        a: b
+      restartPolicy: Never
+      containers:
+        - name: follow
+          image: busybox
+          command: ["/bin/sh", "-c", "[ $MY_CONFIG = foo ] && [ $MY_SECRET = bar ]"]
+          envFrom:
+            - configMapRef:
+                name: follow
+            - secretRef:
+                name: follow

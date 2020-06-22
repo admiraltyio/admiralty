@@ -115,10 +115,7 @@ func (c *reconciler) Handle(obj interface{}) (requeueAfter *time.Duration, err e
 	// Convert the namespace/name string into a distinct namespace and name
 	key := obj.(string)
 	namespace, name, err := cache.SplitMetaNamespaceKey(key)
-	if err != nil {
-		utilruntime.HandleError(fmt.Errorf("invalid resource key: %s", key))
-		return nil, nil
-	}
+	utilruntime.Must(err)
 
 	// Get the PodChaperon resource with this namespace/name
 	podChaperon, err := c.podChaperonsLister.PodChaperons(namespace).Get(name)

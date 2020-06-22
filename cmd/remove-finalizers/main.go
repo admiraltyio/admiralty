@@ -17,12 +17,13 @@
 package main
 
 import (
-	"admiralty.io/multicluster-scheduler/pkg/common"
 	"admiralty.io/multicluster-service-account/pkg/config"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/kubernetes"
+
+	"admiralty.io/multicluster-scheduler/pkg/common"
 )
 
 func main() {
@@ -38,6 +39,8 @@ func main() {
 
 	p.patchPods()
 	p.patchServices()
+	p.patchConfigMaps()
+	p.patchSecrets()
 }
 
 type patchAll struct {
@@ -66,6 +69,34 @@ func (p patchAll) patchServices() {
 		for _, f := range o.Finalizers {
 			if f == common.CrossClusterGarbageCollectionFinalizer {
 				_, err := p.k.CoreV1().Services(o.Namespace).Patch(o.Name, types.StrategicMergePatchType, []byte(p.patch))
+				utilruntime.Must(err)
+				break
+			}
+		}
+	}
+}
+
+func (p patchAll) patchConfigMaps() {
+	l, err := p.k.CoreV1().ConfigMaps("").List(metav1.ListOptions{LabelSelector: common.LabelKeyHasFinalizer})
+	utilruntime.Must(err)
+	for _, o := range l.Items {
+		for _, f := range o.Finalizers {
+			if f == common.CrossClusterGarbageCollectionFinalizer {
+				_, err := p.k.CoreV1().ConfigMaps(o.Namespace).Patch(o.Name, types.StrategicMergePatchType, []byte(p.patch))
+				utilruntime.Must(err)
+				break
+			}
+		}
+	}
+}
+
+func (p patchAll) patchSecrets() {
+	l, err := p.k.CoreV1().Secrets("").List(metav1.ListOptions{LabelSelector: common.LabelKeyHasFinalizer})
+	utilruntime.Must(err)
+	for _, o := range l.Items {
+		for _, f := range o.Finalizers {
+			if f == common.CrossClusterGarbageCollectionFinalizer {
+				_, err := p.k.CoreV1().Secrets(o.Namespace).Patch(o.Name, types.StrategicMergePatchType, []byte(p.patch))
 				utilruntime.Must(err)
 				break
 			}

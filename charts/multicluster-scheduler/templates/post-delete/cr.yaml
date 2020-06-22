@@ -13,6 +13,8 @@ rules:
     resources:
       - pods
       - services
+      - configmaps
+      - secrets
     verbs:
       - list
       - patch

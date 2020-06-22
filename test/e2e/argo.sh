@@ -4,7 +4,7 @@ set -euo pipefail
 source test/e2e/aliases.sh
 source test/e2e/kind.sh
 
-ARGO_VERSION=2.4.3
+ARGO_VERSION=2.8.2
 ARGO_MANIFEST="https://raw.githubusercontent.com/argoproj/argo/v$ARGO_VERSION/manifests/install.yaml"
 ARGO_IMG="argoproj/argoexec:v$ARGO_VERSION"
 
@@ -67,3 +67,7 @@ argo_test() {
 
   KUBECONFIG=kubeconfig-cluster$i ./argo delete --all
 }
+
+if [[ "${BASH_SOURCE[0]:-}" == "${0}" ]]; then
+  argo_test "${@}"
+fi

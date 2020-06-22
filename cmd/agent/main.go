@@ -31,6 +31,7 @@ import (
 	logruslogger "github.com/virtual-kubelet/virtual-kubelet/log/logrus"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	kubeinformers "k8s.io/client-go/informers"
+	v1 "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	"k8s.io/client-go/rest"
@@ -44,6 +45,7 @@ import (
 	"admiralty.io/multicluster-scheduler/pkg/controller"
 	"admiralty.io/multicluster-scheduler/pkg/controllers/chaperon"
 	"admiralty.io/multicluster-scheduler/pkg/controllers/feedback"
+	"admiralty.io/multicluster-scheduler/pkg/controllers/follow"
 	"admiralty.io/multicluster-scheduler/pkg/controllers/globalsvc"
 	"admiralty.io/multicluster-scheduler/pkg/controllers/svcreroute"
 	"admiralty.io/multicluster-scheduler/pkg/generated/clientset/versioned"
@@ -78,6 +80,8 @@ func main() {
 	<-stopCh
 }
 
+// TODO: this is a bit messy, we need to refactor using a pattern similar to the one of multicluster-controller,
+// but for "old-style" controllers, i.e., using typed informers
 func startOldStyleControllers(stopCh <-chan struct{}, agentCfg agentconfig.Config, cfg *rest.Config, k *kubernetes.Clientset) {
 	customClient, err := versioned.NewForConfig(cfg)
 	utilruntime.Must(err)
@@ -94,10 +98,12 @@ func startOldStyleControllers(stopCh <-chan struct{}, agentCfg agentconfig.Confi
 	targetPodChaperonInformers := make(map[string]v1alpha1.PodChaperonInformer, n)
 	for _, target := range agentCfg.Targets {
 		c, err := versioned.NewForConfig(target.ClientConfig)
-		targetCustomClients[target.Name] = c
 		utilruntime.Must(err)
+		targetCustomClients[target.Name] = c
+
 		f := informers.NewSharedInformerFactoryWithOptions(c, time.Second*30, informers.WithNamespace(target.Namespace))
 		targetCustomInformerFactories[target.Name] = f
+
 		targetPodChaperonInformers[target.Name] = f.Multicluster().V1alpha1().PodChaperons()
 	}
 	if agentCfg.Raw.TargetSelf {
@@ -112,6 +118,34 @@ func startOldStyleControllers(stopCh <-chan struct{}, agentCfg agentconfig.Confi
 	var feedbackCtrl *controller.Controller
 	if n > 0 {
 		feedbackCtrl = feedback.NewController(k, targetCustomClients, podInformer, targetPodChaperonInformers)
+	}
+
+	nt := len(agentCfg.Targets)
+	var cmFollowCtrl *controller.Controller
+	var secretFollowCtrl *controller.Controller
+	if nt > 0 {
+		targetKubeClients := make(map[string]kubernetes.Interface, nt)
+		targetKubeInformerFactories := make(map[string]kubeinformers.SharedInformerFactory, nt)
+		targetConfigMapInformers := make(map[string]v1.ConfigMapInformer, nt)
+		targetSecretInformers := make(map[string]v1.SecretInformer, nt)
+		for _, target := range agentCfg.Targets {
+			k, err := kubernetes.NewForConfig(target.ClientConfig)
+			utilruntime.Must(err)
+			targetKubeClients[target.Name] = k
+
+			f := kubeinformers.NewSharedInformerFactory(k, time.Second*30)
+			targetKubeInformerFactories[target.Name] = f
+
+			targetConfigMapInformers[target.Name] = f.Core().V1().ConfigMaps()
+			targetSecretInformers[target.Name] = f.Core().V1().Secrets()
+		}
+		cmFollowCtrl = follow.NewConfigMapController(k, targetKubeClients, podInformer,
+			kubeInformerFactory.Core().V1().ConfigMaps(), targetConfigMapInformers, agentCfg.Raw.ClusterName)
+		secretFollowCtrl = follow.NewSecretController(k, targetKubeClients, podInformer,
+			kubeInformerFactory.Core().V1().Secrets(), targetSecretInformers, agentCfg.Raw.ClusterName)
+		for _, f := range targetKubeInformerFactories {
+			f.Start(stopCh)
+		}
 	}
 
 	kubeInformerFactory.Start(stopCh)
@@ -130,6 +164,14 @@ func startOldStyleControllers(stopCh <-chan struct{}, agentCfg agentconfig.Confi
 			if err = feedbackCtrl.Run(2, stopCh); err != nil {
 				klog.Fatalf("Error running controller: %s", err.Error())
 			}
+		}()
+	}
+	if nt > 0 {
+		go func() {
+			utilruntime.Must(cmFollowCtrl.Run(2, stopCh))
+		}()
+		go func() {
+			utilruntime.Must(secretFollowCtrl.Run(2, stopCh))
 		}()
 	}
 }
