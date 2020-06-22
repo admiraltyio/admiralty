@@ -20,6 +20,12 @@
 
 -->
 
+## v0.9.0
+
+### New Features
+
+- Fix [#32](https://github.com/admiraltyio/multicluster-scheduler/issues/20). Config maps and secrets now follow pods. More specifically, if a proxy pod refers to config maps or secrets to be mounted as volumes, projected volumes, used as environment variables or, for secrets, as image pull secrets, Admiralty copies those config maps or secrets to the target cluster where the corresponding delegate pod runs.
+
 ## v0.8.2
 
 Note: we're skipping v0.8.1 because the 0.8.1 image tag was erroneously used for a pre-release version.
