@@ -86,14 +86,16 @@ func NewController(
 	r := &reconciler{
 		kubeclientset:    kubeclientset,
 		customclientsets: customclientsets,
-		podsLister:       podInformer.Lister(),
-		recorder:         recorder,
+
+		podsLister:          podInformer.Lister(),
+		podChaperonsListers: make(map[string]listers.PodChaperonLister, len(podChaperonInformers)),
+
+		recorder: recorder,
 	}
 
 	informersSynced := make([]cache.InformerSynced, len(podChaperonInformers)+1)
 	informersSynced[0] = podInformer.Informer().HasSynced
 
-	r.podChaperonsListers = make(map[string]listers.PodChaperonLister, len(podChaperonInformers))
 	i := 1
 	for targetName, informer := range podChaperonInformers {
 		r.podChaperonsListers[targetName] = informer.Lister()
@@ -119,10 +121,7 @@ func (c *reconciler) Handle(obj interface{}) (requeueAfter *time.Duration, err e
 	// Convert the namespace/name string into a distinct namespace and name
 	key := obj.(string)
 	namespace, name, err := cache.SplitMetaNamespaceKey(key)
-	if err != nil {
-		utilruntime.HandleError(fmt.Errorf("invalid resource key: %s", key))
-		return nil, nil
-	}
+	utilruntime.Must(err)
 
 	// Get the proxy pod resource with this namespace/name
 	proxyPod, err := c.podsLister.Pods(namespace).Get(name)

@@ -54,6 +54,8 @@ rules:
       - get
       - list
       - watch
+      - configmaps
+      - secrets
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -102,6 +104,8 @@ rules:
       - ""
     resources:
       - services
+      - secrets
+      - configmaps
     verbs:
       - get
       - list

@@ -10,6 +10,7 @@ source test/e2e/cert-manager.sh
 source test/e2e/kind.sh
 source test/e2e/klum.sh
 source test/e2e/mcsa.sh
+source test/e2e/follow/test.sh
 
 argo_setup_once
 cert_manager_setup_once
@@ -29,5 +30,7 @@ argo_setup_source 1
 argo_setup_target 2
 #webhook_ready 1 admiralty multicluster-scheduler-controller-manager multicluster-scheduler multicluster-scheduler-cert
 argo_test 1 2
+
+follow_test 1 2
 
 echo "ALL SUCCEEDED"
