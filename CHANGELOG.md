@@ -20,11 +20,17 @@
 
 -->
 
+## v0.9.2
+
+### Bugfixes
+
+The feature introduced in v0.9.0 (config maps and secrets follow pods) wasn't compatible with namespaced targets.
+
 ## v0.9.1
 
-**HOTFIX**
+### Bugfixes
 
-f4b1936 removed proxy pod filter on feedback controller, which crashed the controller manager if normal pods were scheduled on nodes whose names were shorter than 10 characters, and added finalizers to normal pods (manual cleanup necessary!)
+f4b1936 removed proxy pod filter on feedback controller, which crashed the controller manager if normal pods were scheduled on nodes whose names were shorter than 10 characters, and added finalizers to normal pods (manual cleanup necessary!).
 
 ## v0.9.0
 
