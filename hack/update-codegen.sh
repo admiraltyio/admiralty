@@ -21,7 +21,7 @@ set -o pipefail
 SCRIPT_ROOT=$(dirname "${BASH_SOURCE[0]}")/..
 CODEGEN_PKG=${CODEGEN_PKG:-$(
   cd "${SCRIPT_ROOT}"
-  ls -d -1 $GOPATH/pkg/mod/k8s.io/code-generator@v0.17.0 2>/dev/null || echo ../code-generator
+  ls -d -1 $GOPATH/pkg/mod/k8s.io/code-generator@v0.17.7 2>/dev/null || echo ../code-generator
 )}
 
 # generate the code with:
