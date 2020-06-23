@@ -106,7 +106,14 @@ func NewController(
 	getPod := func(namespace, name string) (metav1.Object, error) { return r.podsLister.Pods(namespace).Get(name) }
 	c := controller.New("feedback", r, informersSynced...)
 
-	podInformer.Informer().AddEventHandler(controller.HandleAddUpdateWith(c.EnqueueObject))
+	enqueueProxyPod := func(obj interface{}) {
+		pod := obj.(*corev1.Pod)
+		if proxypod.IsProxy(pod) {
+			c.EnqueueObject(obj)
+		}
+	}
+
+	podInformer.Informer().AddEventHandler(controller.HandleAddUpdateWith(enqueueProxyPod))
 	for _, informer := range podChaperonInformers {
 		informer.Informer().AddEventHandler(controller.HandleAllWith(c.EnqueueRemoteController("Pod", getPod)))
 	}
