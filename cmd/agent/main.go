@@ -133,7 +133,7 @@ func startOldStyleControllers(stopCh <-chan struct{}, agentCfg agentconfig.Confi
 			utilruntime.Must(err)
 			targetKubeClients[target.Name] = k
 
-			f := kubeinformers.NewSharedInformerFactory(k, time.Second*30)
+			f := kubeinformers.NewSharedInformerFactoryWithOptions(k, time.Second*30, kubeinformers.WithNamespace(target.Namespace))
 			targetKubeInformerFactories[target.Name] = f
 
 			targetConfigMapInformers[target.Name] = f.Core().V1().ConfigMaps()
