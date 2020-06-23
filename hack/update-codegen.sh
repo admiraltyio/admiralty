@@ -18,17 +18,19 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
+GOPATH="${GOPATH:-"$HOME/go"}"
+
 SCRIPT_ROOT=$(dirname "${BASH_SOURCE[0]}")/..
 CODEGEN_PKG=${CODEGEN_PKG:-$(
   cd "${SCRIPT_ROOT}"
-  ls -d -1 "${GOPATH:-"$HOME/go"}/pkg/mod/k8s.io/code-generator@v0.17.7" 2>/dev/null || echo ../code-generator
+  ls -d -1 "$GOPATH/pkg/mod/k8s.io/code-generator@v0.17.7" 2>/dev/null || echo ../code-generator
 )}
 
 # generate the code with:
 # --output-base    because this script should also be able to run inside the vendor dir of
 #                  k8s.io/kubernetes. The output-base is needed for the generators to output into the vendor dir
 #                  instead of the $GOPATH directly. For normal projects this can be dropped.
-bash "${CODEGEN_PKG}"/generate-groups.sh "deepcopy,client,informer,lister" \
+GOPATH=$GOPATH bash "${CODEGEN_PKG}"/generate-groups.sh "deepcopy,client,informer,lister" \
   admiralty.io/multicluster-scheduler/pkg/generated admiralty.io/multicluster-scheduler/pkg/apis \
   multicluster:v1alpha1 \
   --go-header-file "${SCRIPT_ROOT}"/hack/boilerplate.go.txt
