@@ -32,10 +32,10 @@ jobs:
         run: ./build/install_docker.sh
 
       - name: Build with Go and Docker
-        run: ./build/build.sh
+        run: ./build/build.sh $GITHUB_SHA
 
       - name: Install E2E dependencies
-        run: ./test/e2e/e2e.sh
+        run: ./test/e2e/install_dependencies.sh
 
       - name: End-to-end test
-        run: ./test/e2e/e2e.sh
+        run: ./test/e2e/e2e.sh $GITHUB_SHA
