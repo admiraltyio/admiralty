@@ -20,11 +20,17 @@
 
 -->
 
+## v0.9.1
+
+**HOTFIX**
+
+f4b1936 removed proxy pod filter on feedback controller, which crashed the controller manager if normal pods were scheduled on nodes whose names were shorter than 10 characters, and added finalizers to normal pods (manual cleanup necessary!)
+
 ## v0.9.0
 
 ### New Features
 
-- Fix [#32](https://github.com/admiraltyio/multicluster-scheduler/issues/20). Config maps and secrets now follow pods. More specifically, if a proxy pod refers to config maps or secrets to be mounted as volumes, projected volumes, used as environment variables or, for secrets, as image pull secrets, Admiralty copies those config maps or secrets to the target cluster where the corresponding delegate pod runs.
+- Fix [#32](https://github.com/admiraltyio/multicluster-scheduler/issues/32). Config maps and secrets now follow pods. More specifically, if a proxy pod refers to config maps or secrets to be mounted as volumes, projected volumes, used as environment variables or, for secrets, as image pull secrets, Admiralty copies those config maps or secrets to the target cluster where the corresponding delegate pod runs.
 
 ## v0.8.2
 
