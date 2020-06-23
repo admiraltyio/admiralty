@@ -52,11 +52,11 @@ spec:
                           {{- range .Values.targets }}
                           {{- if not .serviceAccountImportName }}
         - name: {{ .secretName | default .name }}
-        secret:
-          secretName: {{ .secretName | default .name }}
-          items:
-            - key: {{ default "config" .key }}
-              path: config
+          secret:
+            secretName: {{ .secretName | default .name }}
+            items:
+              - key: {{ default "config" .key }}
+                path: config
           {{- end }}
           {{- end }}
         {{- with .Values.imagePullSecretName }}
