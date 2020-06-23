@@ -33,4 +33,8 @@ argo_test 1 2
 
 follow_test 1 2
 
+# check that we didn't add finalizers to uncontrolled resources
+finalizer="multicluster.admiralty.io/multiclusterForegroundDeletion"
+[ "$(k 1 get pod -A -o custom-columns=FINALIZERS:.metadata.finalizers | grep -c "$finalizer")" -eq 0 ]
+
 echo "ALL SUCCEEDED"
