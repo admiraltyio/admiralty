@@ -11,6 +11,8 @@ CMDS=(
   "scheduler"
 )
 
+mkdir -p _out
+
 cp build/Dockerfile _out/
 
 for CMD in "${CMDS[@]}"; do
