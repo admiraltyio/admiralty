@@ -25,7 +25,6 @@ import (
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // PodChaperon is the Schema for the podchaperons API
-// +k8s:openapi-gen=true
 type PodChaperon struct {
 	metav1.TypeMeta `json:",inline"`
 	// +optional

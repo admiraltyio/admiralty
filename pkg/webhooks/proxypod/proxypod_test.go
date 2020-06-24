@@ -19,11 +19,12 @@ package proxypod
 import (
 	"testing"
 
-	"admiralty.io/multicluster-scheduler/pkg/common"
 	"github.com/ghodss/yaml"
 	"github.com/go-test/deep"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"admiralty.io/multicluster-scheduler/pkg/common"
 )
 
 // TODO test webhook namespace selector
@@ -53,6 +54,7 @@ var testCases = map[string]struct {
 				Labels: map[string]string{
 					common.LabelKeyHasFinalizer: "true",
 				},
+				Finalizers: []string{common.CrossClusterGarbageCollectionFinalizer},
 			},
 			Spec: corev1.PodSpec{
 				Containers: []corev1.Container{{
@@ -106,7 +108,8 @@ var testCases = map[string]struct {
 					common.AnnotationKeySourcePodManifest: "HACK", // yaml serialization computed in test code
 					"k1":                                  "v1",
 				},
-				Labels: map[string]string{"k2": "v2", common.LabelKeyHasFinalizer: "true"},
+				Labels:     map[string]string{"k2": "v2", common.LabelKeyHasFinalizer: "true"},
+				Finalizers: []string{common.CrossClusterGarbageCollectionFinalizer},
 			},
 			Spec: corev1.PodSpec{
 				Containers: []corev1.Container{{
