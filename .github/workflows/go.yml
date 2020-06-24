@@ -1,4 +1,4 @@
-name: Go
+name: Continuous Integration
 
 on:
   push:
@@ -9,7 +9,7 @@ on:
 jobs:
 
   build:
-    name: Build
+    name: All
     runs-on: ubuntu-latest
     steps:
 
@@ -25,17 +25,25 @@ jobs:
       - name: Get dependencies
         run: go get -v -t -d ./...
 
-      - name: Verify code gen, vet, unit test
+      - name: Verify code gen, go vet, go test
         run: ./test/test.sh
 
       - name: Install Docker
         run: ./build/install_docker.sh
 
-      - name: Build with Go and Docker
+      - name: go build, docker build
         run: ./build/build.sh $GITHUB_SHA
 
-      - name: Install E2E dependencies
+      - name: Install kubectl, helm, kind
         run: ./test/e2e/install_dependencies.sh
 
       - name: End-to-end test
+        id: e2e
         run: ./test/e2e/e2e.sh $GITHUB_SHA
+
+      - if: ${{ steps.e2e.outcome == "failure" }}
+        name: Archive cluster dump
+        uses: actions/upload-artifact@v1
+        with:
+          name: cluster-dump
+          path: cluster-dump

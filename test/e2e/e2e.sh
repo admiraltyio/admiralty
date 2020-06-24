@@ -30,8 +30,14 @@ while ! k 2 get sa cluster1 -n klum; do sleep 1; done
 argo_setup_source 1
 argo_setup_target 2
 #webhook_ready 1 admiralty multicluster-scheduler-controller-manager multicluster-scheduler multicluster-scheduler-cert
-argo_test 1 2
 
+cluster_dump() {
+  k 1 cluster-info dump -A --output-directory cluster-dump/1
+  k 2 cluster-info dump -A --output-directory cluster-dump/2
+}
+trap cluster_dump ERR
+
+argo_test 1 2
 follow_test 1 2
 
 # check that we didn't add finalizers to uncontrolled resources
