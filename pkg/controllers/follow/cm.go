@@ -195,12 +195,23 @@ func (r configMapReconciler) Handle(obj interface{}) (requeueAfter *time.Duratio
 		}
 	}
 
+	// get remote owned configMaps
+	// eponymous configMaps that aren't owned are not included (because we don't want to delete them, see below)
+	// include owned configMaps in targets that no longer need them (because we shouldn't forget them when deleting)
 	remoteConfigMaps := make(map[string]*corev1.ConfigMap)
-	for targetName := range targetNames {
-		var err error
-		remoteConfigMaps[targetName], err = r.remoteConfigMapLister[targetName].ConfigMaps(namespace).Get(name)
-		if !errors.IsNotFound(err) {
-			utilruntime.HandleError(err) // connection error with a target shouldn't block reconciliation with other targets
+	for targetName, lister := range r.remoteConfigMapLister {
+		remoteConfigMap, err := lister.ConfigMaps(namespace).Get(name)
+		if err != nil {
+			if !errors.IsNotFound(err) {
+				// error with a target shouldn't block reconciliation with other targets
+				d := time.Second
+				requeueAfter = &d // named returned
+				utilruntime.HandleError(err)
+			}
+			continue
+		}
+		if remoteConfigMap.Labels[common.LabelKeyParentUID] == string(configMap.UID) {
+			remoteConfigMaps[targetName] = remoteConfigMap
 		}
 	}
 
@@ -210,65 +221,98 @@ func (r configMapReconciler) Handle(obj interface{}) (requeueAfter *time.Duratio
 				return nil, err
 			}
 		}
-		if len(remoteConfigMaps) == 0 && hasFinalizer {
-			configMapCopy := configMap.DeepCopy()
-			configMapCopy.Finalizers = append(configMapCopy.Finalizers[:j], configMapCopy.Finalizers[j+1:]...)
-			var err error
-			if configMap, err = r.kubeclientset.CoreV1().ConfigMaps(namespace).Update(configMapCopy); err != nil {
-				if patterns.IsOptimisticLockError(err) {
+		if hasFinalizer && len(remoteConfigMaps) == 0 {
+			requeueAfter, err = r.removeFinalizer(configMap, j)
+			if requeueAfter != nil || err != nil {
+				return requeueAfter, err
+			}
+		}
+	} else if len(targetNames) == 0 {
+		// remove extraneous finalizers added pre-0.9.3 (to all config maps and secrets)
+		if hasFinalizer && len(remoteConfigMaps) == 0 {
+			requeueAfter, err = r.removeFinalizer(configMap, j)
+			if requeueAfter != nil || err != nil {
+				return requeueAfter, err
+			}
+		}
+	} else {
+		if !hasFinalizer {
+			requeueAfter, err = r.addFinalizer(configMap)
+			if requeueAfter != nil || err != nil {
+				return requeueAfter, err
+			}
+		}
+
+		for targetName := range targetNames {
+			remoteConfigMap := remoteConfigMaps[targetName]
+			if remoteConfigMap == nil {
+				gold := makeRemoteConfigMap(configMap)
+				_, err := r.remoteClients[targetName].CoreV1().ConfigMaps(namespace).Create(gold)
+				if err != nil && !errors.IsAlreadyExists(err) {
+					// error with a target shouldn't block reconciliation with other targets
 					d := time.Second
-					return &d, nil
-				} else {
-					return nil, err
+					requeueAfter = &d // named returned
+					utilruntime.HandleError(err)
+				}
+			} else if !reflect.DeepEqual(remoteConfigMap.Data, configMap.Data) || !reflect.DeepEqual(remoteConfigMap.BinaryData, configMap.BinaryData) {
+				remoteConfigMapCopy := remoteConfigMap.DeepCopy()
+				remoteConfigMapCopy.Data = make(map[string]string, len(configMap.Data))
+				for k, v := range configMap.Data {
+					remoteConfigMapCopy.Data[k] = v
+				}
+				remoteConfigMapCopy.BinaryData = make(map[string][]byte, len(configMap.BinaryData))
+				for k, v := range configMap.BinaryData {
+					remoteConfigMapCopy.BinaryData[k] = make([]byte, len(v))
+					copy(remoteConfigMapCopy.BinaryData[k], v)
+				}
+				_, err := r.remoteClients[targetName].CoreV1().ConfigMaps(namespace).Update(remoteConfigMapCopy)
+				if err != nil {
+					// error with a target shouldn't block reconciliation with other targets
+					d := time.Second
+					requeueAfter = &d // named returned
+					utilruntime.HandleError(err)
 				}
 			}
 		}
-	} else if !hasFinalizer {
-		configMapCopy := configMap.DeepCopy()
-		configMapCopy.Finalizers = append(configMapCopy.Finalizers, common.CrossClusterGarbageCollectionFinalizer)
-		var err error
-		if configMap, err = r.kubeclientset.CoreV1().ConfigMaps(namespace).Update(configMapCopy); err != nil {
-			if patterns.IsOptimisticLockError(err) {
-				d := time.Second
-				return &d, nil
-			} else {
-				return nil, err
-			}
-		}
 	}
 
-	for targetName := range targetNames {
-		remoteConfigMap := remoteConfigMaps[targetName]
-		if remoteConfigMap == nil {
-			gold := makeRemoteConfigMap(configMap)
-			_, err := r.remoteClients[targetName].CoreV1().ConfigMaps(namespace).Create(gold)
-			if err != nil {
-				// error with a target shouldn't block reconciliation with other targets
-				d := time.Second
-				requeueAfter = &d // named returned
-				utilruntime.HandleError(err)
-			}
-		} else if !reflect.DeepEqual(remoteConfigMap.Data, configMap.Data) || !reflect.DeepEqual(remoteConfigMap.BinaryData, configMap.BinaryData) {
-			remoteConfigMapCopy := remoteConfigMap.DeepCopy()
-			remoteConfigMapCopy.Data = make(map[string]string, len(configMap.Data))
-			for k, v := range configMap.Data {
-				remoteConfigMapCopy.Data[k] = v
-			}
-			remoteConfigMapCopy.BinaryData = make(map[string][]byte, len(configMap.BinaryData))
-			for k, v := range configMap.BinaryData {
-				remoteConfigMapCopy.BinaryData[k] = make([]byte, len(v))
-				copy(remoteConfigMapCopy.BinaryData[k], v)
-			}
-			_, err := r.remoteClients[targetName].CoreV1().ConfigMaps(namespace).Update(remoteConfigMapCopy)
-			if err != nil {
-				// error with a target shouldn't block reconciliation with other targets
-				d := time.Second
-				requeueAfter = &d // named returned
-				utilruntime.HandleError(err)
-			}
+	// TODO? cleanup remote configMaps that aren't referred to by proxy pods
+
+	return requeueAfter, nil
+}
+
+func (r configMapReconciler) addFinalizer(configMap *corev1.ConfigMap) (*time.Duration, error) {
+	configMapCopy := configMap.DeepCopy()
+	configMapCopy.Finalizers = append(configMapCopy.Finalizers, common.CrossClusterGarbageCollectionFinalizer)
+	if configMapCopy.Labels == nil {
+		configMapCopy.Labels = map[string]string{}
+	}
+	configMapCopy.Labels[common.LabelKeyHasFinalizer] = "true"
+	var err error
+	if _, err = r.kubeclientset.CoreV1().ConfigMaps(configMap.Namespace).Update(configMapCopy); err != nil {
+		if patterns.IsOptimisticLockError(err) {
+			d := time.Second
+			return &d, nil
+		} else {
+			return nil, err
 		}
 	}
+	return nil, nil
+}
 
+func (r configMapReconciler) removeFinalizer(configMap *corev1.ConfigMap, j int) (*time.Duration, error) {
+	configMapCopy := configMap.DeepCopy()
+	configMapCopy.Finalizers = append(configMapCopy.Finalizers[:j], configMapCopy.Finalizers[j+1:]...)
+	delete(configMapCopy.Labels, common.LabelKeyHasFinalizer)
+	var err error
+	if _, err = r.kubeclientset.CoreV1().ConfigMaps(configMap.Namespace).Update(configMapCopy); err != nil {
+		if patterns.IsOptimisticLockError(err) {
+			d := time.Second
+			return &d, nil
+		} else {
+			return nil, err
+		}
+	}
 	return nil, nil
 }
 
