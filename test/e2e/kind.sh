@@ -11,7 +11,9 @@ kind_setup() {
   if ! kind get clusters | grep $CLUSTER; then
     kind create cluster --name $CLUSTER --wait 5m
   fi
-  kind get kubeconfig --name $CLUSTER --internal >kubeconfig-$CLUSTER
+  NODE_IP=$(docker inspect "${CLUSTER}-control-plane" --format "{{ .NetworkSettings.Networks.kind.IPAddress }}")
+  kind get kubeconfig --name $CLUSTER --internal | \
+    sed "s/${CLUSTER}-control-plane/${NODE_IP}/g" >kubeconfig-$CLUSTER
   k $i apply -f test/e2e/must-run-as-non-root.yaml
 }
 
