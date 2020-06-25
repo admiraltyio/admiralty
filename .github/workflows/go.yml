@@ -38,11 +38,10 @@ jobs:
         run: ./test/e2e/install_dependencies.sh
 
       - name: End-to-end test
-        id: e2e
         run: ./test/e2e/e2e.sh $GITHUB_SHA
 
-      - if: ${{ steps.e2e.outcome == 'failure' }}
-        name: Archive cluster dump
+      - name: Archive cluster dump
+        if: ${{ failure() }}
         uses: actions/upload-artifact@v1
         with:
           name: cluster-dump
