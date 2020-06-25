@@ -20,17 +20,23 @@
 
 -->
 
+## v0.9.3
+
+### Bugfixes
+
+- Fix [#38](https://github.com/admiraltyio/multicluster-scheduler/issues/38). Cross-cluster garbage collection finalizers were added to all config maps and secrets, although only those that are copied across clusters actually need them. Finalizers are removed by the controller manager when config maps and secrets are terminating, so the bug wasn't major, but it did introduce unnecessary risk, because, if the controller manager went down, config maps and secrets couldn't be deleted. It could also conflict with third-party controllers of those config maps and secrets. The fix only applies finalizers to config maps and secrets that are referrred to by multi-cluster pods, and removes extraneous finalizers (no manual cleanup needed).
+
 ## v0.9.2
 
 ### Bugfixes
 
-The feature introduced in v0.9.0 (config maps and secrets follow pods) wasn't compatible with namespaced targets.
+- The feature introduced in v0.9.0 (config maps and secrets follow pods) wasn't compatible with namespaced targets.
 
 ## v0.9.1
 
 ### Bugfixes
 
-f4b1936 removed proxy pod filter on feedback controller, which crashed the controller manager if normal pods were scheduled on nodes whose names were shorter than 10 characters, and added finalizers to normal pods (manual cleanup necessary!).
+- f4b1936 removed proxy pod filter on feedback controller, which crashed the controller manager if normal pods were scheduled on nodes whose names were shorter than 10 characters, and added finalizers to normal pods (manual cleanup necessary!).
 
 ## v0.9.0
 
