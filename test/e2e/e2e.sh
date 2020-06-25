@@ -24,17 +24,26 @@ done
 
 klum_setup 2
 k 2 apply -f test/e2e/argo-workflow/cluster1-on-cluster2.yaml
+while ! k 2 get sa cluster1 -n klum; do sleep 1; done
 ./kubemcsa export --kubeconfig kubeconfig-cluster2 cluster1 -n klum --as c2 | k 1 apply -n admiralty -f -
 
 argo_setup_source 1
 argo_setup_target 2
 #webhook_ready 1 admiralty multicluster-scheduler-controller-manager multicluster-scheduler multicluster-scheduler-cert
-argo_test 1 2
 
+cluster_dump() {
+  k 1 cluster-info dump -A --output-directory cluster-dump/1
+  k 2 cluster-info dump -A --output-directory cluster-dump/2
+}
+trap cluster_dump ERR
+
+argo_test 1 2
 follow_test 1 2
 
 # check that we didn't add finalizers to uncontrolled resources
 finalizer="multicluster.admiralty.io/multiclusterForegroundDeletion"
-[ "$(k 1 get pod -A -o custom-columns=FINALIZERS:.metadata.finalizers | grep -c "$finalizer")" -eq 0 ]
+for resource in pods configmaps secrets services; do
+  [ "$(k 1 get $resource -A -o custom-columns=FINALIZERS:.metadata.finalizers | grep -c "$finalizer")" -eq 0 ]
+done
 
 echo "ALL SUCCEEDED"

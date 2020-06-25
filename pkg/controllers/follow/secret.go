@@ -200,15 +200,23 @@ func (r secretReconciler) Handle(obj interface{}) (requeueAfter *time.Duration, 
 		}
 	}
 
-	remoteSecrets := make(map[string]*corev1.Secret)
-	for targetName := range targetNames {
-		var err error
-		remoteSecrets[targetName], err = r.remoteSecretLister[targetName].Secrets(namespace).Get(name)
-		if !errors.IsNotFound(err) {
-			// error with a target shouldn't block reconciliation with other targets
-			d := time.Second
-			requeueAfter = &d // named returned
-			utilruntime.HandleError(err)
+	// get remote owned secrets
+	// eponymous secrets that aren't owned are not included (because we don't want to delete them, see below)
+	// include owned secrets in targets that no longer need them (because we shouldn't forget them when deleting)
+	remoteSecrets := make(map[string]*corev1.Secret, len(r.remoteSecretLister))
+	for targetName, lister := range r.remoteSecretLister {
+		remoteSecret, err := lister.Secrets(namespace).Get(name)
+		if err != nil {
+			if !errors.IsNotFound(err) {
+				// error with a target shouldn't block reconciliation with other targets
+				d := time.Second
+				requeueAfter = &d // named returned
+				utilruntime.HandleError(err)
+			}
+			continue
+		}
+		if remoteSecret.Labels[common.LabelKeyParentUID] == string(secret.UID) {
+			remoteSecrets[targetName] = remoteSecret
 		}
 	}
 
@@ -218,61 +226,94 @@ func (r secretReconciler) Handle(obj interface{}) (requeueAfter *time.Duration, 
 				return nil, err
 			}
 		}
-		if len(remoteSecrets) == 0 && hasFinalizer {
-			secretCopy := secret.DeepCopy()
-			secretCopy.Finalizers = append(secretCopy.Finalizers[:j], secretCopy.Finalizers[j+1:]...)
-			var err error
-			if secret, err = r.kubeclientset.CoreV1().Secrets(namespace).Update(secretCopy); err != nil {
-				if patterns.IsOptimisticLockError(err) {
+		if hasFinalizer && len(remoteSecrets) == 0 {
+			requeueAfter, err = r.removeFinalizer(secret, j)
+			if requeueAfter != nil || err != nil {
+				return requeueAfter, err
+			}
+		}
+	} else if len(targetNames) == 0 {
+		// remove extraneous finalizers added pre-0.9.3 (to all config maps and secrets)
+		if hasFinalizer && len(remoteSecrets) == 0 {
+			requeueAfter, err = r.removeFinalizer(secret, j)
+			if requeueAfter != nil || err != nil {
+				return requeueAfter, err
+			}
+		}
+	} else {
+		if !hasFinalizer {
+			requeueAfter, err = r.addFinalizer(secret)
+			if requeueAfter != nil || err != nil {
+				return requeueAfter, err
+			}
+		}
+
+		for targetName := range targetNames {
+			remoteSecret := remoteSecrets[targetName]
+			if remoteSecret == nil {
+				gold := makeRemoteSecret(secret)
+				_, err := r.remoteClients[targetName].CoreV1().Secrets(namespace).Create(gold)
+				if err != nil && !errors.IsAlreadyExists(err) {
+					// error with a target shouldn't block reconciliation with other targets
 					d := time.Second
-					return &d, nil
-				} else {
-					return nil, err
+					requeueAfter = &d // named returned
+					utilruntime.HandleError(err)
+				}
+			} else if !reflect.DeepEqual(remoteSecret.Data, secret.Data) {
+				remoteSecretCopy := remoteSecret.DeepCopy()
+				remoteSecretCopy.Data = make(map[string][]byte, len(secret.Data))
+				for k, v := range secret.Data {
+					remoteSecretCopy.Data[k] = make([]byte, len(v))
+					copy(remoteSecretCopy.Data[k], v)
+				}
+				_, err := r.remoteClients[targetName].CoreV1().Secrets(namespace).Update(remoteSecretCopy)
+				if err != nil {
+					// error with a target shouldn't block reconciliation with other targets
+					d := time.Second
+					requeueAfter = &d // named returned
+					utilruntime.HandleError(err)
 				}
 			}
 		}
-	} else if !hasFinalizer {
-		secretCopy := secret.DeepCopy()
-		secretCopy.Finalizers = append(secretCopy.Finalizers, common.CrossClusterGarbageCollectionFinalizer)
-		var err error
-		if secret, err = r.kubeclientset.CoreV1().Secrets(namespace).Update(secretCopy); err != nil {
-			if patterns.IsOptimisticLockError(err) {
-				d := time.Second
-				return &d, nil
-			} else {
-				return nil, err
-			}
-		}
 	}
 
-	for targetName := range targetNames {
-		remoteSecret := remoteSecrets[targetName]
-		if remoteSecret == nil {
-			gold := makeRemoteSecret(secret)
-			_, err := r.remoteClients[targetName].CoreV1().Secrets(namespace).Create(gold)
-			if err != nil {
-				// error with a target shouldn't block reconciliation with other targets
-				d := time.Second
-				requeueAfter = &d // named returned
-				utilruntime.HandleError(err)
-			}
-		} else if !reflect.DeepEqual(remoteSecret.Data, secret.Data) {
-			remoteSecretCopy := remoteSecret.DeepCopy()
-			remoteSecretCopy.Data = make(map[string][]byte, len(secret.Data))
-			for k, v := range secret.Data {
-				remoteSecretCopy.Data[k] = make([]byte, len(v))
-				copy(remoteSecretCopy.Data[k], v)
-			}
-			_, err := r.remoteClients[targetName].CoreV1().Secrets(namespace).Update(remoteSecretCopy)
-			if err != nil {
-				// error with a target shouldn't block reconciliation with other targets
-				d := time.Second
-				requeueAfter = &d // named returned
-				utilruntime.HandleError(err)
-			}
+	// TODO? cleanup remote secrets that aren't referred to by proxy pods
+
+	return requeueAfter, nil
+}
+
+func (r secretReconciler) addFinalizer(secret *corev1.Secret) (*time.Duration, error) {
+	secretCopy := secret.DeepCopy()
+	secretCopy.Finalizers = append(secretCopy.Finalizers, common.CrossClusterGarbageCollectionFinalizer)
+	if secretCopy.Labels == nil {
+		secretCopy.Labels = map[string]string{}
+	}
+	secretCopy.Labels[common.LabelKeyHasFinalizer] = "true"
+	var err error
+	if _, err = r.kubeclientset.CoreV1().Secrets(secret.Namespace).Update(secretCopy); err != nil {
+		if patterns.IsOptimisticLockError(err) {
+			d := time.Second
+			return &d, nil
+		} else {
+			return nil, err
 		}
 	}
+	return nil, nil
+}
 
+func (r secretReconciler) removeFinalizer(secret *corev1.Secret, j int) (*time.Duration, error) {
+	secretCopy := secret.DeepCopy()
+	secretCopy.Finalizers = append(secretCopy.Finalizers[:j], secretCopy.Finalizers[j+1:]...)
+	delete(secretCopy.Labels, common.LabelKeyHasFinalizer)
+	var err error
+	if _, err = r.kubeclientset.CoreV1().Secrets(secret.Namespace).Update(secretCopy); err != nil {
+		if patterns.IsOptimisticLockError(err) {
+			d := time.Second
+			return &d, nil
+		} else {
+			return nil, err
+		}
+	}
 	return nil, nil
 }
 
