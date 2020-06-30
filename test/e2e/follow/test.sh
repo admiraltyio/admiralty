@@ -7,7 +7,7 @@ follow_test() {
   i=$1
   j=$2
 
-  k $j label node --all a=b
+  k $j label node --all a=b --overwrite
   k $i apply -f test/e2e/follow/test.yaml
   k $i wait job/follow --for=condition=Complete
   k $i delete -f test/e2e/follow/test.yaml
