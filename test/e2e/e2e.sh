@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -Eeuo pipefail
 
 VERSION="$1"
 
@@ -11,6 +11,7 @@ source test/e2e/kind.sh
 source test/e2e/klum.sh
 source test/e2e/mcsa.sh
 source test/e2e/follow/test.sh
+source test/e2e/webhook_ready.sh
 
 argo_setup_once
 cert_manager_setup_once
@@ -29,7 +30,7 @@ while ! k 2 get sa cluster1 -n klum; do sleep 1; done
 
 argo_setup_source 1
 argo_setup_target 2
-#webhook_ready 1 admiralty multicluster-scheduler-controller-manager multicluster-scheduler multicluster-scheduler-cert
+webhook_ready 1 admiralty multicluster-scheduler-controller-manager multicluster-scheduler multicluster-scheduler-cert
 
 cluster_dump() {
   k 1 cluster-info dump -A --output-directory cluster-dump/1
