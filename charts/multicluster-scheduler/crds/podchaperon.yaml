@@ -15,3 +15,10 @@ spec:
   subresources:
     status: {}
   version: v1alpha1
+  additionalPrinterColumns:
+    - name: reserved
+      type: string
+      JSONPath: .metadata.annotations.multicluster\.admiralty\.io/is-reserved
+    - name: allowed
+      type: string
+      JSONPath: .metadata.annotations.multicluster\.admiralty\.io/is-allowed
