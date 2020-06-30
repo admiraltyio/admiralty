@@ -37,11 +37,8 @@ var (
 
 	// annotations on delegate pod chaperons (by scheduler plugins)
 
-	AnnotationKeyIsReserved      = KeyPrefix + "is-reserved"
-	AnnotationKeyIsUnschedulable = KeyPrefix + "is-unschedulable"
-	AnnotationKeyIsAllowed       = KeyPrefix + "is-allowed"
-	AnnotationKeyIsBound         = KeyPrefix + "is-bound"
-	AnnotationKeyBindingFailed   = KeyPrefix + "binding-failed"
+	AnnotationKeyIsReserved = KeyPrefix + "is-reserved"
+	AnnotationKeyIsAllowed  = KeyPrefix + "is-allowed"
 
 	// annotations on delegate services (by global service controller)
 

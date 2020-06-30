@@ -47,9 +47,8 @@ type Plugin struct {
 
 var _ framework.FilterPlugin = &Plugin{}
 var _ framework.ReservePlugin = &Plugin{}
-var _ framework.PermitPlugin = &Plugin{}
+var _ framework.PreBindPlugin = &Plugin{}
 var _ framework.PostBindPlugin = &Plugin{}
-var _ framework.UnreservePlugin = &Plugin{}
 
 // Name is the name of the plugin used in the plugin registry and configurations.
 const Name = "proxy"
@@ -63,12 +62,12 @@ func virtualNodeNameToClusterName(nodeName string) string {
 	return nodeName[10:]
 }
 
-func (pl *Plugin) getCandidate(proxyPod *v1.Pod, clusterName string) (*v1alpha1.PodChaperon, error) {
+func (pl *Plugin) getCandidate(ctx context.Context, proxyPod *v1.Pod, clusterName string) (*v1alpha1.PodChaperon, error) {
 	target, ok := pl.targets[clusterName]
 	if !ok {
 		return nil, fmt.Errorf("no target for cluster name %s", clusterName)
 	}
-	l, err := target.MulticlusterV1alpha1().PodChaperons(proxyPod.Namespace).List(metav1.ListOptions{LabelSelector: common.LabelKeyParentUID + "=" + string(proxyPod.UID)})
+	l, err := target.MulticlusterV1alpha1().PodChaperons(proxyPod.Namespace).List(ctx, metav1.ListOptions{LabelSelector: common.LabelKeyParentUID + "=" + string(proxyPod.UID)})
 	if err != nil {
 		return nil, err
 	}
@@ -81,15 +80,17 @@ func (pl *Plugin) getCandidate(proxyPod *v1.Pod, clusterName string) (*v1alpha1.
 	return &l.Items[0], nil
 }
 
-func (pl *Plugin) allowCandidate(c *v1alpha1.PodChaperon, clusterName string) error {
+func (pl *Plugin) allowCandidate(ctx context.Context, c *v1alpha1.PodChaperon, clusterName string) error {
 	target, ok := pl.targets[clusterName]
 	if !ok {
 		return fmt.Errorf("no target for cluster name %s", clusterName)
 	}
-	patch := []byte(`{"metadata":{"annotations":{"` + common.AnnotationKeyIsAllowed + `":""}}}`)
-	_, err := target.MulticlusterV1alpha1().PodChaperons(c.Namespace).Patch(c.Name, types.MergePatchType, patch)
+	patch := []byte(`{"metadata":{"annotations":{"` + common.AnnotationKeyIsAllowed + `":"true"}}}`)
+	_, err := target.MulticlusterV1alpha1().PodChaperons(c.Namespace).Patch(ctx, c.Name, types.MergePatchType, patch, metav1.PatchOptions{})
 	return err
 }
+
+const filterWaitDuration = 30 * time.Second // TODO configure
 
 func (pl *Plugin) Filter(ctx context.Context, state *framework.CycleState, pod *v1.Pod, nodeInfo *nodeinfo.NodeInfo) *framework.Status {
 	if !proxypod.IsProxy(pod) {
@@ -102,13 +103,13 @@ func (pl *Plugin) Filter(ctx context.Context, state *framework.CycleState, pod *
 
 	targetClusterName := virtualNodeNameToClusterName(nodeInfo.Node().Name)
 
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second) // TODO configure
+	ctx, cancel := context.WithTimeout(ctx, filterWaitDuration)
 	defer cancel()
 
 	var isReserved, isUnschedulable bool
 
 	if err := wait.PollImmediateUntil(time.Second, func() (bool, error) {
-		c, err := pl.getCandidate(pod, targetClusterName)
+		c, err := pl.getCandidate(ctx, pod, targetClusterName)
 		if err != nil {
 			// may be forbidden, or namespace doesn't exist, or target cluster is unavailable
 			// handled below as unschedulable
@@ -121,7 +122,7 @@ func (pl *Plugin) Filter(ctx context.Context, state *framework.CycleState, pod *
 				return false, err
 			}
 
-			_, err = pl.targets[targetClusterName].MulticlusterV1alpha1().PodChaperons(c.Namespace).Create(c)
+			_, err = pl.targets[targetClusterName].MulticlusterV1alpha1().PodChaperons(c.Namespace).Create(ctx, c, metav1.CreateOptions{})
 			if err != nil {
 				// may be forbidden, or namespace doesn't exist, or target cluster is unavailable
 				// handled below as unschedulable
@@ -131,7 +132,13 @@ func (pl *Plugin) Filter(ctx context.Context, state *framework.CycleState, pod *
 			return false, nil
 		}
 		_, isReserved = c.Annotations[common.AnnotationKeyIsReserved]
-		_, isUnschedulable = c.Annotations[common.AnnotationKeyIsUnschedulable]
+
+		for _, cond := range c.Status.Conditions {
+			if cond.Type == v1.PodScheduled && cond.Status == v1.ConditionFalse && cond.Reason == v1.PodReasonUnschedulable {
+				isUnschedulable = true
+				break
+			}
+		}
 
 		klog.V(1).Infof("candidate %s is reserved? %v unschedulable? %v", c.Name, isReserved, isUnschedulable)
 
@@ -154,112 +161,66 @@ func (pl *Plugin) Reserve(ctx context.Context, state *framework.CycleState, p *v
 	}
 
 	targetClusterName := virtualNodeNameToClusterName(nodeName)
-	c, err := pl.getCandidate(p, targetClusterName)
+	c, err := pl.getCandidate(ctx, p, targetClusterName)
 	if err != nil {
 		return framework.NewStatus(framework.Error, err.Error())
 	}
 	if c == nil {
 		return framework.NewStatus(framework.Error, "candidate not found")
 	}
-	if err = pl.allowCandidate(c, targetClusterName); err != nil {
+	if err = pl.allowCandidate(ctx, c, targetClusterName); err != nil {
 		return framework.NewStatus(framework.Error, err.Error())
 	}
 
 	return nil
 }
 
-func (pl *Plugin) Permit(ctx context.Context, state *framework.CycleState, p *v1.Pod, nodeName string) (*framework.Status, time.Duration) {
+const preBindWaitDuration = 30 * time.Second
+
+func (pl *Plugin) PreBind(ctx context.Context, state *framework.CycleState, p *v1.Pod, nodeName string) *framework.Status {
 	if !proxypod.IsProxy(p) {
-		return nil, 0
+		return nil
 	}
 
 	// wait for candidate to be bound or not
 	targetClusterName := virtualNodeNameToClusterName(nodeName)
-	c, err := pl.getCandidate(p, targetClusterName)
+
+	ctx, cancel := context.WithTimeout(ctx, preBindWaitDuration)
+	defer cancel()
+
+	// TODO subscribe to a controller instead of polling
+	if err := wait.PollImmediateUntil(time.Second, func() (bool, error) {
+		return pl.candidateIsBound(ctx, p, targetClusterName)
+	}, ctx.Done()); err != nil {
+		// or binding cycle done, candidate was never bound or not
+		return framework.NewStatus(framework.Error, err.Error())
+	}
+
+	return nil
+}
+
+func (pl *Plugin) candidateIsBound(ctx context.Context, p *v1.Pod, targetClusterName string) (bool, error) {
+	c, err := pl.getCandidate(ctx, p, targetClusterName)
 	if err != nil {
-		return framework.NewStatus(framework.Error, err.Error()), 0
+		// TODO handle retriable vs. not retriable (we assume retriable for now)
+		// TODO log
+		return false, nil
 	}
 	if c == nil {
-		return framework.NewStatus(framework.Error, "candidate not found"), 0
+		return false, fmt.Errorf("candidate not found")
 	}
 
-	_, isBound := c.Annotations[common.AnnotationKeyIsBound]
-	if isBound {
-		return nil, 0
-	}
-	_, bindingFailed := c.Annotations[common.AnnotationKeyBindingFailed]
-	if bindingFailed {
-		return framework.NewStatus(framework.Unschedulable, "candidate binding failed"), 0
-	}
-
-	//_, cond := pod.GetPodCondition(&c.Status, v1.PodScheduled)
-	//if cond != nil {
-	//	if cond.Status == v1.ConditionTrue { // bound
-	//		return nil, 0
-	//	} else { // binding failed
-	//		return framework.NewStatus(framework.Unschedulable, "candidate binding failed"), 0
-	//	}
-	//}
-
-	go func() {
-		// wait until the pod is waiting
-		if err := wait.PollUntil(10*time.Millisecond, func() (bool, error) {
-			wp := pl.handle.GetWaitingPod(p.UID)
-			return wp != nil, nil
-		}, ctx.Done()); err != nil {
-			// condition func doesn't throw, i.e., binding cycle done, pod never made it to waiting
-			// TODO log
-			return
-		}
-
-		// the pod is now waiting, wait for its candidate to be bound or not
-		if err := wait.PollUntil(time.Second, func() (bool, error) {
-			c, err := pl.getCandidate(p, targetClusterName)
-			if err != nil {
-				// TODO handle retriable vs. not retriable (we assume retriable for now)
-				return false, nil
-			}
-			if c == nil {
-				return false, fmt.Errorf("candidate not found")
-			}
-
-			_, isBound = c.Annotations[common.AnnotationKeyIsBound]
-			_, bindingFailed = c.Annotations[common.AnnotationKeyBindingFailed]
-			if !isBound && !bindingFailed {
-				return false, nil
-			}
-			wp := pl.handle.GetWaitingPod(p.UID)
-			if wp == nil {
-				// TODO log pod isn't waiting anymore (timed out)
+	for _, cond := range c.Status.Conditions {
+		if cond.Type == v1.PodScheduled {
+			if cond.Status == v1.ConditionTrue { // bound
 				return true, nil
+			} else { // binding failed
+				return false, fmt.Errorf("candidate binding failed")
 			}
-			if isBound {
-				return wp.Allow(Name), nil
-			} else { // bindingFailed
-				return wp.Reject("candidate binding failed"), nil
-			}
-
-			//_, cond := pod.GetPodCondition(&c.Status, v1.PodScheduled)
-			//if cond == nil {
-			//	return false, nil
-			//}
-			//wp := pl.handle.GetWaitingPod(p.UID)
-			//if wp == nil {
-			//	// TODO log pod isn't waiting anymore (timed out)
-			//	return true, nil
-			//}
-			//if cond.Status == v1.ConditionTrue { // bound
-			//	return wp.Allow(Name), nil
-			//} else { // binding failed
-			//	return wp.Reject("candidate binding failed"), nil
-			//}
-		}, ctx.Done()); err != nil {
-			// or binding cycle done, candidate was never bound or not
-			return
+			break
 		}
-	}()
-
-	return framework.NewStatus(framework.Wait, ""), 30 * time.Second
+	}
+	return false, nil
 }
 
 func (pl *Plugin) PostBind(ctx context.Context, state *framework.CycleState, p *v1.Pod, nodeName string) {
@@ -272,20 +233,9 @@ func (pl *Plugin) PostBind(ctx context.Context, state *framework.CycleState, p *
 		if clusterName == targetClusterName {
 			continue
 		}
-		err := target.MulticlusterV1alpha1().PodChaperons(p.Namespace).DeleteCollection(nil, metav1.ListOptions{LabelSelector: common.LabelKeyParentUID + "=" + string(p.UID)})
+		err := target.MulticlusterV1alpha1().PodChaperons(p.Namespace).DeleteCollection(ctx, metav1.DeleteOptions{}, metav1.ListOptions{LabelSelector: common.LabelKeyParentUID + "=" + string(p.UID)})
 		utilruntime.HandleError(err)
 	}
-}
-
-func (pl *Plugin) Unreserve(ctx context.Context, state *framework.CycleState, p *v1.Pod, nodeName string) {
-	if !proxypod.IsProxy(p) {
-		return
-	}
-
-	//for _, target := range pl.targets {
-	//	err := target.MulticlusterV1alpha1().PodChaperons(p.Namespace).DeleteCollection(nil, metav1.ListOptions{LabelSelector: common.LabelKeyParentUID + "=" + string(p.UID)})
-	//	utilruntime.HandleError(err)
-	//}
 }
 
 // New initializes a new plugin and returns it.
