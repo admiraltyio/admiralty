@@ -17,6 +17,7 @@
 package feedback
 
 import (
+	"context"
 	"fmt"
 	"reflect"
 	"time"
@@ -125,6 +126,8 @@ func NewController(
 // converge the two. It then updates the Status block of the proxy pod resource
 // with the current status of the resource.
 func (c *reconciler) Handle(obj interface{}) (requeueAfter *time.Duration, err error) {
+	ctx := context.Background()
+
 	// Convert the namespace/name string into a distinct namespace and name
 	key := obj.(string)
 	namespace, name, err := cache.SplitMetaNamespaceKey(key)
@@ -172,7 +175,7 @@ func (c *reconciler) Handle(obj interface{}) (requeueAfter *time.Duration, err e
 
 	if proxyPodTerminating {
 		for targetName, chap := range candidates {
-			if err := c.customclientsets[targetName].MulticlusterV1alpha1().PodChaperons(namespace).Delete(chap.Name, nil); err != nil && !errors.IsNotFound(err) {
+			if err := c.customclientsets[targetName].MulticlusterV1alpha1().PodChaperons(namespace).Delete(ctx, chap.Name, metav1.DeleteOptions{}); err != nil && !errors.IsNotFound(err) {
 				return nil, err
 			}
 			didSomething = true
@@ -181,7 +184,7 @@ func (c *reconciler) Handle(obj interface{}) (requeueAfter *time.Duration, err e
 			podCopy := proxyPod.DeepCopy()
 			podCopy.Finalizers = append(podCopy.Finalizers[:j], podCopy.Finalizers[j+1:]...)
 			var err error
-			if proxyPod, err = c.kubeclientset.CoreV1().Pods(namespace).Update(podCopy); err != nil {
+			if proxyPod, err = c.kubeclientset.CoreV1().Pods(namespace).Update(ctx, podCopy, metav1.UpdateOptions{}); err != nil {
 				if patterns.IsOptimisticLockError(err) {
 					d := time.Second
 					return &d, nil
@@ -195,7 +198,7 @@ func (c *reconciler) Handle(obj interface{}) (requeueAfter *time.Duration, err e
 		podCopy := proxyPod.DeepCopy()
 		podCopy.Finalizers = append(podCopy.Finalizers, common.CrossClusterGarbageCollectionFinalizer)
 		var err error
-		if proxyPod, err = c.kubeclientset.CoreV1().Pods(namespace).Update(podCopy); err != nil {
+		if proxyPod, err = c.kubeclientset.CoreV1().Pods(namespace).Update(ctx, podCopy, metav1.UpdateOptions{}); err != nil {
 			if patterns.IsOptimisticLockError(err) {
 				d := time.Second
 				return &d, nil
@@ -221,7 +224,7 @@ func (c *reconciler) Handle(obj interface{}) (requeueAfter *time.Duration, err e
 				podCopy.Annotations = mcProxyPodAnnotations
 
 				var err error
-				if proxyPod, err = c.kubeclientset.CoreV1().Pods(namespace).Update(podCopy); err != nil {
+				if proxyPod, err = c.kubeclientset.CoreV1().Pods(namespace).Update(ctx, podCopy, metav1.UpdateOptions{}); err != nil {
 					if patterns.IsOptimisticLockError(err) {
 						d := time.Second
 						return &d, nil
@@ -241,7 +244,7 @@ func (c *reconciler) Handle(obj interface{}) (requeueAfter *time.Duration, err e
 				podCopy.Status = delegate.Status
 
 				var err error
-				if proxyPod, err = c.kubeclientset.CoreV1().Pods(namespace).UpdateStatus(podCopy); err != nil {
+				if proxyPod, err = c.kubeclientset.CoreV1().Pods(namespace).UpdateStatus(ctx, podCopy, metav1.UpdateOptions{}); err != nil {
 					if patterns.IsOptimisticLockError(err) {
 						d := time.Second
 						return &d, nil

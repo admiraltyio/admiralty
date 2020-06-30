@@ -25,18 +25,19 @@ import (
 	"admiralty.io/multicluster-controller/pkg/patterns"
 	"admiralty.io/multicluster-controller/pkg/reconcile"
 	"admiralty.io/multicluster-controller/pkg/reference"
-	"admiralty.io/multicluster-scheduler/pkg/common"
 	"github.com/go-test/deep"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"admiralty.io/multicluster-scheduler/pkg/common"
 )
 
 // TODO use gc pattern
 
-func NewController(sources []*cluster.Cluster, targets []*cluster.Cluster) (*controller.Controller, error) {
+func NewController(ctx context.Context, sources []*cluster.Cluster, targets []*cluster.Cluster) (*controller.Controller, error) {
 	r := &reconciler{}
 
 	co := controller.New(r, controller.Options{})
@@ -61,7 +62,7 @@ func NewController(sources []*cluster.Cluster, targets []*cluster.Cluster) (*con
 			return nil, err
 		}
 		s = s.Add(*req)
-		if err := co.WatchResourceReconcileObject(clu, &corev1.Service{}, controller.WatchOptions{AnnotationSelector: s}); err != nil {
+		if err := co.WatchResourceReconcileObject(ctx, clu, &corev1.Service{}, controller.WatchOptions{AnnotationSelector: s}); err != nil {
 			return nil, fmt.Errorf("setting up proxy service watch: %v", err)
 		}
 	}
@@ -86,7 +87,7 @@ func NewController(sources []*cluster.Cluster, targets []*cluster.Cluster) (*con
 			return nil, err
 		}
 		s = s.Add(*req)
-		if err := co.WatchResourceReconcileController(clu, &corev1.Service{}, controller.WatchOptions{AnnotationSelector: s}); err != nil {
+		if err := co.WatchResourceReconcileController(ctx, clu, &corev1.Service{}, controller.WatchOptions{AnnotationSelector: s}); err != nil {
 			return nil, fmt.Errorf("setting up delegate service watch: %v", err)
 		}
 	}

@@ -25,15 +25,16 @@ import (
 	"admiralty.io/multicluster-controller/pkg/controller"
 	"admiralty.io/multicluster-controller/pkg/patterns"
 	"admiralty.io/multicluster-controller/pkg/reconcile"
-	"admiralty.io/multicluster-scheduler/pkg/common"
-	"admiralty.io/multicluster-scheduler/pkg/model/proxypod"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"admiralty.io/multicluster-scheduler/pkg/common"
+	"admiralty.io/multicluster-scheduler/pkg/model/proxypod"
 )
 
-func NewController(agent *cluster.Cluster) (*controller.Controller, error) {
+func NewController(ctx context.Context, agent *cluster.Cluster) (*controller.Controller, error) {
 	client, err := agent.GetDelegatingClient()
 	if err != nil {
 		return nil, fmt.Errorf("getting delegating client for agent cluster: %v", err)
@@ -44,13 +45,13 @@ func NewController(agent *cluster.Cluster) (*controller.Controller, error) {
 	}, controller.Options{})
 
 	// we watch endpoints to see if their listed pods are proxy pods
-	if err := co.WatchResourceReconcileObject(agent, &corev1.Endpoints{}, controller.WatchOptions{}); err != nil {
+	if err := co.WatchResourceReconcileObject(ctx, agent, &corev1.Endpoints{}, controller.WatchOptions{}); err != nil {
 		return nil, fmt.Errorf("setting up endpoints watch: %v", err)
 	}
 	// we watch services because they are updated in the loop,
 	// and if those updates fail with an optimistic lock error
 	// we must requeue when we receive the cache is updated
-	if err := co.WatchResourceReconcileObject(agent, &corev1.Service{}, controller.WatchOptions{}); err != nil {
+	if err := co.WatchResourceReconcileObject(ctx, agent, &corev1.Service{}, controller.WatchOptions{}); err != nil {
 		return nil, fmt.Errorf("setting up service watch: %v", err)
 	}
 	// a service and its endpoints object have the same name/namespace, i.e., the same reconcile key

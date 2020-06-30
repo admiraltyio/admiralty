@@ -60,6 +60,11 @@ import (
 
 func main() {
 	stopCh := signals.SetupSignalHandler()
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		<-stopCh
+		cancel()
+	}()
 
 	agentCfg := agentconfig.New()
 
@@ -73,8 +78,8 @@ func main() {
 	startWebhook(stopCh, agentCfg, cfg)
 
 	if len(agentCfg.Targets) > 0 || agentCfg.Raw.TargetSelf {
-		startControllers(stopCh, agentCfg, cfg)
-		startVirtualKubelet(stopCh, agentCfg, k)
+		startControllers(ctx, stopCh, agentCfg, cfg)
+		startVirtualKubelet(ctx, agentCfg, k)
 	}
 
 	<-stopCh
@@ -176,7 +181,7 @@ func startOldStyleControllers(stopCh <-chan struct{}, agentCfg agentconfig.Confi
 	}
 }
 
-func startControllers(stopCh <-chan struct{}, agentCfg agentconfig.Config, cfg *rest.Config) {
+func startControllers(ctx context.Context, stopCh <-chan struct{}, agentCfg agentconfig.Config, cfg *rest.Config) {
 	m := mcmgr.New()
 
 	o := cluster.Options{}
@@ -207,13 +212,13 @@ func startControllers(stopCh <-chan struct{}, agentCfg agentconfig.Config, cfg *
 		targetClusters[n-1] = src
 	}
 
-	co, err := svcreroute.NewController(src)
+	co, err := svcreroute.NewController(ctx, src)
 	if err != nil {
 		log.Fatalf("cannot create svcreroute controller: %v", err)
 	}
 	m.AddController(co)
 
-	co, err = globalsvc.NewController(sourceClusters, targetClusters)
+	co, err = globalsvc.NewController(ctx, sourceClusters, targetClusters)
 	if err != nil {
 		log.Fatalf("cannot create feedback controller: %v", err)
 	}
@@ -238,13 +243,7 @@ func startWebhook(stopCh <-chan struct{}, agentCfg agentconfig.Config, cfg *rest
 	}()
 }
 
-func startVirtualKubelet(stopCh <-chan struct{}, agentCfg agentconfig.Config, k kubernetes.Interface) {
-	ctx, cancel := context.WithCancel(context.Background())
-	go func() {
-		<-stopCh
-		cancel()
-	}()
-
+func startVirtualKubelet(ctx context.Context, agentCfg agentconfig.Config, k kubernetes.Interface) {
 	var logLevel string
 	flag.StringVar(&logLevel, "log-level", "info", `set the log level, e.g. "debug", "info", "warn", "error"`)
 	klog.InitFlags(nil)

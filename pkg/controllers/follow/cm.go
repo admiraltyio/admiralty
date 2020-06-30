@@ -17,6 +17,7 @@
 package follow
 
 import (
+	"context"
 	"fmt"
 	"reflect"
 	"time"
@@ -160,6 +161,8 @@ func indexContainerByConfigMap(c corev1.Container, keys []string, pod *corev1.Po
 }
 
 func (r configMapReconciler) Handle(obj interface{}) (requeueAfter *time.Duration, err error) {
+	ctx := context.Background()
+
 	key := obj.(string)
 	namespace, name, err := cache.SplitMetaNamespaceKey(key)
 	utilruntime.Must(err)
@@ -217,12 +220,12 @@ func (r configMapReconciler) Handle(obj interface{}) (requeueAfter *time.Duratio
 
 	if terminating {
 		for targetName := range remoteConfigMaps {
-			if err := r.remoteClients[targetName].CoreV1().ConfigMaps(namespace).Delete(name, nil); err != nil && !errors.IsNotFound(err) {
+			if err := r.remoteClients[targetName].CoreV1().ConfigMaps(namespace).Delete(ctx, name, metav1.DeleteOptions{}); err != nil && !errors.IsNotFound(err) {
 				return nil, err
 			}
 		}
 		if hasFinalizer && len(remoteConfigMaps) == 0 {
-			requeueAfter, err = r.removeFinalizer(configMap, j)
+			requeueAfter, err = r.removeFinalizer(ctx, configMap, j)
 			if requeueAfter != nil || err != nil {
 				return requeueAfter, err
 			}
@@ -230,14 +233,14 @@ func (r configMapReconciler) Handle(obj interface{}) (requeueAfter *time.Duratio
 	} else if len(targetNames) == 0 {
 		// remove extraneous finalizers added pre-0.9.3 (to all config maps and secrets)
 		if hasFinalizer && len(remoteConfigMaps) == 0 {
-			requeueAfter, err = r.removeFinalizer(configMap, j)
+			requeueAfter, err = r.removeFinalizer(ctx, configMap, j)
 			if requeueAfter != nil || err != nil {
 				return requeueAfter, err
 			}
 		}
 	} else {
 		if !hasFinalizer {
-			requeueAfter, err = r.addFinalizer(configMap)
+			requeueAfter, err = r.addFinalizer(ctx, configMap)
 			if requeueAfter != nil || err != nil {
 				return requeueAfter, err
 			}
@@ -247,7 +250,7 @@ func (r configMapReconciler) Handle(obj interface{}) (requeueAfter *time.Duratio
 			remoteConfigMap := remoteConfigMaps[targetName]
 			if remoteConfigMap == nil {
 				gold := makeRemoteConfigMap(configMap)
-				_, err := r.remoteClients[targetName].CoreV1().ConfigMaps(namespace).Create(gold)
+				_, err := r.remoteClients[targetName].CoreV1().ConfigMaps(namespace).Create(ctx, gold, metav1.CreateOptions{})
 				if err != nil && !errors.IsAlreadyExists(err) {
 					// error with a target shouldn't block reconciliation with other targets
 					d := time.Second
@@ -265,7 +268,7 @@ func (r configMapReconciler) Handle(obj interface{}) (requeueAfter *time.Duratio
 					remoteConfigMapCopy.BinaryData[k] = make([]byte, len(v))
 					copy(remoteConfigMapCopy.BinaryData[k], v)
 				}
-				_, err := r.remoteClients[targetName].CoreV1().ConfigMaps(namespace).Update(remoteConfigMapCopy)
+				_, err := r.remoteClients[targetName].CoreV1().ConfigMaps(namespace).Update(ctx, remoteConfigMapCopy, metav1.UpdateOptions{})
 				if err != nil {
 					// error with a target shouldn't block reconciliation with other targets
 					d := time.Second
@@ -281,7 +284,7 @@ func (r configMapReconciler) Handle(obj interface{}) (requeueAfter *time.Duratio
 	return requeueAfter, nil
 }
 
-func (r configMapReconciler) addFinalizer(configMap *corev1.ConfigMap) (*time.Duration, error) {
+func (r configMapReconciler) addFinalizer(ctx context.Context, configMap *corev1.ConfigMap) (*time.Duration, error) {
 	configMapCopy := configMap.DeepCopy()
 	configMapCopy.Finalizers = append(configMapCopy.Finalizers, common.CrossClusterGarbageCollectionFinalizer)
 	if configMapCopy.Labels == nil {
@@ -289,7 +292,7 @@ func (r configMapReconciler) addFinalizer(configMap *corev1.ConfigMap) (*time.Du
 	}
 	configMapCopy.Labels[common.LabelKeyHasFinalizer] = "true"
 	var err error
-	if _, err = r.kubeclientset.CoreV1().ConfigMaps(configMap.Namespace).Update(configMapCopy); err != nil {
+	if _, err = r.kubeclientset.CoreV1().ConfigMaps(configMap.Namespace).Update(ctx, configMapCopy, metav1.UpdateOptions{}); err != nil {
 		if patterns.IsOptimisticLockError(err) {
 			d := time.Second
 			return &d, nil
@@ -300,12 +303,12 @@ func (r configMapReconciler) addFinalizer(configMap *corev1.ConfigMap) (*time.Du
 	return nil, nil
 }
 
-func (r configMapReconciler) removeFinalizer(configMap *corev1.ConfigMap, j int) (*time.Duration, error) {
+func (r configMapReconciler) removeFinalizer(ctx context.Context, configMap *corev1.ConfigMap, j int) (*time.Duration, error) {
 	configMapCopy := configMap.DeepCopy()
 	configMapCopy.Finalizers = append(configMapCopy.Finalizers[:j], configMapCopy.Finalizers[j+1:]...)
 	delete(configMapCopy.Labels, common.LabelKeyHasFinalizer)
 	var err error
-	if _, err = r.kubeclientset.CoreV1().ConfigMaps(configMap.Namespace).Update(configMapCopy); err != nil {
+	if _, err = r.kubeclientset.CoreV1().ConfigMaps(configMap.Namespace).Update(ctx, configMapCopy, metav1.UpdateOptions{}); err != nil {
 		if patterns.IsOptimisticLockError(err) {
 			d := time.Second
 			return &d, nil
