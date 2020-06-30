@@ -217,7 +217,6 @@ func (pl *Plugin) candidateIsBound(ctx context.Context, p *v1.Pod, targetCluster
 			} else { // binding failed
 				return false, fmt.Errorf("candidate binding failed")
 			}
-			break
 		}
 	}
 	return false, nil
