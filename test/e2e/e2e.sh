@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -Eeuo pipefail
+set -euo pipefail
 
 VERSION="$1"
 
@@ -33,10 +33,12 @@ argo_setup_target 2
 webhook_ready 1 admiralty multicluster-scheduler-controller-manager multicluster-scheduler multicluster-scheduler-cert
 
 cluster_dump() {
-  k 1 cluster-info dump -A --output-directory cluster-dump/1
-  k 2 cluster-info dump -A --output-directory cluster-dump/2
+  if [ $? -ne 0 ]; then
+    k 1 cluster-info dump -A --output-directory cluster-dump/1
+    k 2 cluster-info dump -A --output-directory cluster-dump/2
+  fi
 }
-trap cluster_dump ERR
+trap cluster_dump EXIT
 
 argo_test 1 2
 follow_test 1 2
@@ -44,7 +46,7 @@ follow_test 1 2
 # check that we didn't add finalizers to uncontrolled resources
 finalizer="multicluster.admiralty.io/multiclusterForegroundDeletion"
 for resource in pods configmaps secrets services; do
-  [[ $(k 1 get $resource -A -o custom-columns=FINALIZERS:.metadata.finalizers | grep -c $finalizer) -eq 0 ]]
+  [ $(k 1 get $resource -A -o custom-columns=FINALIZERS:.metadata.finalizers | grep -c $finalizer) -eq 0 ]
 done
 
 echo "ALL SUCCEEDED"
