@@ -17,6 +17,7 @@
 package chaperon
 
 import (
+	"context"
 	"fmt"
 	"reflect"
 	"time"
@@ -112,6 +113,8 @@ func NewController(
 // converge the two. It then updates the Status block of the PodChaperon resource
 // with the current status of the resource.
 func (c *reconciler) Handle(obj interface{}) (requeueAfter *time.Duration, err error) {
+	ctx := context.Background()
+
 	// Convert the namespace/name string into a distinct namespace and name
 	key := obj.(string)
 	namespace, name, err := cache.SplitMetaNamespaceKey(key)
@@ -136,7 +139,7 @@ func (c *reconciler) Handle(obj interface{}) (requeueAfter *time.Duration, err e
 	pod, err := c.podsLister.Pods(podChaperon.Namespace).Get(podChaperon.Name)
 	// If the resource doesn't exist, we'll create it
 	if errors.IsNotFound(err) {
-		pod, err = c.kubeclientset.CoreV1().Pods(podChaperon.Namespace).Create(newPod(podChaperon))
+		pod, err = c.kubeclientset.CoreV1().Pods(podChaperon.Namespace).Create(ctx, newPod(podChaperon), metav1.CreateOptions{})
 		didSomething = true
 	}
 
@@ -175,7 +178,7 @@ func (c *reconciler) Handle(obj interface{}) (requeueAfter *time.Duration, err e
 		pod.Status.DeepCopyInto(&podChaperonCopy.Status)
 
 		var err error
-		podChaperon, err = c.customclientset.MulticlusterV1alpha1().PodChaperons(podChaperon.Namespace).UpdateStatus(podChaperonCopy)
+		podChaperon, err = c.customclientset.MulticlusterV1alpha1().PodChaperons(podChaperon.Namespace).UpdateStatus(ctx, podChaperonCopy, metav1.UpdateOptions{})
 		if err != nil {
 			if patterns.IsOptimisticLockError(err) {
 				requeueAfter := time.Second
@@ -194,7 +197,7 @@ func (c *reconciler) Handle(obj interface{}) (requeueAfter *time.Duration, err e
 		podChaperonCopy.Annotations = mcPodChaperonAnnotations
 
 		var err error
-		podChaperon, err = c.customclientset.MulticlusterV1alpha1().PodChaperons(podChaperon.Namespace).Update(podChaperonCopy)
+		podChaperon, err = c.customclientset.MulticlusterV1alpha1().PodChaperons(podChaperon.Namespace).Update(ctx, podChaperonCopy, metav1.UpdateOptions{})
 		if err != nil {
 			if patterns.IsOptimisticLockError(err) {
 				requeueAfter := time.Second

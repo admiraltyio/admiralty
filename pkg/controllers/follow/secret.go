@@ -17,6 +17,7 @@
 package follow
 
 import (
+	"context"
 	"fmt"
 	"reflect"
 	"time"
@@ -165,6 +166,8 @@ func indexContainerBySecret(c corev1.Container, keys []string, pod *corev1.Pod) 
 }
 
 func (r secretReconciler) Handle(obj interface{}) (requeueAfter *time.Duration, err error) {
+	ctx := context.Background()
+
 	key := obj.(string)
 	namespace, name, err := cache.SplitMetaNamespaceKey(key)
 	utilruntime.Must(err)
@@ -222,12 +225,12 @@ func (r secretReconciler) Handle(obj interface{}) (requeueAfter *time.Duration, 
 
 	if terminating {
 		for targetName := range remoteSecrets {
-			if err := r.remoteClients[targetName].CoreV1().Secrets(namespace).Delete(name, nil); err != nil && !errors.IsNotFound(err) {
+			if err := r.remoteClients[targetName].CoreV1().Secrets(namespace).Delete(ctx, name, metav1.DeleteOptions{}); err != nil && !errors.IsNotFound(err) {
 				return nil, err
 			}
 		}
 		if hasFinalizer && len(remoteSecrets) == 0 {
-			requeueAfter, err = r.removeFinalizer(secret, j)
+			requeueAfter, err = r.removeFinalizer(ctx, secret, j)
 			if requeueAfter != nil || err != nil {
 				return requeueAfter, err
 			}
@@ -235,14 +238,14 @@ func (r secretReconciler) Handle(obj interface{}) (requeueAfter *time.Duration, 
 	} else if len(targetNames) == 0 {
 		// remove extraneous finalizers added pre-0.9.3 (to all config maps and secrets)
 		if hasFinalizer && len(remoteSecrets) == 0 {
-			requeueAfter, err = r.removeFinalizer(secret, j)
+			requeueAfter, err = r.removeFinalizer(ctx, secret, j)
 			if requeueAfter != nil || err != nil {
 				return requeueAfter, err
 			}
 		}
 	} else {
 		if !hasFinalizer {
-			requeueAfter, err = r.addFinalizer(secret)
+			requeueAfter, err = r.addFinalizer(ctx, secret)
 			if requeueAfter != nil || err != nil {
 				return requeueAfter, err
 			}
@@ -252,7 +255,7 @@ func (r secretReconciler) Handle(obj interface{}) (requeueAfter *time.Duration, 
 			remoteSecret := remoteSecrets[targetName]
 			if remoteSecret == nil {
 				gold := makeRemoteSecret(secret)
-				_, err := r.remoteClients[targetName].CoreV1().Secrets(namespace).Create(gold)
+				_, err := r.remoteClients[targetName].CoreV1().Secrets(namespace).Create(ctx, gold, metav1.CreateOptions{})
 				if err != nil && !errors.IsAlreadyExists(err) {
 					// error with a target shouldn't block reconciliation with other targets
 					d := time.Second
@@ -266,7 +269,7 @@ func (r secretReconciler) Handle(obj interface{}) (requeueAfter *time.Duration, 
 					remoteSecretCopy.Data[k] = make([]byte, len(v))
 					copy(remoteSecretCopy.Data[k], v)
 				}
-				_, err := r.remoteClients[targetName].CoreV1().Secrets(namespace).Update(remoteSecretCopy)
+				_, err := r.remoteClients[targetName].CoreV1().Secrets(namespace).Update(ctx, remoteSecretCopy, metav1.UpdateOptions{})
 				if err != nil {
 					// error with a target shouldn't block reconciliation with other targets
 					d := time.Second
@@ -282,7 +285,7 @@ func (r secretReconciler) Handle(obj interface{}) (requeueAfter *time.Duration, 
 	return requeueAfter, nil
 }
 
-func (r secretReconciler) addFinalizer(secret *corev1.Secret) (*time.Duration, error) {
+func (r secretReconciler) addFinalizer(ctx context.Context, secret *corev1.Secret) (*time.Duration, error) {
 	secretCopy := secret.DeepCopy()
 	secretCopy.Finalizers = append(secretCopy.Finalizers, common.CrossClusterGarbageCollectionFinalizer)
 	if secretCopy.Labels == nil {
@@ -290,7 +293,7 @@ func (r secretReconciler) addFinalizer(secret *corev1.Secret) (*time.Duration, e
 	}
 	secretCopy.Labels[common.LabelKeyHasFinalizer] = "true"
 	var err error
-	if _, err = r.kubeclientset.CoreV1().Secrets(secret.Namespace).Update(secretCopy); err != nil {
+	if _, err = r.kubeclientset.CoreV1().Secrets(secret.Namespace).Update(ctx, secretCopy, metav1.UpdateOptions{}); err != nil {
 		if patterns.IsOptimisticLockError(err) {
 			d := time.Second
 			return &d, nil
@@ -301,12 +304,12 @@ func (r secretReconciler) addFinalizer(secret *corev1.Secret) (*time.Duration, e
 	return nil, nil
 }
 
-func (r secretReconciler) removeFinalizer(secret *corev1.Secret, j int) (*time.Duration, error) {
+func (r secretReconciler) removeFinalizer(ctx context.Context, secret *corev1.Secret, j int) (*time.Duration, error) {
 	secretCopy := secret.DeepCopy()
 	secretCopy.Finalizers = append(secretCopy.Finalizers[:j], secretCopy.Finalizers[j+1:]...)
 	delete(secretCopy.Labels, common.LabelKeyHasFinalizer)
 	var err error
-	if _, err = r.kubeclientset.CoreV1().Secrets(secret.Namespace).Update(secretCopy); err != nil {
+	if _, err = r.kubeclientset.CoreV1().Secrets(secret.Namespace).Update(ctx, secretCopy, metav1.UpdateOptions{}); err != nil {
 		if patterns.IsOptimisticLockError(err) {
 			d := time.Second
 			return &d, nil

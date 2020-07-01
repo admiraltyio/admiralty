@@ -19,6 +19,7 @@
 package v1alpha1
 
 import (
+	"context"
 	time "time"
 
 	multiclusterv1alpha1 "admiralty.io/multicluster-scheduler/pkg/apis/multicluster/v1alpha1"
@@ -61,13 +62,13 @@ func NewFilteredPodChaperonInformer(client versioned.Interface, namespace string
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.MulticlusterV1alpha1().PodChaperons(namespace).List(options)
+				return client.MulticlusterV1alpha1().PodChaperons(namespace).List(context.TODO(), options)
 			},
 			WatchFunc: func(options v1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.MulticlusterV1alpha1().PodChaperons(namespace).Watch(options)
+				return client.MulticlusterV1alpha1().PodChaperons(namespace).Watch(context.TODO(), options)
 			},
 		},
 		&multiclusterv1alpha1.PodChaperon{},

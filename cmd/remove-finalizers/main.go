@@ -17,6 +17,8 @@
 package main
 
 import (
+	"context"
+
 	"admiralty.io/multicluster-service-account/pkg/config"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -27,6 +29,8 @@ import (
 )
 
 func main() {
+	ctx := context.Background()
+
 	patch := `{"metadata":{"$deleteFromPrimitiveList/finalizers":[` + common.CrossClusterGarbageCollectionFinalizer + `]}}`
 
 	cfg, _, err := config.ConfigAndNamespace()
@@ -37,10 +41,10 @@ func main() {
 
 	p := patchAll{k, patch}
 
-	p.patchPods()
-	p.patchServices()
-	p.patchConfigMaps()
-	p.patchSecrets()
+	p.patchPods(ctx)
+	p.patchServices(ctx)
+	p.patchConfigMaps(ctx)
+	p.patchSecrets(ctx)
 }
 
 type patchAll struct {
@@ -48,13 +52,13 @@ type patchAll struct {
 	patch string
 }
 
-func (p patchAll) patchPods() {
-	l, err := p.k.CoreV1().Pods("").List(metav1.ListOptions{LabelSelector: common.LabelKeyHasFinalizer})
+func (p patchAll) patchPods(ctx context.Context) {
+	l, err := p.k.CoreV1().Pods("").List(ctx, metav1.ListOptions{LabelSelector: common.LabelKeyHasFinalizer})
 	utilruntime.Must(err)
 	for _, o := range l.Items {
 		for _, f := range o.Finalizers {
 			if f == common.CrossClusterGarbageCollectionFinalizer {
-				_, err := p.k.CoreV1().Pods(o.Namespace).Patch(o.Name, types.StrategicMergePatchType, []byte(p.patch))
+				_, err := p.k.CoreV1().Pods(o.Namespace).Patch(ctx, o.Name, types.StrategicMergePatchType, []byte(p.patch), metav1.PatchOptions{})
 				utilruntime.Must(err)
 				break
 			}
@@ -62,13 +66,13 @@ func (p patchAll) patchPods() {
 	}
 }
 
-func (p patchAll) patchServices() {
-	l, err := p.k.CoreV1().Services("").List(metav1.ListOptions{LabelSelector: common.LabelKeyHasFinalizer})
+func (p patchAll) patchServices(ctx context.Context) {
+	l, err := p.k.CoreV1().Services("").List(ctx, metav1.ListOptions{LabelSelector: common.LabelKeyHasFinalizer})
 	utilruntime.Must(err)
 	for _, o := range l.Items {
 		for _, f := range o.Finalizers {
 			if f == common.CrossClusterGarbageCollectionFinalizer {
-				_, err := p.k.CoreV1().Services(o.Namespace).Patch(o.Name, types.StrategicMergePatchType, []byte(p.patch))
+				_, err := p.k.CoreV1().Services(o.Namespace).Patch(ctx, o.Name, types.StrategicMergePatchType, []byte(p.patch), metav1.PatchOptions{})
 				utilruntime.Must(err)
 				break
 			}
@@ -76,13 +80,13 @@ func (p patchAll) patchServices() {
 	}
 }
 
-func (p patchAll) patchConfigMaps() {
-	l, err := p.k.CoreV1().ConfigMaps("").List(metav1.ListOptions{LabelSelector: common.LabelKeyHasFinalizer})
+func (p patchAll) patchConfigMaps(ctx context.Context) {
+	l, err := p.k.CoreV1().ConfigMaps("").List(ctx, metav1.ListOptions{LabelSelector: common.LabelKeyHasFinalizer})
 	utilruntime.Must(err)
 	for _, o := range l.Items {
 		for _, f := range o.Finalizers {
 			if f == common.CrossClusterGarbageCollectionFinalizer {
-				_, err := p.k.CoreV1().ConfigMaps(o.Namespace).Patch(o.Name, types.StrategicMergePatchType, []byte(p.patch))
+				_, err := p.k.CoreV1().ConfigMaps(o.Namespace).Patch(ctx, o.Name, types.StrategicMergePatchType, []byte(p.patch), metav1.PatchOptions{})
 				utilruntime.Must(err)
 				break
 			}
@@ -90,13 +94,13 @@ func (p patchAll) patchConfigMaps() {
 	}
 }
 
-func (p patchAll) patchSecrets() {
-	l, err := p.k.CoreV1().Secrets("").List(metav1.ListOptions{LabelSelector: common.LabelKeyHasFinalizer})
+func (p patchAll) patchSecrets(ctx context.Context) {
+	l, err := p.k.CoreV1().Secrets("").List(ctx, metav1.ListOptions{LabelSelector: common.LabelKeyHasFinalizer})
 	utilruntime.Must(err)
 	for _, o := range l.Items {
 		for _, f := range o.Finalizers {
 			if f == common.CrossClusterGarbageCollectionFinalizer {
-				_, err := p.k.CoreV1().Secrets(o.Namespace).Patch(o.Name, types.StrategicMergePatchType, []byte(p.patch))
+				_, err := p.k.CoreV1().Secrets(o.Namespace).Patch(ctx, o.Name, types.StrategicMergePatchType, []byte(p.patch), metav1.PatchOptions{})
 				utilruntime.Must(err)
 				break
 			}

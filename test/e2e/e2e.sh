@@ -11,6 +11,7 @@ source test/e2e/kind.sh
 source test/e2e/klum.sh
 source test/e2e/mcsa.sh
 source test/e2e/follow/test.sh
+source test/e2e/webhook_ready.sh
 
 argo_setup_once
 cert_manager_setup_once
@@ -29,13 +30,15 @@ while ! k 2 get sa cluster1 -n klum; do sleep 1; done
 
 argo_setup_source 1
 argo_setup_target 2
-#webhook_ready 1 admiralty multicluster-scheduler-controller-manager multicluster-scheduler multicluster-scheduler-cert
+webhook_ready 1 admiralty multicluster-scheduler-controller-manager multicluster-scheduler multicluster-scheduler-cert
 
 cluster_dump() {
-  k 1 cluster-info dump -A --output-directory cluster-dump/1
-  k 2 cluster-info dump -A --output-directory cluster-dump/2
+  if [ $? -ne 0 ]; then
+    k 1 cluster-info dump -A --output-directory cluster-dump/1
+    k 2 cluster-info dump -A --output-directory cluster-dump/2
+  fi
 }
-trap cluster_dump ERR
+trap cluster_dump EXIT
 
 argo_test 1 2
 follow_test 1 2
@@ -43,7 +46,7 @@ follow_test 1 2
 # check that we didn't add finalizers to uncontrolled resources
 finalizer="multicluster.admiralty.io/multiclusterForegroundDeletion"
 for resource in pods configmaps secrets services; do
-  [ "$(k 1 get $resource -A -o custom-columns=FINALIZERS:.metadata.finalizers | grep -c "$finalizer")" -eq 0 ]
+  [ $(k 1 get $resource -A -o custom-columns=FINALIZERS:.metadata.finalizers | grep -c $finalizer) -eq 0 ]
 done
 
 echo "ALL SUCCEEDED"
