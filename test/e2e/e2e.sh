@@ -44,7 +44,7 @@ follow_test 1 2
 # check that we didn't add finalizers to uncontrolled resources
 finalizer="multicluster.admiralty.io/multiclusterForegroundDeletion"
 for resource in pods configmaps secrets services; do
-  [ "$(k 1 get $resource -A -o custom-columns=FINALIZERS:.metadata.finalizers | grep -c "$finalizer")" -eq 0 ]
+  [[ $(k 1 get $resource -A -o custom-columns=FINALIZERS:.metadata.finalizers | grep -c $finalizer) -eq 0 ]]
 done
 
 echo "ALL SUCCEEDED"
