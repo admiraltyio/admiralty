@@ -64,6 +64,9 @@ var testCases = map[string]struct {
 				Tolerations: []corev1.Toleration{{
 					Key:   common.LabelAndTaintKeyVirtualKubeletProvider,
 					Value: common.VirtualKubeletProviderName,
+				}, {
+					Key:      corev1.TaintNodeNetworkUnavailable,
+					Operator: corev1.TolerationOpExists,
 				}},
 				SchedulerName:                 common.ProxySchedulerName,
 				TerminationGracePeriodSeconds: &zero,
@@ -119,6 +122,9 @@ var testCases = map[string]struct {
 				Tolerations: []corev1.Toleration{{
 					Key:   common.LabelAndTaintKeyVirtualKubeletProvider,
 					Value: common.VirtualKubeletProviderName,
+				}, {
+					Key:      corev1.TaintNodeNetworkUnavailable,
+					Operator: corev1.TolerationOpExists,
 				}},
 				SchedulerName:                 common.ProxySchedulerName,
 				TerminationGracePeriodSeconds: &zero,
