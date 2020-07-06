@@ -20,13 +20,14 @@ import (
 	"context"
 	"net/http"
 
-	"admiralty.io/multicluster-scheduler/pkg/common"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/json"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 	"sigs.k8s.io/yaml"
+
+	"admiralty.io/multicluster-scheduler/pkg/common"
 )
 
 type Handler struct {
@@ -83,12 +84,16 @@ func (m mutator) mutate(pod *corev1.Pod) error {
 
 	pod.Spec.NodeSelector = map[string]string{common.LabelAndTaintKeyVirtualKubeletProvider: common.VirtualKubeletProviderName}
 
-	// Even though we don't rely on taints and tolerations to schedule PROXY pods,
-	// we don't want our pod to be evicted by the taint eviction manager later on.
 	pod.Spec.Tolerations = []corev1.Toleration{{
 		Key:   common.LabelAndTaintKeyVirtualKubeletProvider,
 		Value: common.VirtualKubeletProviderName,
+	}, {
+		Key:      corev1.TaintNodeNetworkUnavailable,
+		Operator: corev1.TolerationOpExists,
 	}}
+	// In some distributions, route controller adds "network unavailable" condition to our virtual nodes,
+	// transformed into a taint by the TaintNodeByCondition feature. We need to tolerate that,
+	// because we have no control over it.
 
 	// remove other scheduling constraints (will be respected in target cluster, from source pod manifest)
 	pod.Spec.SchedulerName = common.ProxySchedulerName
