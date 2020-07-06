@@ -17,10 +17,11 @@
 package node
 
 import (
-	"admiralty.io/multicluster-scheduler/pkg/common"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"admiralty.io/multicluster-scheduler/pkg/common"
 )
 
 func NodeFromOpts(c Opts) *v1.Node {
@@ -30,7 +31,7 @@ func NodeFromOpts(c Opts) *v1.Node {
 			Labels: map[string]string{
 				"type": "virtual-kubelet",
 				common.LabelAndTaintKeyVirtualKubeletProvider: common.VirtualKubeletProviderName,
-				"kubernetes.io/role":                          "agent",
+				"kubernetes.io/role":                          "cluster",
 				//"kubernetes.io/hostname": c.NodeName,
 				"alpha.service-controller.kubernetes.io/exclude-balancer": "true",
 			},
@@ -41,11 +42,6 @@ func NodeFromOpts(c Opts) *v1.Node {
 					Key:    common.LabelAndTaintKeyVirtualKubeletProvider,
 					Value:  common.VirtualKubeletProviderName,
 					Effect: v1.TaintEffectNoSchedule,
-				},
-				{
-					Key:    common.LabelAndTaintKeyVirtualKubeletProvider,
-					Value:  common.VirtualKubeletProviderName,
-					Effect: v1.TaintEffectNoExecute,
 				},
 			},
 		},
