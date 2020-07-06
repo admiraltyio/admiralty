@@ -43,11 +43,6 @@ func NodeFromOpts(c Opts) *v1.Node {
 					Value:  common.VirtualKubeletProviderName,
 					Effect: v1.TaintEffectNoSchedule,
 				},
-				{
-					Key:    common.LabelAndTaintKeyVirtualKubeletProvider,
-					Value:  common.VirtualKubeletProviderName,
-					Effect: v1.TaintEffectNoExecute,
-				},
 			},
 		},
 		Status: v1.NodeStatus{
