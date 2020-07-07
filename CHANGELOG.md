@@ -20,6 +20,10 @@
 
 -->
 
+## v0.10.0-rc.1
+
+This release fixes cluster summary RBAC for namespaced targets. (ClusterSummary is a new CRD introduced in v0.10.0-rc.0.)
+
 ## v0.10.0-rc.0
 
 This release fixes a couple of bugs, one [with GKE route-based clusters](https://github.com/admiraltyio/multicluster-scheduler/issues/44) (vs.VPC-native), the other [with DNS horizontal autoscaling](https://github.com/admiraltyio/multicluster-scheduler/issues/43). As a side benefit, virtual nodes capacities and allocatable resources aren't dummy high values anymore, but the sum of the corresponding values over the nodes of the target clusters that they represent. We slipped in a small UX change: when you run `kubectl get nodes`, the role column will now say "cluster" for virtual nodes, rather than "agent", to help understand concepts. Last but not least, we're upgrading internally from Kubernetes 1.17 to 1.18.

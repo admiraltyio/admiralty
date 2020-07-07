@@ -46,7 +46,7 @@ Create a namespace for multicluster-scheduler and install the chart in it, using
 ```sh
 kubectl create namespace admiralty
 helm install multicluster-scheduler admiralty/multicluster-scheduler \
-  --version 0.10.0-rc.0 \
+  --version 0.10.0-rc.1 \
   -n admiralty \
   -f values.yaml
 ```
@@ -109,7 +109,7 @@ Don't forget to label multicluster-scheduler's namespace (e.g., "admiralty") wit
 | targets[].context | string | `""` | if using a custom kubeconfig secret, with multiple contexts, override the kubeconfig's current context |
 | imagePullSecretName | string | `""` |  |
 | controllerManager.image.repository | string | `"quay.io/admiralty/multicluster-scheduler-agent"` |  |
-| controllerManager.image.tag | string | `"0.10.0-rc.0"` |  |
+| controllerManager.image.tag | string | `"0.10.0-rc.1"` |  |
 | controllerManager.image.pullPolicy | string | `"IfNotPresent"` |  |
 | controllerManager.resources | object | `{}` |  |
 | controllerManager.nodeSelector | object | `{}` |  |
@@ -117,7 +117,7 @@ Don't forget to label multicluster-scheduler's namespace (e.g., "admiralty") wit
 | controllerManager.affinity | object | `{}` |  |
 | controllerManager.tolerations | array | `[]` |  |
 | scheduler.image.repository | string | `"quay.io/admiralty/multicluster-scheduler-scheduler"` |  |
-| scheduler.image.tag | string | `"0.10.0-rc.0"` |  |
+| scheduler.image.tag | string | `"0.10.0-rc.1"` |  |
 | scheduler.image.pullPolicy | string | `"IfNotPresent"` |  |
 | scheduler.resources | object | `{}` |  |
 | scheduler.nodeSelector | object | `{}` |  |
@@ -125,7 +125,7 @@ Don't forget to label multicluster-scheduler's namespace (e.g., "admiralty") wit
 | scheduler.affinity | object | `{}` |  |
 | scheduler.tolerations | array | `[]` |  |
 | postDeleteJob.image.repository | string | `"quay.io/admiralty/multicluster-scheduler-remove-finalizers"` |  |
-| postDeleteJob.image.tag | string | `"0.10.0-rc.0"` |  |
+| postDeleteJob.image.tag | string | `"0.10.0-rc.1"` |  |
 | postDeleteJob.image.pullPolicy | string | `"IfNotPresent"` |  |
 | postDeleteJob.resources | object | `{}` |  |
 | postDeleteJob.nodeSelector | object | `{}` |  |
