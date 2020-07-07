@@ -3,5 +3,8 @@ apiVersion: klum.cattle.io/v1alpha1
 metadata:
   name: cluster1
 spec:
+  roles:
+    - clusterRole: multicluster-scheduler-source
+      namespace: default
   clusterRoles:
-    - multicluster-scheduler-source
+    - multicluster-scheduler-cluster-summary-viewer

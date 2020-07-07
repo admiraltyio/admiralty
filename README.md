@@ -117,9 +117,9 @@ For cross-cluster source-target communications, i.e., for multicluster-scheduler
 
 Note: for a source cluster that targets itself (here, cluster1), multicluster-scheduler simply uses its own service account to talk to its own Kubernetes API server.
 
-In this getting started guide, we use [klum](https://github.com/ibuildthecloud/klum) to create a service account for cluster1 in cluster2 (there are other ways, [contact us](#community) while we work on documenting them).
+In this getting started guide, we use [klum](https://github.com/ibuildthecloud/klum) to create a service account for cluster1 in cluster2 (there are other ways, [contact us](#community) while we work on documenting them). In cluster2, install klum and create a User named `c1`, bound to the `multicluster-scheduler-source` and `multicluster-scheduler-cluster-summary-viewer` cluster roles at the cluster scope.
 
-In cluster2, install klum and create a User named `c1`, bound to the `multicluster-scheduler-source` cluster role at the cluster scope (you could bind it to one or several namespaces only, and configure multicluster-scheduler with namespaced targets, cf. [full installation guide](charts/multicluster-scheduler/README.md)).
+> You could bind `multicluster-scheduler-source` to one or several namespaces only, and configure multicluster-scheduler with namespaced targets (cf. [full installation guide](charts/multicluster-scheduler/README.md)).
 
 ```bash
 kubectl --context "$CLUSTER2" apply -f https://raw.githubusercontent.com/ibuildthecloud/klum/v0.0.1/deploy.yaml
@@ -134,6 +134,7 @@ metadata:
 spec:
   clusterRoles:
     - multicluster-scheduler-source
+    - multicluster-scheduler-cluster-summary-viewer
 EOF
 ```
 

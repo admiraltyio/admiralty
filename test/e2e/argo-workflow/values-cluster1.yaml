@@ -2,6 +2,7 @@ clusterName: c1
 targetSelf: true
 targets:
   - name: c2
+    namespaced: true
 
 controllerManager:
   securityContext:

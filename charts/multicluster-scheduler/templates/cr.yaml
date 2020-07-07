@@ -135,6 +135,13 @@ rules:
       - create
       - update
       - delete
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "fullname" . }}-cluster-summary-viewer
+  labels: {{ include "labels" . | nindent 4 }}
+rules:
   - apiGroups:
       - multicluster.admiralty.io
     resources:
