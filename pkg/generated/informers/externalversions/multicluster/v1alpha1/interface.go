@@ -24,6 +24,8 @@ import (
 
 // Interface provides access to all the informers in this group version.
 type Interface interface {
+	// ClusterSummaries returns a ClusterSummaryInformer.
+	ClusterSummaries() ClusterSummaryInformer
 	// PodChaperons returns a PodChaperonInformer.
 	PodChaperons() PodChaperonInformer
 }
@@ -37,6 +39,11 @@ type version struct {
 // New returns a new Interface.
 func New(f internalinterfaces.SharedInformerFactory, namespace string, tweakListOptions internalinterfaces.TweakListOptionsFunc) Interface {
 	return &version{factory: f, namespace: namespace, tweakListOptions: tweakListOptions}
+}
+
+// ClusterSummaries returns a ClusterSummaryInformer.
+func (v *version) ClusterSummaries() ClusterSummaryInformer {
+	return &clusterSummaryInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
 }
 
 // PodChaperons returns a PodChaperonInformer.

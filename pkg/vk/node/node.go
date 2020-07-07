@@ -18,7 +18,6 @@ package node
 
 import (
 	v1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"admiralty.io/multicluster-scheduler/pkg/common"
@@ -46,15 +45,6 @@ func NodeFromOpts(c Opts) *v1.Node {
 			},
 		},
 		Status: v1.NodeStatus{
-			Capacity: v1.ResourceList{
-				// TODO: configure or change dynamically to always be greater than what's available
-				// delegate scheduler plugin actually ensures resources are available in target cluster
-				// but proxy scheduling would fail if capacity wasn't set here
-				// (maybe configure proxy scheduler to not run capacity check?)
-				"cpu":    resource.MustParse("100000"),
-				"memory": resource.MustParse("100000Gi"),
-				"pods":   resource.MustParse("100000"),
-			},
 			Conditions: []v1.NodeCondition{
 				{
 					Type:               v1.NodeReady,
@@ -100,7 +90,5 @@ func NodeFromOpts(c Opts) *v1.Node {
 			//},
 		},
 	}
-
-	//node.Status.Allocatable = node.Status.Capacity
 	return node
 }

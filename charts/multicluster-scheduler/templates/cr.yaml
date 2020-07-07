@@ -50,12 +50,34 @@ rules:
       - ""
     resources:
       - endpoints
+      - configmaps
+      - secrets
     verbs:
       - get
       - list
       - watch
-      - configmaps
-      - secrets
+  - apiGroups:
+      - multicluster.admiralty.io
+    resources:
+      - clustersummaries
+    verbs:
+      - get
+      - create
+      - update
+  - apiGroups:
+      - ""
+    resources:
+      - nodes
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - ""
+    resources:
+      - nodes/status
+    verbs:
+      - update
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -113,3 +135,11 @@ rules:
       - create
       - update
       - delete
+  - apiGroups:
+      - multicluster.admiralty.io
+    resources:
+      - clustersummaries
+    verbs:
+      - get
+      - list
+      - watch
