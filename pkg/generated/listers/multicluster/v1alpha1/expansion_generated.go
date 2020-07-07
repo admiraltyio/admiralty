@@ -18,6 +18,10 @@
 
 package v1alpha1
 
+// ClusterSummaryListerExpansion allows custom methods to be added to
+// ClusterSummaryLister.
+type ClusterSummaryListerExpansion interface{}
+
 // PodChaperonListerExpansion allows custom methods to be added to
 // PodChaperonLister.
 type PodChaperonListerExpansion interface{}

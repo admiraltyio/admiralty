@@ -47,6 +47,7 @@ import (
 	"admiralty.io/multicluster-scheduler/pkg/controllers/feedback"
 	"admiralty.io/multicluster-scheduler/pkg/controllers/follow"
 	"admiralty.io/multicluster-scheduler/pkg/controllers/globalsvc"
+	"admiralty.io/multicluster-scheduler/pkg/controllers/resources"
 	"admiralty.io/multicluster-scheduler/pkg/controllers/svcreroute"
 	"admiralty.io/multicluster-scheduler/pkg/generated/clientset/versioned"
 	clientset "admiralty.io/multicluster-scheduler/pkg/generated/clientset/versioned"
@@ -101,6 +102,7 @@ func startOldStyleControllers(stopCh <-chan struct{}, agentCfg agentconfig.Confi
 	targetCustomClients := make(map[string]clientset.Interface, n)
 	targetCustomInformerFactories := make(map[string]informers.SharedInformerFactory, n)
 	targetPodChaperonInformers := make(map[string]v1alpha1.PodChaperonInformer, n)
+	targetClusterSummaryInformers := make(map[string]v1alpha1.ClusterSummaryInformer, n)
 	for _, target := range agentCfg.Targets {
 		c, err := versioned.NewForConfig(target.ClientConfig)
 		utilruntime.Must(err)
@@ -110,19 +112,25 @@ func startOldStyleControllers(stopCh <-chan struct{}, agentCfg agentconfig.Confi
 		targetCustomInformerFactories[target.Name] = f
 
 		targetPodChaperonInformers[target.Name] = f.Multicluster().V1alpha1().PodChaperons()
+		targetClusterSummaryInformers[target.Name] = f.Multicluster().V1alpha1().ClusterSummaries()
 	}
 	if agentCfg.Raw.TargetSelf {
 		targetCustomClients[agentCfg.Raw.ClusterName] = customClient
 		targetPodChaperonInformers[agentCfg.Raw.ClusterName] = customInformerFactory.Multicluster().V1alpha1().PodChaperons()
+		targetClusterSummaryInformers[agentCfg.Raw.ClusterName] = customInformerFactory.Multicluster().V1alpha1().ClusterSummaries()
 	}
 
 	podInformer := kubeInformerFactory.Core().V1().Pods()
+	nodeInformer := kubeInformerFactory.Core().V1().Nodes()
 	podChaperonInformer := customInformerFactory.Multicluster().V1alpha1().PodChaperons()
 
 	chapCtrl := chaperon.NewController(k, customClient, podInformer, podChaperonInformer)
+	downstreamResCtrl := resources.NewDownstreamController(customClient, nodeInformer)
 	var feedbackCtrl *controller.Controller
+	var upstreamResCtrl *controller.Controller
 	if n > 0 {
 		feedbackCtrl = feedback.NewController(k, targetCustomClients, podInformer, targetPodChaperonInformers)
+		upstreamResCtrl = resources.NewUpstreamController(k, nodeInformer, targetClusterSummaryInformers)
 	}
 
 	nt := len(agentCfg.Targets)
@@ -164,6 +172,10 @@ func startOldStyleControllers(stopCh <-chan struct{}, agentCfg agentconfig.Confi
 			klog.Fatalf("Error running controller: %s", err.Error())
 		}
 	}()
+	go func() { utilruntime.Must(downstreamResCtrl.Run(1, stopCh)) }()
+	if upstreamResCtrl != nil {
+		go func() { utilruntime.Must(upstreamResCtrl.Run(1, stopCh)) }()
+	}
 	if feedbackCtrl != nil {
 		go func() {
 			if err = feedbackCtrl.Run(2, stopCh); err != nil {

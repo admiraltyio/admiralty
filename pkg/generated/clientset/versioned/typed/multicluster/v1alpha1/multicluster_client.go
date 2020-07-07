@@ -26,12 +26,17 @@ import (
 
 type MulticlusterV1alpha1Interface interface {
 	RESTClient() rest.Interface
+	ClusterSummariesGetter
 	PodChaperonsGetter
 }
 
 // MulticlusterV1alpha1Client is used to interact with features provided by the multicluster.admiralty.io group.
 type MulticlusterV1alpha1Client struct {
 	restClient rest.Interface
+}
+
+func (c *MulticlusterV1alpha1Client) ClusterSummaries() ClusterSummaryInterface {
+	return newClusterSummaries(c)
 }
 
 func (c *MulticlusterV1alpha1Client) PodChaperons(namespace string) PodChaperonInterface {

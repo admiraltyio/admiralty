@@ -53,6 +53,8 @@ func (f *genericInformer) Lister() cache.GenericLister {
 func (f *sharedInformerFactory) ForResource(resource schema.GroupVersionResource) (GenericInformer, error) {
 	switch resource {
 	// Group=multicluster.admiralty.io, Version=v1alpha1
+	case v1alpha1.SchemeGroupVersion.WithResource("clustersummaries"):
+		return &genericInformer{resource: resource.GroupResource(), informer: f.Multicluster().V1alpha1().ClusterSummaries().Informer()}, nil
 	case v1alpha1.SchemeGroupVersion.WithResource("podchaperons"):
 		return &genericInformer{resource: resource.GroupResource(), informer: f.Multicluster().V1alpha1().PodChaperons().Informer()}, nil
 
