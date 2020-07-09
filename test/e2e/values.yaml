@@ -1,5 +1,3 @@
-clusterName: c2
-
 controllerManager:
   securityContext:
     runAsUser: 1000
@@ -12,7 +10,6 @@ postDeleteJob:
   securityContext:
     runAsUser: 1000
 
-debug:
-  controllerManager: false
-  proxyScheduler: false
-  candidateScheduler: false
+restarter:
+  securityContext:
+    runAsUser: 1000

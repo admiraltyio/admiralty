@@ -26,8 +26,12 @@ import (
 type Interface interface {
 	// ClusterSummaries returns a ClusterSummaryInformer.
 	ClusterSummaries() ClusterSummaryInformer
+	// ClusterTargets returns a ClusterTargetInformer.
+	ClusterTargets() ClusterTargetInformer
 	// PodChaperons returns a PodChaperonInformer.
 	PodChaperons() PodChaperonInformer
+	// Targets returns a TargetInformer.
+	Targets() TargetInformer
 }
 
 type version struct {
@@ -46,7 +50,17 @@ func (v *version) ClusterSummaries() ClusterSummaryInformer {
 	return &clusterSummaryInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
 }
 
+// ClusterTargets returns a ClusterTargetInformer.
+func (v *version) ClusterTargets() ClusterTargetInformer {
+	return &clusterTargetInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
+}
+
 // PodChaperons returns a PodChaperonInformer.
 func (v *version) PodChaperons() PodChaperonInformer {
 	return &podChaperonInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+}
+
+// Targets returns a TargetInformer.
+func (v *version) Targets() TargetInformer {
+	return &targetInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }

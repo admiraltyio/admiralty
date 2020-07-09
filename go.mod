@@ -7,7 +7,7 @@ require (
 	admiralty.io/multicluster-service-account v0.6.1
 	github.com/ghodss/yaml v1.0.0
 	github.com/go-logr/zapr v0.1.1 // indirect
-	github.com/go-test/deep v1.0.1
+	github.com/go-test/deep v1.0.2-0.20181118220953-042da051cf31
 	github.com/golang/groupcache v0.0.0-20190702054246-869f871628b6 // indirect
 	github.com/imdario/mergo v0.3.7 // indirect
 	github.com/pkg/errors v0.8.1
@@ -15,6 +15,7 @@ require (
 	github.com/spf13/pflag v1.0.5
 	github.com/virtual-kubelet/virtual-kubelet v1.2.1
 	go.uber.org/multierr v1.2.0 // indirect
+	gopkg.in/square/go-jose.v2 v2.3.1 // indirect
 	k8s.io/api v0.18.4
 	k8s.io/apimachinery v0.18.4
 	k8s.io/client-go v10.0.0+incompatible
@@ -31,7 +32,7 @@ require (
 
 // replace admiralty.io/multicluster-service-account => ../multicluster-service-account
 
-replace github.com/appscode/jsonpatch => gomodules.xyz/jsonpatch/v2 v2.0.0
+// replace github.com/appscode/jsonpatch => gomodules.xyz/jsonpatch/v2 v2.0.0
 
 replace k8s.io/api => k8s.io/api v0.18.4
 
@@ -73,11 +74,11 @@ replace k8s.io/legacy-cloud-providers => k8s.io/legacy-cloud-providers v0.18.4
 
 replace k8s.io/metrics => k8s.io/metrics v0.18.4
 
-replace k8s.io/node-api => k8s.io/node-api v0.18.4
+// replace k8s.io/node-api => k8s.io/node-api v0.18.4
 
 replace k8s.io/sample-apiserver => k8s.io/sample-apiserver v0.18.4
 
-replace k8s.io/sample-cli-plugin => k8s.io/sample-cli-plugin v0.18.4
+// replace k8s.io/sample-cli-plugin => k8s.io/sample-cli-plugin v0.18.4
 
 replace k8s.io/sample-controller => k8s.io/sample-controller v0.18.4
 

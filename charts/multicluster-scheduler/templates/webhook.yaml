@@ -9,7 +9,7 @@ webhooks:
   - clientConfig:
       caBundle: Cg==
             {{- if .Values.debug.controllerManager }}
-      url: "https://172.17.0.1:{{ .Values.webhook.port }}/mutate-v1-pod"
+      url: "https://172.17.0.1:9443/mutate-v1-pod"
             {{- else }}
       service:
         name: {{ include "fullname" . }}

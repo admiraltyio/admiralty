@@ -1,0 +1,14 @@
+kind: Target
+apiVersion: multicluster.admiralty.io/v1alpha1
+metadata:
+  name: c2
+spec:
+  kubeconfigSecret:
+    name: c2
+---
+kind: Target
+apiVersion: multicluster.admiralty.io/v1alpha1
+metadata:
+  name: c1
+spec:
+  self: true

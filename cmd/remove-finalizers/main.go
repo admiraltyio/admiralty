@@ -19,11 +19,11 @@ package main
 import (
 	"context"
 
-	"admiralty.io/multicluster-service-account/pkg/config"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/kubernetes"
+	"sigs.k8s.io/controller-runtime/pkg/client/config"
 
 	"admiralty.io/multicluster-scheduler/pkg/common"
 )
@@ -33,8 +33,7 @@ func main() {
 
 	patch := `{"metadata":{"$deleteFromPrimitiveList/finalizers":[` + common.CrossClusterGarbageCollectionFinalizer + `]}}`
 
-	cfg, _, err := config.ConfigAndNamespace()
-	utilruntime.Must(err)
+	cfg := config.GetConfigOrDie()
 
 	k, err := kubernetes.NewForConfig(cfg)
 	utilruntime.Must(err)

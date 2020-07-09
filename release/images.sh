@@ -10,6 +10,7 @@ CMDS=(
   "agent"
   "remove-finalizers"
   "scheduler"
+  "restarter"
 )
 
 for CMD in "${CMDS[@]}"; do
