@@ -28,7 +28,12 @@ CLUSTER2=cluster2 # change me
 - For private clusters, you might have to set up a VPN or tunnel (we have plans to help with that).
 - While experimenting with [kind](https://kind.sigs.k8s.io/), [minikube](https://minikube.sigs.k8s.io/) or [k3d](https://k3d.io/) clusters, where Kubernetes nodes run as containers (on Linux) or VMs (on Mac/Windows) on your machine, you may have to edit the kubeconfig given to cluster1 to access cluster2 (cf. [Service Account Exchange](#2-service-account-exchange) step, below). The Kubernetes API server is usually exposed on your machine's loopback IP (127.0.0.1), which is what you use from your machine, but means something different from pods—i.e., their own loopback interface. You'll need to replace the address with either your machine's address from containers/VMs (though the CA certificate may not match in that case), or cluster2's master node address on the Docker network shared by the two clusters (assuming they share a Docker network).
 
-> ℹ️ If a single person manages all clusters, that's great, but multicluster-scheduler can also be used to join clusters operated by several distinct administrative groups. If you can only access one of the two clusters, just follow the intructions relevant to your cluster. In that case you can also remove the context part from all of the commands. Note that some parts need coordination between the admins of the two clusters; how messages are exchanged in multi-admin setups is beyond the scope of this document.
+<details>
+  <summary>ℹ️ If you can only access one of the two clusters, ...</summary>
+
+  just follow the instructions relevant to your cluster. If a single person manages all clusters, that's great, but multicluster-scheduler can also be used to join clusters operated by several distinct administrative groups. In that case you can also remove the context part from all of the commands. Note that some parts need coordination between the admins of the two clusters; how messages are exchanged in multi-admin setups is beyond the scope of this document.
+
+</details>
 
 ### Prerequisites
 
@@ -83,11 +88,16 @@ At this point, multicluster-scheduler is installed in both clusters, but neither
 
 2. Source clusters need those service account's tokens, and their targets' server addresses and CA certificates, saved as kubeconfig files in secrets, cf. [Service Account Exchange](#2-service-account-exchange), below.
 
-    > ℹ️ There are other ways to solve cross-cluster authentication, including the use of cloud service accounts, also known as "service principals" or "roles", as opposed to Kubernetes service accounts; or public key infrastructure (PKI) solutions. [Contact us](#community) while we work on documenting them.
-
 3. You also need to tell multicluster-scheduler in source clusters which kubeconfig secret corresponds to which target, and if targets are namespaced or cluster-scoped, using Target and ClusterTarget custom resources objects, respectively, cf. [Creating ClusterTargets and Targets in Source Clusters](#3-creating-clustertargets-and-targets-in-source-clusters), below.
 
  ⚠️ For a source cluster that targets itself (here, cluster1), multicluster-scheduler simply uses its own service account to talk to its own Kubernetes API server. For that connection, you only need to create a ClusterTarget or namespaced Target with `spec.self=true`.
+
+<details>
+  <summary>ℹ️ If you're concerned about the spread of service account tokens, ...</summary>
+
+  there are other ways to solve cross-cluster authentication, including the use of cloud service accounts, also known as "service principals" or "roles", as opposed to Kubernetes service accounts; or public key infrastructure (PKI) solutions. [Contact us](#community) while we work on documenting them.
+
+</details>
 
 #### 1. Creating Service Accounts and RBAC Rules in Target Clusters
 
@@ -110,10 +120,15 @@ spec:
 EOF
 ```
 
-> ℹ You could bind `multicluster-scheduler-source` to one or several namespaces only, and configure multicluster-scheduler with namespaced Targets, but `multicluster-scheduler-cluster-summary-viewer` _must_ be cluster-bound, because clustersummaries is a cluster-scoped custom resource. Though have no fear: all `multicluster-scheduler-cluster-summary-viewer` allows is get/list/watch ClusterSummaries, which are cluster singletons that only contain the sum of the capacities and allocatable resources of their respective clusters' nodes.
+<details>
+  <summary>ℹ If you want to allow a source in specific namespaces only, ...</summary>
+  
+  you can bind `multicluster-scheduler-source` to namespaces, and configure multicluster-scheduler with namespaced Targets (see below), but `multicluster-scheduler-cluster-summary-viewer` _must_ be cluster-bound, because clustersummaries is a cluster-scoped custom resource. Though have no fear: all `multicluster-scheduler-cluster-summary-viewer` allows is get/list/watch ClusterSummaries, which are cluster singletons that only contain the sum of the capacities and allocatable resources of their respective clusters' nodes.
+
+</details>
 
 <details>
-  <summary>If you don't want to use klum, ...</summary>
+  <summary>ℹ If you don't want to use klum, ...</summary>
   
   you can create a ServiceAccount and ClusterRoleBindings and/or RoleBindings directly, e.g.:
   
@@ -176,10 +191,14 @@ Then, run `kubemcsa export` to generate a template for a secret containing a kub
   | kubectl --context "$CLUSTER1" -n admiralty apply -f -
 ```
 
-> ℹ If you do not have access to both clusters, the admin of the target cluster (i.e. cluster2) can save the output of `kubemcsa export` into a file and deliver it to the admin of the source cluster (i.e. cluster1), who can then import it with `kubectl` from that file. 
-Since the information in that file will contain secrets, the exchange should happen in a secure (e.g. encrypted) manner. What tools to use for that purpose is beyond the scope of this document (we're working on a convenient way to do that).
-
 ⚠️ `kubemcsa export` combines a service account token with the Kubernetes API server address and associated CA certificate of the cluster found in your local kubeconfig. The address and CA certificate are routable and valid from your machine, but they need to be routable/valid from pods in the source cluster as well. For example, if you're using [kind](https://kind.sigs.k8s.io/), by default the address is `127.0.0.1:SOME_PORT`, because kind exposes API servers on random ports of your machine. However, `127.0.0.1` has a different meaning from a multicluster-scheduler pod. On Linux, you can generate a kubeconfig with `kind get kubeconfig --internal` that will work from your machine and from pods, because it uses the master node container's IP in the overlay network (e.g., `172.17.0.x`), instead of `127.0.0.1`. Unfortunately, that won't work on Windows/Mac. In that case, you can either run the commands above from a container, or tweak the result of `kubemcsa export` before piping it into `kubectl apply`, to override the secret's `server` and `ca.crt` data fields (TODO: support overrides in `kubemcsa export` and provide detailed instructions on different platforms).
+
+<details>
+  <summary>ℹ If you don't have access to both clusters, ...</summary>
+
+  the admin of the target cluster (i.e. cluster2) can save the output of `kubemcsa export` into a file and deliver it to the admin of the source cluster (i.e. cluster1), who can then import it with `kubectl` from that file. Since the information in that file will contain secrets, the exchange should happen in a secure (e.g. encrypted) manner. What tools to use for that purpose is beyond the scope of this document (we're working on a convenient way to do that).
+
+</details>
 
 <details>
   <summary>ℹ If you don't want to use kubemcsa, ...</summary>
@@ -259,14 +278,11 @@ kubectl --context "$CLUSTER1" get node -l virtual-kubelet.io/provider=admiralty
 
 ### Multi-Cluster Deployment in Source Cluster
 
-Multicluster-scheduler's pod admission controller operates in namespaces labeled with `multicluster-scheduler=enabled`. In cluster1, label the `default` namespace:
+Multicluster-scheduler's pod admission controller operates in namespaces labeled with `multicluster-scheduler=enabled`. In cluster1, label the `default` namespace (any other namespace could be used as well, but you would have to change the example accordingly, of course):
 
 ```bash
 kubectl --context "$CLUSTER1" label namespace default multicluster-scheduler=enabled
 ```
-
-> ℹ While we use the "default" namespace in this example, any other namespace could be used as well.
-(but you will have to change the example accordingly, of course).
 
 Then, deploy NGINX in it with the election annotation on the pod template:
 
@@ -310,7 +326,12 @@ kubectl --context "$CLUSTER1" get pods -o wide # (-o yaml for details)
 kubectl --context "$CLUSTER2" get pods -o wide # (-o yaml for details)
 ```
 
-> ℹ While launching and executing the pods requires only access to the source cluster (i.e., cluster1), the above check requires access to both the source and target clusters. If you do not have direct access to the target cluster, ask for help from someone who does.
+<details>
+  <summary>ℹ If you do not have direct access to the target cluster, ...</summary>
+  
+  ask for help from someone who does. While launching and executing the pods requires only access to the source cluster (i.e., cluster1), the above check requires access to both the source and target clusters.
+
+</details>
 
 ### Advanced Scheduling
 
@@ -321,12 +342,17 @@ kubectl --context "$CLUSTER1" get nodes --show-labels
 kubectl --context "$CLUSTER2" get nodes --show-labels
 ```
 
->If your test setup doesn't have region labels, you can add some:
->
->```sh
->kubectl --context "$CLUSTER1" label nodes -l virtual-kubelet.io/provider!=admiralty topology.kubernetes.io/region=us
->kubectl --context "$CLUSTER2" label nodes -l virtual-kubelet.io/provider!=admiralty topology.kubernetes.io/region=eu
->```
+<details>
+  <summary>ℹ If your test setup doesn't have region labels, ...</summary>
+  
+  you can add some:
+
+  ```sh
+  kubectl --context "$CLUSTER1" label nodes -l virtual-kubelet.io/provider!=admiralty topology.kubernetes.io/region=us
+  kubectl --context "$CLUSTER2" label nodes -l virtual-kubelet.io/provider!=admiralty topology.kubernetes.io/region=eu
+  ```
+
+</details>
 
 To schedule a deployment to a particular region, just add a node selector to its pod template:
 
