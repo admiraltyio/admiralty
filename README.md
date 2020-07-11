@@ -14,6 +14,8 @@ There are many other use cases: dynamic CDNs, multi-region high availability and
 
 ## Getting Started
 
+⚠️ This guide applies to the unreleased HEAD of the master branch, i.e., it likely doesn't work with released charts and images. Please check out the latest [release](https://github.com/admiraltyio/multicluster-scheduler/tree/v0.9.3) or [release candidate](https://github.com/admiraltyio/multicluster-scheduler/tree/v0.10.0-rc.1) versions of this document.
+
 The first thing to understand is that clusters can be **either or both** sources and/or targets. Multicluster-scheduler has to be installed in all clusters.
 
 In this guide, we assume that you are a cluster admin for two clusters, associated with, e.g., the contexts "cluster1" and "cluster2" in your [kubeconfig](https://kubernetes.io/docs/tasks/access-application-cluster/configure-access-multiple-clusters/). We're going to install multicluster-scheduler in both clusters, and configure cluster1 as a source and target, and cluster2 as a target only. This topology is typical of a cloud bursting use case. Then, we will deploy a multi-cluster NGINX.
@@ -75,7 +77,7 @@ do
   helm install multicluster-scheduler admiralty/multicluster-scheduler \
   --kube-context "$CONTEXT" \
   --namespace admiralty \
-  --version 0.10.0-rc.1 \
+  --version 0.10.0 \
   --wait
 done
 ```
