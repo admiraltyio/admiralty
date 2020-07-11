@@ -50,7 +50,7 @@ type secretReconciler struct {
 
 	podIndex cache.Indexer
 
-	selfTargetName string
+	selfTargetKeys map[string]bool
 }
 
 func NewSecretController(
@@ -62,7 +62,7 @@ func NewSecretController(
 
 	remoteSecretInformers map[string]coreinformers.SecretInformer,
 
-	selfTargetName string) *controller.Controller {
+	selfTargetKeys map[string]bool) *controller.Controller {
 
 	r := &secretReconciler{
 		kubeclientset: kubeclientset,
@@ -75,7 +75,7 @@ func NewSecretController(
 
 		podIndex: podInformer.Informer().GetIndexer(),
 
-		selfTargetName: selfTargetName,
+		selfTargetKeys: selfTargetKeys,
 	}
 
 	informersSynced := make([]cache.InformerSynced, 2+len(remoteSecretInformers))
@@ -101,9 +101,9 @@ func NewSecretController(
 	}
 
 	podInformer.Informer().AddEventHandler(controller.HandleAllWith(enqueueProxyPodsSecrets(c)))
-	podInformer.Informer().AddIndexers(map[string]cache.IndexFunc{
+	utilruntime.Must(podInformer.Informer().AddIndexers(map[string]cache.IndexFunc{
 		proxyPodBySecrets: indexProxyPodBySecrets,
-	})
+	}))
 
 	// TODO follow ingresses (TLS) when ingresses follows pods
 
@@ -197,7 +197,7 @@ func (r secretReconciler) Handle(obj interface{}) (requeueAfter *time.Duration, 
 	for _, obj := range objs {
 		proxyPod := obj.(*corev1.Pod)
 		if proxypod.IsScheduled(proxyPod) {
-			if targetName := proxypod.GetScheduledClusterName(proxyPod); targetName != r.selfTargetName {
+			if targetName := proxypod.GetScheduledClusterName(proxyPod); !r.selfTargetKeys[targetName] {
 				targetNames[targetName] = true
 			}
 		}

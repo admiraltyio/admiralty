@@ -20,7 +20,6 @@ import (
 	"context"
 	"time"
 
-	"admiralty.io/multicluster-service-account/pkg/config"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -29,6 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog"
 	framework "k8s.io/kubernetes/pkg/scheduler/framework/v1alpha1"
+	"sigs.k8s.io/controller-runtime/pkg/client/config"
 
 	"admiralty.io/multicluster-scheduler/pkg/common"
 	"admiralty.io/multicluster-scheduler/pkg/generated/clientset/versioned"
@@ -124,8 +124,7 @@ func (pl *Plugin) isAllowed(ctx context.Context, p *v1.Pod) (bool, error) {
 
 // New initializes a new plugin and returns it.
 func New(_ *runtime.Unknown, h framework.FrameworkHandle) (framework.Plugin, error) {
-	cfg, _, err := config.ConfigAndNamespaceForKubeconfigAndContext("", "")
-	utilruntime.Must(err)
+	cfg := config.GetConfigOrDie()
 	client, err := versioned.NewForConfig(cfg)
 	utilruntime.Must(err)
 	return &Plugin{handle: h, client: client}, nil

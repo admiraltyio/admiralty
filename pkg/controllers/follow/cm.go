@@ -50,7 +50,7 @@ type configMapReconciler struct {
 
 	podIndex cache.Indexer
 
-	selfTargetName string
+	selfTargetKeys map[string]bool
 }
 
 func NewConfigMapController(
@@ -62,7 +62,7 @@ func NewConfigMapController(
 
 	remoteConfigMapInformers map[string]coreinformers.ConfigMapInformer,
 
-	selfTargetName string) *controller.Controller {
+	selfTargetKeys map[string]bool) *controller.Controller {
 
 	r := &configMapReconciler{
 		kubeclientset: kubeclientset,
@@ -75,7 +75,7 @@ func NewConfigMapController(
 
 		podIndex: podInformer.Informer().GetIndexer(),
 
-		selfTargetName: selfTargetName,
+		selfTargetKeys: selfTargetKeys,
 	}
 
 	informersSynced := make([]cache.InformerSynced, 2+len(remoteConfigMapInformers))
@@ -101,9 +101,9 @@ func NewConfigMapController(
 	}
 
 	podInformer.Informer().AddEventHandler(controller.HandleAllWith(enqueueProxyPodsConfigMaps(c)))
-	podInformer.Informer().AddIndexers(map[string]cache.IndexFunc{
+	utilruntime.Must(podInformer.Informer().AddIndexers(map[string]cache.IndexFunc{
 		proxyPodByConfigMaps: indexProxyPodByConfigMaps,
-	})
+	}))
 
 	return c
 }
@@ -192,7 +192,7 @@ func (r configMapReconciler) Handle(obj interface{}) (requeueAfter *time.Duratio
 	for _, obj := range objs {
 		proxyPod := obj.(*corev1.Pod)
 		if proxypod.IsScheduled(proxyPod) {
-			if targetName := proxypod.GetScheduledClusterName(proxyPod); targetName != r.selfTargetName {
+			if targetName := proxypod.GetScheduledClusterName(proxyPod); !r.selfTargetKeys[targetName] {
 				targetNames[targetName] = true
 			}
 		}

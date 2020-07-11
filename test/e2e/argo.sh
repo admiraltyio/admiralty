@@ -12,7 +12,10 @@ argo_setup_once() {
   OS=${1:-linux}
   ARCH=${2:-amd64}
 
-  if ./argo version | grep "$ARGO_VERSION"; then
+  if
+    out=$(./argo version) || true
+    echo "$out" | grep "$ARGO_VERSION"
+  then
     echo "argo already downloaded"
   else
     echo "downloading argo"

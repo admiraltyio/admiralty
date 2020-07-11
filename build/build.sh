@@ -9,6 +9,7 @@ CMDS=(
   "agent"
   "remove-finalizers"
   "scheduler"
+  "restarter"
 )
 
 mkdir -p _out

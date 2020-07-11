@@ -32,8 +32,16 @@ func (c *FakeMulticlusterV1alpha1) ClusterSummaries() v1alpha1.ClusterSummaryInt
 	return &FakeClusterSummaries{c}
 }
 
+func (c *FakeMulticlusterV1alpha1) ClusterTargets() v1alpha1.ClusterTargetInterface {
+	return &FakeClusterTargets{c}
+}
+
 func (c *FakeMulticlusterV1alpha1) PodChaperons(namespace string) v1alpha1.PodChaperonInterface {
 	return &FakePodChaperons{c, namespace}
+}
+
+func (c *FakeMulticlusterV1alpha1) Targets(namespace string) v1alpha1.TargetInterface {
+	return &FakeTargets{c, namespace}
 }
 
 // RESTClient returns a RESTClient that is used to communicate

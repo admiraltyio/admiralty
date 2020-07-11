@@ -114,10 +114,6 @@ func (r *reconciler) Reconcile(req reconcile.Request) (reconcile.Result, error) 
 	}
 
 	for targetClusterName, cli := range r.targets {
-		if targetClusterName == srcClusterName {
-			continue
-		}
-
 		delSvc := makeDelegateService(svc)
 
 		foundDelSvc := &corev1.Service{}
@@ -182,11 +178,11 @@ func makeDelegateService(svc *corev1.Service) *corev1.Service {
 	delSvc.Name = svc.Name
 	delSvc.Namespace = svc.Namespace
 
-	labels := make(map[string]string)
+	l := make(map[string]string)
 	for k, v := range svc.Labels {
-		labels[k] = v
+		l[k] = v
 	}
-	delSvc.Labels = labels
+	delSvc.Labels = l
 
 	annotations := make(map[string]string)
 	for k, v := range svc.Annotations { // including "io.cilium/global-service"

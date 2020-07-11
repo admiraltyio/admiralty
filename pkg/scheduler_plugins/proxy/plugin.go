@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"time"
 
-	"admiralty.io/multicluster-service-account/pkg/config"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -239,29 +238,15 @@ func (pl *Plugin) PostBind(ctx context.Context, state *framework.CycleState, p *
 
 // New initializes a new plugin and returns it.
 func New(args *runtime.Unknown, h framework.FrameworkHandle) (framework.Plugin, error) {
-	agentCfg := agentconfig.NewFromBytes(args.Raw)
-	//clients := make(map[string]*kubernetes.Clientset, len(agentCfg.Targets))
+	agentCfg := agentconfig.NewFromCRD(context.Background())
 	n := len(agentCfg.Targets)
-	if agentCfg.Raw.TargetSelf {
-		n++
-	}
 	clients := make(map[string]*versioned.Clientset, n)
 	for _, target := range agentCfg.Targets {
-		//kubeClient, err := kubernetes.NewForConfig(target.ClientConfig)
 		client, err := versioned.NewForConfig(target.ClientConfig)
 		utilruntime.Must(err)
-
-		// TODO... cache podchaperons with lister
-
-		clients[target.Name] = client
+		clients[target.GetKey()] = client
 	}
-	if agentCfg.Raw.TargetSelf {
-		cfg, _, err := config.ConfigAndNamespaceForKubeconfigAndContext("", "")
-		utilruntime.Must(err)
-		client, err := versioned.NewForConfig(cfg)
-		utilruntime.Must(err)
-		clients[agentCfg.Raw.ClusterName] = client
-	}
+	// TODO... cache podchaperons with lister
 
 	return &Plugin{handle: h, targets: clients}, nil
 }

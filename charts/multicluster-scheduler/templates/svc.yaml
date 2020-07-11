@@ -10,5 +10,5 @@ spec:
   ports:
     - port: 443
       protocol: TCP
-      targetPort: {{ .Values.webhook.port }}
+      targetPort: 9443
         {{- end }}

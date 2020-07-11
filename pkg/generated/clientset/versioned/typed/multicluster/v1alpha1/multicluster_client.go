@@ -27,7 +27,9 @@ import (
 type MulticlusterV1alpha1Interface interface {
 	RESTClient() rest.Interface
 	ClusterSummariesGetter
+	ClusterTargetsGetter
 	PodChaperonsGetter
+	TargetsGetter
 }
 
 // MulticlusterV1alpha1Client is used to interact with features provided by the multicluster.admiralty.io group.
@@ -39,8 +41,16 @@ func (c *MulticlusterV1alpha1Client) ClusterSummaries() ClusterSummaryInterface 
 	return newClusterSummaries(c)
 }
 
+func (c *MulticlusterV1alpha1Client) ClusterTargets() ClusterTargetInterface {
+	return newClusterTargets(c)
+}
+
 func (c *MulticlusterV1alpha1Client) PodChaperons(namespace string) PodChaperonInterface {
 	return newPodChaperons(c, namespace)
+}
+
+func (c *MulticlusterV1alpha1Client) Targets(namespace string) TargetInterface {
+	return newTargets(c, namespace)
 }
 
 // NewForConfig creates a new MulticlusterV1alpha1Client for the given config.
