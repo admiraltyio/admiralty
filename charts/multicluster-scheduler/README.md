@@ -14,6 +14,7 @@ Multicluster-scheduler uses [finalizers](https://kubernetes.io/docs/tasks/access
 
 | Key | Type | Default | Comment |
 | --- | --- | --- | --- |
+| sourceController.enabled | boolean | `true` | disable to configure source RBAC yourself |
 | nameOverride | string | `""` | Override chart name in object names and labels |
 | fullnameOverride | string | `""` | Override chart and release names in object names |
 | imagePullSecretName | string | `""` |  |

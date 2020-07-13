@@ -5,6 +5,7 @@ Multicluster-scheduler is a system of Kubernetes controllers that intelligently 
 1. Install multicluster-scheduler in each cluster that you want to federate. Configure clusters as sources and/or targets to build a centralized or decentralized topology.
 1. Annotate any pod or pod template (e.g., of a Deployment, Job, or [Argo](https://argoproj.github.io/projects/argo) Workflow, among others) in any source cluster with `multicluster.admiralty.io/elect=""`.
 1. Multicluster-scheduler mutates the elected pods into _proxy pods_ scheduled on [virtual-kubelet](https://virtual-kubelet.io/) nodes representing target clusters, and creates _delegate pods_ in the remote clusters (actually running the containers).
+1. Pod dependencies (configmaps and secrets only, for now) "follow" delegate pods, i.e., they are copied as needed to target clusters. 
 1. A feedback loop updates the statuses and annotations of the proxy pods to reflect the statuses and annotations of the delegate pods.
 1. Services that target proxy pods are rerouted to their delegates, replicated across clusters, and annotated with `io.cilium/global-service=true` to be [load-balanced across a Cilium cluster mesh](http://docs.cilium.io/en/stable/gettingstarted/clustermesh/#load-balancing-with-global-services), if installed. (Other integrations are possible, e.g., with [Linkerd](https://linkerd.io/2/features/multicluster/) or [Istio](https://istio.io/latest/docs/ops/deployment/deployment-models/#multiple-clusters); please [tell us about your network setup](#community).)
 
@@ -16,13 +17,14 @@ There are many other use cases: dynamic CDNs, multi-region high availability and
 
 ⚠️ This guide applies to the unreleased HEAD of the master branch, i.e., it likely doesn't work with released charts and images. Please check out the latest [release](https://github.com/admiraltyio/multicluster-scheduler/tree/v0.9.3) or [release candidate](https://github.com/admiraltyio/multicluster-scheduler/tree/v0.10.0-rc.1) versions of this document.
 
-The first thing to understand is that clusters can be **either or both** sources and/or targets. Multicluster-scheduler has to be installed in all clusters.
+The first thing to understand is that clusters can be **either or both** sources and/or targets. Multicluster-scheduler has to be installed in all clusters. Source clusters define their targets; target clusters define their sources. 
 
-In this guide, we assume that you are a cluster admin for two clusters, associated with, e.g., the contexts "cluster1" and "cluster2" in your [kubeconfig](https://kubernetes.io/docs/tasks/access-application-cluster/configure-access-multiple-clusters/). We're going to install multicluster-scheduler in both clusters, and configure cluster1 as a source and target, and cluster2 as a target only. This topology is typical of a cloud bursting use case. Then, we will deploy a multi-cluster NGINX.
+In this guide, we assume that you are a cluster admin for two clusters, associated with, e.g., the contexts "cluster1" and "cluster2" in your [kubeconfig](https://kubernetes.io/docs/tasks/access-application-cluster/configure-access-multiple-clusters/). We're going to install multicluster-scheduler in both clusters, and configure cluster1 as a source and target, and cluster2 as a target only, in the `default` namespace. This topology is typical of a cloud bursting use case. Then, we will deploy a multi-cluster NGINX.
 
 ```bash
 CLUSTER1=cluster1 # change me
 CLUSTER2=cluster2 # change me
+NAMESPACE=default # change me
 ```
 
 ⚠️ The Kubernetes API server address of a target cluster must be routable from pods running multicluster-scheduler in its source clusters. Here, pods in cluster1 can obviously reach their own cluster's Kubernetes API server. They must also be able to reach cluster2's Kubernetes API server.
@@ -86,11 +88,11 @@ done
 
 At this point, multicluster-scheduler is installed in both clusters, but neither is a source or target yet.
 
-1. Target clusters need service accounts and RBAC rules to autenticate and authorize source clusters, cf. [Creating Service Accounts and RBAC Rules in Target Clusters](#1-creating-service-accounts-and-rbac-rules-in-target-clusters), below.
+1. Target clusters need service accounts and RBAC rules to autenticate and authorize source clusters. The source controller can configure those for you, cf. [Creating ClusterSources and Sources in Target Clusters](#1-creating-clustersources-and-sources-in-target-clusters), below.
 
 2. Source clusters need those service account's tokens, and their targets' server addresses and CA certificates, saved as kubeconfig files in secrets, cf. [Service Account Exchange](#2-service-account-exchange), below.
 
-3. You also need to tell multicluster-scheduler in source clusters which kubeconfig secret corresponds to which target, and if targets are namespaced or cluster-scoped, using Target and ClusterTarget custom resources objects, respectively, cf. [Creating ClusterTargets and Targets in Source Clusters](#3-creating-clustertargets-and-targets-in-source-clusters), below.
+3. You also need to tell multicluster-scheduler in source clusters which targets to use, using which kubeconfig secrets, and if targets are namespaced or cluster-scoped, using Target and ClusterTarget custom resources objects, respectively, cf. [Creating ClusterTargets and Targets in Source Clusters](#3-creating-clustertargets-and-targets-in-source-clusters), below.
 
  ⚠️ For a source cluster that targets itself (here, cluster1), multicluster-scheduler simply uses its own service account to talk to its own Kubernetes API server. For that connection, you only need to create a ClusterTarget or namespaced Target with `spec.self=true`.
 
@@ -101,38 +103,57 @@ At this point, multicluster-scheduler is installed in both clusters, but neither
 
 </details>
 
-#### 1. Creating Service Accounts and RBAC Rules in Target Clusters
+#### 1. Creating ClusterSources and Sources in Target Clusters
 
-In this guide, we use [klum](https://github.com/ibuildthecloud/klum) to create a service account and RBAC rules for cluster1 in cluster2. In cluster2, install klum and create a User named `c1`, bound to the `multicluster-scheduler-source` and `multicluster-scheduler-cluster-summary-viewer` cluster roles at the cluster scope.
+ClusterSources and Sources are custom resources installed with multicluster-scheduler:
+
+- A cluster-scoped ClusterSource cluster-binds the `multicluster-scheduler-source` cluster role to a user or service account (in any namespace).
+
+- A namespaced Source namespace-binds the `multicluster-scheduler-source` cluster role to a user, or a service account in the same namespace.
+
+In either case, the `multicluster-scheduler-cluster-summary-viewer` cluster role must be cluster-bound to that user or service account, because
+ clustersummaries is a cluster-scoped resource. Though have no fear: all `multicluster-scheduler-cluster-summary-viewer` allows is get/list/watch ClusterSummaries, which are cluster singletons that only contain the sum of the capacities and allocatable resources of their respective clusters' nodes.
+
+If the referred service account doesn't exist, it is created.
+
+Let's create a Source for cluster1 in cluster2 in the `default` namespace:
 
 ```bash
-kubectl --context "$CLUSTER2" apply -f https://raw.githubusercontent.com/ibuildthecloud/klum/v0.0.1/deploy.yaml
-
-# klum registers the User CRD at runtime so wait a bit, then
-
 cat <<EOF | kubectl --context "$CLUSTER2" apply -f -
-kind: User
-apiVersion: klum.cattle.io/v1alpha1
+apiVersion: multicluster.admiralty.io/v1alpha1
+kind: Source
 metadata:
   name: c1
+  namespace: $NAMESPACE
 spec:
-  clusterRoles:
-    - multicluster-scheduler-source
-    - multicluster-scheduler-cluster-summary-viewer
+  serviceAccountName: c1
 EOF
 ```
 
 <details>
-  <summary>ℹ If you want to allow a source in specific namespaces only, ...</summary>
+  <summary>ℹ If you want to allow a source at the cluster scope, ...</summary>
   
-  you can bind `multicluster-scheduler-source` to namespaces, and configure multicluster-scheduler with namespaced Targets (see below), but `multicluster-scheduler-cluster-summary-viewer` _must_ be cluster-bound, because clustersummaries is a cluster-scoped custom resource. Though have no fear: all `multicluster-scheduler-cluster-summary-viewer` allows is get/list/watch ClusterSummaries, which are cluster singletons that only contain the sum of the capacities and allocatable resources of their respective clusters' nodes.
+  create a ClusterSource instead, with, e.g., a service account in the `admiralty` namespace:
+  
+  ```bash
+  cat <<EOF | kubectl --context "$CLUSTER2" apply -f -
+  apiVersion: multicluster.admiralty.io/v1alpha1
+  kind: ClusterSource
+  metadata:
+    name: c1
+  spec:
+    serviceAccount:
+      name: c1
+      namespace: admiralty
+  EOF
+  ```
 
 </details>
 
 <details>
-  <summary>ℹ If you don't want to use klum, ...</summary>
+  <summary>ℹ If you don't want multicluster-controller to control RBAC, ...</summary>
   
-  you can create a ServiceAccount and ClusterRoleBindings and/or RoleBindings directly, e.g.:
+  you can disable the source controller (with the Helm chart value `sourceController.enabled=false`) and create a ServiceAccount and ClusterRoleBindings and/or RoleBindings directly, e.g.:
   
   ```bash
   cat <<EOF | kubectl --context "$CLUSTER2" apply -f -
@@ -140,12 +161,13 @@ EOF
   kind: ServiceAccount
   metadata:
     name: c1
-    namespace: admiralty
+    namespace: $NAMESPACE
   ---
   apiVersion: rbac.authorization.k8s.io/v1
-  kind: ClusterRoleBinding
+  kind: RoleBinding
   metadata:
-    name: c1-multicluster-scheduler-source
+    name: admiralty-source-c1
+    namespace: $NAMESPACE
   roleRef:
     apiGroup: rbac.authorization.k8s.io
     kind: ClusterRole
@@ -153,12 +175,12 @@ EOF
   subjects:
     - kind: ServiceAccount
       name: c1
-      namespace: admiralty
+      namespace: $NAMESPACE
   ---
   apiVersion: rbac.authorization.k8s.io/v1
   kind: ClusterRoleBinding
   metadata:
-    name: c1-multicluster-scheduler-cluster-summary-viewer
+    name: admiralty-source-$NAMESPACE-c1-cluster-summary-viewer
   roleRef:
     apiGroup: rbac.authorization.k8s.io
     kind: ClusterRole
@@ -166,7 +188,7 @@ EOF
   subjects:
     - kind: ServiceAccount
       name: c1
-      namespace: admiralty
+      namespace: $NAMESPACE
   EOF
   ```
 
@@ -186,11 +208,11 @@ curl -Lo kubemcsa "$MCSA_RELEASE_URL/kubemcsa-$OS-$ARCH"
 chmod +x kubemcsa
 ```
 
-Then, run `kubemcsa export` to generate a template for a secret containing a kubeconfig equivalent to the `c1` service account (that was created by klum or yourself, above), and apply the template with kubectl in cluster1:
+Then, run `kubemcsa export` to generate a template for a secret containing a kubeconfig equivalent to the `c1` service account (that was created by the source controller or yourself, above), and apply the template with kubectl in cluster1:
 
 ```bash
-./kubemcsa export --context "$CLUSTER2" -n klum c1 --as c2 \
-  | kubectl --context "$CLUSTER1" -n admiralty apply -f -
+./kubemcsa export --context "$CLUSTER2" -n "$NAMESPACE" c1 --as c2 \
+  | kubectl --context "$CLUSTER1" -n "$NAMESPACE" apply -f -
 ```
 
 ⚠️ `kubemcsa export` combines a service account token with the Kubernetes API server address and associated CA certificate of the cluster found in your local kubeconfig. The address and CA certificate are routable and valid from your machine, but they need to be routable/valid from pods in the source cluster as well. For example, if you're using [kind](https://kind.sigs.k8s.io/), by default the address is `127.0.0.1:SOME_PORT`, because kind exposes API servers on random ports of your machine. However, `127.0.0.1` has a different meaning from a multicluster-scheduler pod. On Linux, you can generate a kubeconfig with `kind get kubeconfig --internal` that will work from your machine and from pods, because it uses the master node container's IP in the overlay network (e.g., `172.17.0.x`), instead of `127.0.0.1`. Unfortunately, that won't work on Windows/Mac. In that case, you can either run the commands above from a container, or tweak the result of `kubemcsa export` before piping it into `kubectl apply`, to override the secret's `server` and `ca.crt` data fields (TODO: support overrides in `kubemcsa export` and provide detailed instructions on different platforms).
@@ -209,12 +231,12 @@ Then, run `kubemcsa export` to generate a template for a secret containing a kub
   
   ```bash
   SECRET_NAME=$(kubectl --context "$CLUSTER2" get serviceaccount c1 \
-    --namespace klum \
+    --namespace "$NAMESPACE" \
     --output json | \
     jq --raw .secrets[0].name)
   
   TOKEN=$(kubectl --context "$CLUSTER2" get secret $SECRET_NAME \
-    --namespace klum \
+    --namespace "$NAMESPACE" \
     --output json | \
     jq --raw .data.token | \
     base64 --decode)
@@ -223,10 +245,10 @@ Then, run `kubemcsa export` to generate a template for a secret containing a kub
     --minify \
     --raw \
     --output json | \
-    jq '.users[0].user={token:"'$TOKEN'"} | \
-      .contexts[0].context.namespace="default"')
+    jq '.users[0].user={token:"'$TOKEN'"}')
 
   kubectl --context "$CLUSTER1" create secret generic c2 \
+    --namespace "$NAMESPACE" \
     --from-literal=config="$CONFIG"
   ```
 
@@ -234,9 +256,10 @@ Then, run `kubemcsa export` to generate a template for a secret containing a kub
 
   ```
   kubectl create secret generic c2 \
-      --from-literal=config="$KUBECONFIG" \
-      --dry-run \
-      --output yaml > kubeconfig-secret.yaml
+    --namespace "$NAMESPACE" \
+    --from-literal=config="$KUBECONFIG" \
+    --dry-run \
+    --output yaml > kubeconfig-secret.yaml
   ```
 </details>
 
@@ -246,33 +269,34 @@ At this point, cluster1 has an identity in cluster2, credentials to be authentic
 
 ClusterTargets and Targets are Kubernetes [custom resources](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/) installed with multicluster-scheduler:
 
-- A cluster-scoped ClusterTarget associates a name (`metadata.name`) with a reference to a kubeconfig secret (name and namespace; can be in any namespace but it makes sense to store these in the same namespace as multicluster-scheduler, e.g., `admiralty`, as we did). Multicluster-scheduler will use the kubeconfig to interact with resources in the target cluster at the cluster level, so it must be authorized to do so there (i.e., there must be a ClusterRoleBinding between the `multicluster-scheduler-source` ClusterRole and cluster1's identity).
+- A cluster-scoped ClusterTarget references a kubeconfig secret (name and namespace; can be in any namespace but it makes sense to store these in the same namespace as multicluster-scheduler, e.g., `admiralty`). Multicluster-scheduler will use the kubeconfig to interact with resources in the target cluster at the cluster scope, so it must be authorized to do so there (i.e., cluster2 must have a ClusterSource for cluster1's identity, or a ClusterRoleBinding between the `multicluster-scheduler-source` ClusterRole and cluster1's identity).
 
-- A namespaced Target associates a name with a reference to a kubeconfig secret (name only, in the same namespace). Multicluster-scheduler will use the kubeconfig to interact with resources in the target cluster in the eponymous namespace (except to view the cluster-scoped ClusterSummary, as explained above), so it must be authorized to do so there (i.e., there must be a RoleBinding between the `multicluster-scheduler-source` ClusterRole and cluster1's identity in that namespace).
+- A namespaced Target references a kubeconfig secret in the same namespace. Multicluster-scheduler will use the kubeconfig to interact with resources in the target cluster in that namespace (except to view the cluster-scoped ClusterSummary, as explained above), so it must be authorized to do so there (i.e., cluster2 must have a Source for cluster1's identity in that namespace, or a RoleBinding between the `multicluster-scheduler-source` ClusterRole and cluster1's identity).
 
-ClusterTargets and Targets can also target their local cluster, e.g., for cloud bursting. In that case, they don't reference a kubeconfig secret, but specify `spec.self=true` instead. In our case, apply the following two ClusterTargets in cluster1:
+ClusterTargets and Targets can also target their local cluster, e.g., for cloud bursting. In that case, they don't reference a kubeconfig secret, but specify `spec.self=true` instead. In our case, apply the following two Targets in cluster1:
 
 ```bash
 cat <<EOF | kubectl --context "$CLUSTER1" apply -f -
-kind: ClusterTarget
 apiVersion: multicluster.admiralty.io/v1alpha1
+kind: Target
 metadata:
   name: c2
+  namespace: $NAMESPACE
 spec:
   kubeconfigSecret:
     name: c2
-    namespace: admiralty
 ---
-kind: ClusterTarget
 apiVersion: multicluster.admiralty.io/v1alpha1
+kind: Target
 metadata:
   name: c1
+  namespace: $NAMESPACE
 spec:
   self: true
 EOF
 ```
 
-After a minute, check that virtual nodes named `admiralty-cluster-c1` and `admiralty-cluster-c2` have been created in cluster1:
+After a minute, check that virtual nodes named `admiralty-namespace-$NAMESPACE-c1` and `admiralty-namespace-$NAMESPACE-c2` have been created in cluster1:
 
 ```bash
 kubectl --context "$CLUSTER1" get node -l virtual-kubelet.io/provider=admiralty
@@ -280,16 +304,16 @@ kubectl --context "$CLUSTER1" get node -l virtual-kubelet.io/provider=admiralty
 
 ### Multi-Cluster Deployment in Source Cluster
 
-Multicluster-scheduler's pod admission controller operates in namespaces labeled with `multicluster-scheduler=enabled`. In cluster1, label the `default` namespace (any other namespace could be used as well, but you would have to change the example accordingly, of course):
+Multicluster-scheduler's pod admission controller operates in namespaces labeled with `multicluster-scheduler=enabled`. In cluster1, label the `default` namespace:
 
 ```bash
-kubectl --context "$CLUSTER1" label namespace default multicluster-scheduler=enabled
+kubectl --context "$CLUSTER1" label namespace "$NAMESPACE" multicluster-scheduler=enabled
 ```
 
 Then, deploy NGINX in it with the election annotation on the pod template:
 
 ```bash
-cat <<EOF | kubectl --context "$CLUSTER1" apply -f -
+cat <<EOF | kubectl --context "$CLUSTER1" -n "$NAMESPACE" apply -f -
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -324,8 +348,8 @@ Things to check:
 1. Delegate pods have been created in either cluster. Notice that their spec matches the original manifest.
 
 ```bash
-kubectl --context "$CLUSTER1" get pods -o wide # (-o yaml for details)
-kubectl --context "$CLUSTER2" get pods -o wide # (-o yaml for details)
+kubectl --context "$CLUSTER1" -n "$NAMESPACE" get pods -o wide # (-o yaml for details)
+kubectl --context "$CLUSTER2" -n "$NAMESPACE" get pods -o wide # (-o yaml for details)
 ```
 
 <details>
@@ -359,7 +383,7 @@ kubectl --context "$CLUSTER2" get nodes --show-labels
 To schedule a deployment to a particular region, just add a node selector to its pod template:
 
 ```sh
-kubectl --context "$CLUSTER1" patch deployment nginx -p '{
+kubectl --context "$CLUSTER1" -n "$NAMESPACE" patch deployment nginx -p '{
   "spec":{
     "template":{
       "spec": {
@@ -381,22 +405,22 @@ Our NGINX deployment isn't much use without a service to expose it. [Kubernetes 
 If some or all of the delegate pods are in a different cluster, we also need the service to route traffic to them. For that, we rely in this guide on a Cilium cluster mesh and global services. Multicluster-scheduler will annotate the service with `io.cilium/global-service=true` and replicate it across clusters. (Multicluster-scheduler replicates any global service across clusters, not just services targeting proxy pods.)
 
 ```bash
-kubectl --context "$CLUSTER1" expose deployment nginx
+kubectl --context "$CLUSTER1" -n "$NAMESPACE" expose deployment nginx
 ```
 
 We just created a service in cluster1, alongside our deployment. However, in the previous step, we rescheduled all NGINX pods to cluster2. Check that the service was rerouted, globalized, and replicated to cluster2:
 
 ```bash
-kubectl --context "$CLUSTER1" get service nginx -o yaml
+kubectl --context "$CLUSTER1" -n "$NAMESPACE" get service nginx -o yaml
 # Check the annotations and the selector,
 # then check that a copy exists in cluster2:
-kubectl --context "$CLUSTER2" get service nginx -o yaml
+kubectl --context "$CLUSTER2" -n "$NAMESPACE" get service nginx -o yaml
 ```
 
 Now call the delegate pods in cluster2 from cluster1:
 
 ```bash
-kubectl --context "$CLUSTER1" run foo -it --rm --image alpine --command -- sh -c "apk add curl && curl nginx"
+kubectl --context "$CLUSTER1" -n "$NAMESPACE" run foo -it --rm --image alpine --command -- sh -c "apk add curl && curl nginx"
 ```
 
 ## Community

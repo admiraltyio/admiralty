@@ -18,10 +18,14 @@
 
 package v1alpha1
 
+type ClusterSourceExpansion interface{}
+
 type ClusterSummaryExpansion interface{}
 
 type ClusterTargetExpansion interface{}
 
 type PodChaperonExpansion interface{}
+
+type SourceExpansion interface{}
 
 type TargetExpansion interface{}
