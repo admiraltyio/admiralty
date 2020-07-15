@@ -88,7 +88,7 @@ done
 
 At this point, multicluster-scheduler is installed in both clusters, but neither is a source or target yet.
 
-1. Target clusters need service accounts and RBAC rules to autenticate and authorize source clusters. The source controller can configure those for you, cf. [Creating ClusterSources and Sources in Target Clusters](#1-creating-clustersources-and-sources-in-target-clusters), below.
+1. Target clusters need service accounts and RBAC rules to autenticate and authorize source clusters. The source controller in each target cluster can configure those for you, cf. [Creating ClusterSources and Sources in Target Clusters](#1-creating-clustersources-and-sources-in-target-clusters), below.
 
 2. Source clusters need those service account's tokens, and their targets' server addresses and CA certificates, saved as kubeconfig files in secrets, cf. [Service Account Exchange](#2-service-account-exchange), below.
 
@@ -273,6 +273,8 @@ ClusterTargets and Targets are Kubernetes [custom resources](https://kubernetes.
 
 - A namespaced Target references a kubeconfig secret in the same namespace. Multicluster-scheduler will use the kubeconfig to interact with resources in the target cluster in that namespace (except to view the cluster-scoped ClusterSummary, as explained above), so it must be authorized to do so there (i.e., cluster2 must have a Source for cluster1's identity in that namespace, or a RoleBinding between the `multicluster-scheduler-source` ClusterRole and cluster1's identity).
 
+Depending on your use case, you may define a mix of ClusterTargets and Targets.
+
 ClusterTargets and Targets can also target their local cluster, e.g., for cloud bursting. In that case, they don't reference a kubeconfig secret, but specify `spec.self=true` instead. In our case, apply the following two Targets in cluster1:
 
 ```bash
@@ -301,6 +303,35 @@ After a minute, check that virtual nodes named `admiralty-namespace-$NAMESPACE-c
 ```bash
 kubectl --context "$CLUSTER1" get node -l virtual-kubelet.io/provider=admiralty
 ```
+
+<details>
+  <summary>ℹ If you want to target clusters at the cluster scope, ...</summary>
+
+  create ClusterTargets instead, e.g.:
+    
+  ```bash
+  cat <<EOF | kubectl --context "$CLUSTER1" apply -f -
+  apiVersion: multicluster.admiralty.io/v1alpha1
+  kind: ClusterTarget
+  metadata:
+    name: c2
+  spec:
+    kubeconfigSecret:
+      name: c2
+      namespace: admiralty
+  ---
+  apiVersion: multicluster.admiralty.io/v1alpha1
+  kind: ClusterTarget
+  metadata:
+    name: c1
+  spec:
+    self: true
+  EOF
+  ```
+
+  Virtual nodes will be called `admiralty-cluster-c1` and `admiralty-cluster-c2`, respectively.
+
+</details>
 
 ### Multi-Cluster Deployment in Source Cluster
 
