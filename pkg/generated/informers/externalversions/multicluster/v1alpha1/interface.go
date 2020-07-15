@@ -24,12 +24,16 @@ import (
 
 // Interface provides access to all the informers in this group version.
 type Interface interface {
+	// ClusterSources returns a ClusterSourceInformer.
+	ClusterSources() ClusterSourceInformer
 	// ClusterSummaries returns a ClusterSummaryInformer.
 	ClusterSummaries() ClusterSummaryInformer
 	// ClusterTargets returns a ClusterTargetInformer.
 	ClusterTargets() ClusterTargetInformer
 	// PodChaperons returns a PodChaperonInformer.
 	PodChaperons() PodChaperonInformer
+	// Sources returns a SourceInformer.
+	Sources() SourceInformer
 	// Targets returns a TargetInformer.
 	Targets() TargetInformer
 }
@@ -45,6 +49,11 @@ func New(f internalinterfaces.SharedInformerFactory, namespace string, tweakList
 	return &version{factory: f, namespace: namespace, tweakListOptions: tweakListOptions}
 }
 
+// ClusterSources returns a ClusterSourceInformer.
+func (v *version) ClusterSources() ClusterSourceInformer {
+	return &clusterSourceInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
+}
+
 // ClusterSummaries returns a ClusterSummaryInformer.
 func (v *version) ClusterSummaries() ClusterSummaryInformer {
 	return &clusterSummaryInformer{factory: v.factory, tweakListOptions: v.tweakListOptions}
@@ -58,6 +67,11 @@ func (v *version) ClusterTargets() ClusterTargetInformer {
 // PodChaperons returns a PodChaperonInformer.
 func (v *version) PodChaperons() PodChaperonInformer {
 	return &podChaperonInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+}
+
+// Sources returns a SourceInformer.
+func (v *version) Sources() SourceInformer {
+	return &sourceInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }
 
 // Targets returns a TargetInformer.

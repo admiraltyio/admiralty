@@ -3,6 +3,17 @@ kind: ClusterRole
 metadata:
   name: {{ include "fullname" . }}
   labels: {{ include "labels" . | nindent 4 }}
+aggregationRule:
+  clusterRoleSelectors:
+    - matchLabels:
+        admiralty.io/aggregate-to-controller-manager: "true"
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "fullname" . }}-todo-split
+  labels: {{ include "labels" . | nindent 4 }}
+    admiralty.io/aggregate-to-controller-manager: "true"
 rules:
   - apiGroups:
       - multicluster.admiralty.io
@@ -78,6 +89,45 @@ rules:
       - nodes/status
     verbs:
       - update
+{{- if .Values.sourceController.enabled }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "fullname" . }}-source-controller
+  labels: {{ include "labels" . | nindent 4 }}
+    admiralty.io/aggregate-to-controller-manager: "true"
+rules:
+  - apiGroups:
+      - multicluster.admiralty.io
+    resources:
+      - sources
+      - clustersources
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - ""
+    resources:
+      - serviceaccounts
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+  - apiGroups:
+      - rbac.authorization.k8s.io
+    resources:
+      - rolebindings
+      - clusterrolebindings
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - update
+{{- end }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole

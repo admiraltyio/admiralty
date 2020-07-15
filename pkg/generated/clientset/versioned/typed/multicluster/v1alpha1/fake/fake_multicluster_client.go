@@ -28,6 +28,10 @@ type FakeMulticlusterV1alpha1 struct {
 	*testing.Fake
 }
 
+func (c *FakeMulticlusterV1alpha1) ClusterSources() v1alpha1.ClusterSourceInterface {
+	return &FakeClusterSources{c}
+}
+
 func (c *FakeMulticlusterV1alpha1) ClusterSummaries() v1alpha1.ClusterSummaryInterface {
 	return &FakeClusterSummaries{c}
 }
@@ -38,6 +42,10 @@ func (c *FakeMulticlusterV1alpha1) ClusterTargets() v1alpha1.ClusterTargetInterf
 
 func (c *FakeMulticlusterV1alpha1) PodChaperons(namespace string) v1alpha1.PodChaperonInterface {
 	return &FakePodChaperons{c, namespace}
+}
+
+func (c *FakeMulticlusterV1alpha1) Sources(namespace string) v1alpha1.SourceInterface {
+	return &FakeSources{c, namespace}
 }
 
 func (c *FakeMulticlusterV1alpha1) Targets(namespace string) v1alpha1.TargetInterface {

@@ -1,0 +1,6 @@
+kind: Source
+apiVersion: multicluster.admiralty.io/v1alpha1
+metadata:
+  name: cluster1
+spec:
+  serviceAccountName: cluster1

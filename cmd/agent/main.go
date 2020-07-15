@@ -19,6 +19,7 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"log"
 	"time"
 
@@ -28,6 +29,7 @@ import (
 	"github.com/sirupsen/logrus"
 	vklog "github.com/virtual-kubelet/virtual-kubelet/log"
 	logruslogger "github.com/virtual-kubelet/virtual-kubelet/log/logrus"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	kubeinformers "k8s.io/client-go/informers"
 	v1 "k8s.io/client-go/informers/core/v1"
@@ -48,6 +50,7 @@ import (
 	"admiralty.io/multicluster-scheduler/pkg/controllers/follow"
 	"admiralty.io/multicluster-scheduler/pkg/controllers/globalsvc"
 	"admiralty.io/multicluster-scheduler/pkg/controllers/resources"
+	"admiralty.io/multicluster-scheduler/pkg/controllers/source"
 	"admiralty.io/multicluster-scheduler/pkg/controllers/svcreroute"
 	"admiralty.io/multicluster-scheduler/pkg/generated/clientset/versioned"
 	clientset "admiralty.io/multicluster-scheduler/pkg/generated/clientset/versioned"
@@ -74,7 +77,7 @@ func main() {
 	k, err := kubernetes.NewForConfig(cfg)
 	utilruntime.Must(err)
 
-	startOldStyleControllers(stopCh, agentCfg, cfg, k)
+	startOldStyleControllers(ctx, stopCh, agentCfg, cfg, k)
 	startWebhook(stopCh, cfg)
 
 	if len(agentCfg.Targets) > 0 {
@@ -87,7 +90,7 @@ func main() {
 
 // TODO: this is a bit messy, we need to refactor using a pattern similar to the one of multicluster-controller,
 // but for "old-style" controllers, i.e., using typed informers
-func startOldStyleControllers(stopCh <-chan struct{}, agentCfg agentconfig.Config, cfg *rest.Config, k *kubernetes.Clientset) {
+func startOldStyleControllers(ctx context.Context, stopCh <-chan struct{}, agentCfg agentconfig.Config, cfg *rest.Config, k *kubernetes.Clientset) {
 	customClient, err := versioned.NewForConfig(cfg)
 	utilruntime.Must(err)
 
@@ -167,6 +170,23 @@ func startOldStyleControllers(stopCh <-chan struct{}, agentCfg agentconfig.Confi
 			kubeInformerFactory.Core().V1().Secrets(), targetSecretInformers, selfTargetKeys)
 	}
 
+	var srcCtrl *controller.Controller
+	// HACK: indirect feature gate, disable source controller if clustersources cannot be listed (e.g., not allowed)
+	srcCtrlEnabled := true
+	_, err = customClient.MulticlusterV1alpha1().ClusterSources().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		utilruntime.HandleError(fmt.Errorf("cannot list clustersources, disabling source controller: %s", err))
+		srcCtrlEnabled = false
+	}
+	if srcCtrlEnabled {
+		sourceInformer := customInformerFactory.Multicluster().V1alpha1().Sources()
+		clusterSourceInformer := customInformerFactory.Multicluster().V1alpha1().ClusterSources()
+		saInformer := kubeInformerFactory.Core().V1().ServiceAccounts()
+		rbInformer := kubeInformerFactory.Rbac().V1().RoleBindings()
+		crbInformer := kubeInformerFactory.Rbac().V1().ClusterRoleBindings()
+		srcCtrl = source.NewController(k, sourceInformer, clusterSourceInformer, saInformer, rbInformer, crbInformer)
+	}
+
 	kubeInformerFactory.Start(stopCh)
 	customInformerFactory.Start(stopCh)
 	for _, f := range targetKubeInformerFactories {
@@ -185,6 +205,9 @@ func startOldStyleControllers(stopCh <-chan struct{}, agentCfg agentconfig.Confi
 	if nt > 0 {
 		go func() { utilruntime.Must(cmFollowCtrl.Run(2, stopCh)) }()
 		go func() { utilruntime.Must(secretFollowCtrl.Run(2, stopCh)) }()
+	}
+	if srcCtrlEnabled {
+		go func() { utilruntime.Must(srcCtrl.Run(2, stopCh)) }()
 	}
 }
 
