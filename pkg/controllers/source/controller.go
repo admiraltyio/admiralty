@@ -19,6 +19,7 @@ package source
 import (
 	"context"
 	"fmt"
+	"os"
 	"reflect"
 	"time"
 
@@ -44,13 +45,13 @@ import (
 var clusterRoleRefSource = rbacv1.RoleRef{
 	APIGroup: "rbac.authorization.k8s.io",
 	Kind:     "ClusterRole",
-	Name:     "multicluster-scheduler-source",
+	Name:     os.Getenv("SOURCE_CLUSTER_ROLE_NAME"),
 }
 
 var clusterRoleRefClusterSummaryViewer = rbacv1.RoleRef{
 	APIGroup: "rbac.authorization.k8s.io",
 	Kind:     "ClusterRole",
-	Name:     "multicluster-scheduler-cluster-summary-viewer",
+	Name:     os.Getenv("CLUSTER_SUMMARY_VIEWER_CLUSTER_ROLE_NAME"),
 }
 
 type reconciler struct {
@@ -213,9 +214,9 @@ func (c *reconciler) ensureClusterRoleBinding(ctx context.Context, name string, 
 			return nil, err
 		}
 	} else if !reflect.DeepEqual(crb.Subjects, subjects) {
-		copy := crb.DeepCopy()
-		copy.Subjects = subjects
-		crb, err = c.kubeClient.RbacV1().ClusterRoleBindings().Update(ctx, copy, metav1.UpdateOptions{})
+		actualCopy := crb.DeepCopy()
+		actualCopy.Subjects = subjects
+		crb, err = c.kubeClient.RbacV1().ClusterRoleBindings().Update(ctx, actualCopy, metav1.UpdateOptions{})
 		if err != nil {
 			return nil, err
 		}
@@ -243,9 +244,9 @@ func (c *reconciler) ensureRoleBinding(ctx context.Context, name, namespace stri
 			return nil, err
 		}
 	} else if !reflect.DeepEqual(rb.Subjects, subjects) {
-		copy := rb.DeepCopy()
-		copy.Subjects = subjects
-		rb, err = c.kubeClient.RbacV1().RoleBindings(namespace).Update(ctx, copy, metav1.UpdateOptions{})
+		actualCopy := rb.DeepCopy()
+		actualCopy.Subjects = subjects
+		rb, err = c.kubeClient.RbacV1().RoleBindings(namespace).Update(ctx, actualCopy, metav1.UpdateOptions{})
 		if err != nil {
 			return nil, err
 		}
