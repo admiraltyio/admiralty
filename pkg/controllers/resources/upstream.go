@@ -94,10 +94,10 @@ func (r upstream) Handle(key interface{}) (requeueAfter *time.Duration, err erro
 
 	if !reflect.DeepEqual(virtualNode.Status.Capacity, clusterSummary.Capacity) ||
 		!reflect.DeepEqual(virtualNode.Status.Allocatable, clusterSummary.Allocatable) {
-		copy := virtualNode.DeepCopy()
-		copy.Status.Allocatable = clusterSummary.Allocatable
-		copy.Status.Capacity = clusterSummary.Capacity
-		_, err = r.kubeclientset.CoreV1().Nodes().UpdateStatus(ctx, copy, v1.UpdateOptions{})
+		actualCopy := virtualNode.DeepCopy()
+		actualCopy.Status.Allocatable = clusterSummary.Allocatable
+		actualCopy.Status.Capacity = clusterSummary.Capacity
+		_, err = r.kubeclientset.CoreV1().Nodes().UpdateStatus(ctx, actualCopy, v1.UpdateOptions{})
 		if err != nil {
 			return nil, err
 		}
