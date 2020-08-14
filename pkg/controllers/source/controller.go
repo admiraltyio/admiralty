@@ -18,6 +18,7 @@ package source
 
 import (
 	"context"
+	"os"
 	"reflect"
 	"time"
 
@@ -44,13 +45,13 @@ import (
 var clusterRoleRefSource = rbacv1.RoleRef{
 	APIGroup: "rbac.authorization.k8s.io",
 	Kind:     "ClusterRole",
-	Name:     "multicluster-scheduler-source",
+	Name:     os.Getenv("SOURCE_CLUSTER_ROLE_NAME"),
 }
 
 var clusterRoleRefClusterSummaryViewer = rbacv1.RoleRef{
 	APIGroup: "rbac.authorization.k8s.io",
 	Kind:     "ClusterRole",
-	Name:     "multicluster-scheduler-cluster-summary-viewer",
+	Name:     os.Getenv("CLUSTER_SUMMARY_VIEWER_CLUSTER_ROLE_NAME"),
 }
 
 type reconciler struct {
