@@ -19,9 +19,10 @@ package proxypod
 import (
 	"fmt"
 
-	"admiralty.io/multicluster-scheduler/pkg/common"
 	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/yaml"
+
+	"admiralty.io/multicluster-scheduler/pkg/common"
 )
 
 func IsProxy(pod *corev1.Pod) bool {
@@ -49,5 +50,5 @@ func GetScheduledClusterName(proxyPod *corev1.Pod) string {
 	if !IsScheduled(proxyPod) {
 		return ""
 	}
-	return proxyPod.Spec.NodeName[10:]
+	return proxyPod.Spec.NodeName
 }

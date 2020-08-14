@@ -30,6 +30,7 @@ import (
 
 	"admiralty.io/multicluster-scheduler/pkg/apis/multicluster/v1alpha1"
 	"admiralty.io/multicluster-scheduler/pkg/generated/clientset/versioned"
+	"admiralty.io/multicluster-scheduler/pkg/name"
 )
 
 type Config struct {
@@ -44,11 +45,7 @@ type Target struct {
 }
 
 func (t Target) GetKey() string {
-	if t.Namespace == "" {
-		return fmt.Sprintf("cluster-%s", t.Name)
-	} else {
-		return fmt.Sprintf("namespace-%s-%s", t.Namespace, t.Name)
-	}
+	return name.FromParts(name.Long, []int{0}, []int{1}, "admiralty", t.Namespace, t.Name)
 }
 
 // until we watch targets at runtime, we can already load them from objects at startup

@@ -65,7 +65,7 @@ func NewUpstreamController(kubeclientset kubernetes.Interface,
 	nodeInformer.Informer().AddEventHandler(controller.HandleAddUpdateWith(func(obj interface{}) {
 		node := obj.(*corev1.Node)
 		if node.Labels[common.LabelAndTaintKeyVirtualKubeletProvider] == common.VirtualKubeletProviderName {
-			c.EnqueueKey(node.Name[10:]) // TODO move name builder to model
+			c.EnqueueKey(node.Name)
 		}
 	}))
 	for targetName, informer := range clusterSummaryInformers {
@@ -87,7 +87,7 @@ func (r upstream) Handle(key interface{}) (requeueAfter *time.Duration, err erro
 		return nil, err
 	}
 
-	virtualNode, err := r.nodeLister.Get("admiralty-" + targetName) // TODO move name builder to model
+	virtualNode, err := r.nodeLister.Get(targetName)
 	if err != nil {
 		return nil, err
 	}
