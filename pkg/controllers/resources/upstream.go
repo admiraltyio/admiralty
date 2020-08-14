@@ -65,7 +65,7 @@ func NewUpstreamController(kubeclientset kubernetes.Interface,
 	nodeInformer.Informer().AddEventHandler(controller.HandleAddUpdateWith(func(obj interface{}) {
 		node := obj.(*corev1.Node)
 		if node.Labels[common.LabelAndTaintKeyVirtualKubeletProvider] == common.VirtualKubeletProviderName {
-			c.EnqueueKey(node.Name[10:]) // TODO move name builder to model
+			c.EnqueueKey(node.Name)
 		}
 	}))
 	for targetName, informer := range clusterSummaryInformers {
@@ -87,17 +87,17 @@ func (r upstream) Handle(key interface{}) (requeueAfter *time.Duration, err erro
 		return nil, err
 	}
 
-	virtualNode, err := r.nodeLister.Get("admiralty-" + targetName) // TODO move name builder to model
+	virtualNode, err := r.nodeLister.Get(targetName)
 	if err != nil {
 		return nil, err
 	}
 
 	if !reflect.DeepEqual(virtualNode.Status.Capacity, clusterSummary.Capacity) ||
 		!reflect.DeepEqual(virtualNode.Status.Allocatable, clusterSummary.Allocatable) {
-		copy := virtualNode.DeepCopy()
-		copy.Status.Allocatable = clusterSummary.Allocatable
-		copy.Status.Capacity = clusterSummary.Capacity
-		_, err = r.kubeclientset.CoreV1().Nodes().UpdateStatus(ctx, copy, v1.UpdateOptions{})
+		actualCopy := virtualNode.DeepCopy()
+		actualCopy.Status.Allocatable = clusterSummary.Allocatable
+		actualCopy.Status.Capacity = clusterSummary.Capacity
+		_, err = r.kubeclientset.CoreV1().Nodes().UpdateStatus(ctx, actualCopy, v1.UpdateOptions{})
 		if err != nil {
 			return nil, err
 		}

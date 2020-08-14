@@ -88,7 +88,7 @@ func main() {
 	<-stopCh
 }
 
-// TODO: this is a bit messy, we need to refactor using a pattern similar to the one of multicluster-controller,
+// TODO: this is very messy, we need to refactor using a pattern similar to the one of multicluster-controller,
 // but for "old-style" controllers, i.e., using typed informers
 func startOldStyleControllers(ctx context.Context, stopCh <-chan struct{}, agentCfg agentconfig.Config, cfg *rest.Config, k *kubernetes.Clientset) {
 	customClient, err := versioned.NewForConfig(cfg)
@@ -280,7 +280,7 @@ func startVirtualKubelet(ctx context.Context, agentCfg agentconfig.Config, k kub
 	}
 
 	for _, target := range agentCfg.Targets {
-		n := "admiralty-" + target.GetKey()
+		n := target.GetKey()
 		go func(nodeName string) {
 			if err := node.Run(ctx, node.Opts{NodeName: n}, k); err != nil && errors.Cause(err) != context.Canceled {
 				vklog.G(ctx).Fatal(err)

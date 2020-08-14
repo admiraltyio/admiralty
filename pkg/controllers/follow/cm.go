@@ -213,7 +213,7 @@ func (r configMapReconciler) Handle(obj interface{}) (requeueAfter *time.Duratio
 			}
 			continue
 		}
-		if remoteConfigMap.Labels[common.LabelKeyParentUID] == string(configMap.UID) {
+		if controller.ParentControlsChild(remoteConfigMap, configMap) {
 			remoteConfigMaps[targetName] = remoteConfigMap
 		}
 	}
@@ -322,15 +322,15 @@ func (r configMapReconciler) removeFinalizer(ctx context.Context, configMap *cor
 func makeRemoteConfigMap(configMap *corev1.ConfigMap) *corev1.ConfigMap {
 	gold := &corev1.ConfigMap{}
 	gold.Name = configMap.Name
-	gold.Labels = make(map[string]string, len(configMap.Labels)+1)
-	gold.Labels[common.LabelKeyParentUID] = string(configMap.UID) // cross-cluster "owner reference"
+	gold.Labels = make(map[string]string, len(configMap.Labels))
 	for k, v := range configMap.Labels {
 		gold.Labels[k] = v
 	}
-	gold.Annotations = make(map[string]string, len(configMap.Annotations)+1)
+	gold.Annotations = make(map[string]string, len(configMap.Annotations))
 	for k, v := range configMap.Annotations {
 		gold.Annotations[k] = v
 	}
+	controller.AddRemoteControllerReference(gold, configMap)
 	gold.Data = make(map[string]string, len(configMap.Data))
 	for k, v := range configMap.Data {
 		gold.Data[k] = v

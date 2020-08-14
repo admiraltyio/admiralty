@@ -24,6 +24,7 @@ import (
 
 	"admiralty.io/multicluster-scheduler/pkg/apis/multicluster/v1alpha1"
 	"admiralty.io/multicluster-scheduler/pkg/common"
+	"admiralty.io/multicluster-scheduler/pkg/controller"
 	"admiralty.io/multicluster-scheduler/pkg/model/proxypod"
 )
 
@@ -54,8 +55,8 @@ func MakeDelegatePod(proxyPod *corev1.Pod) (*v1alpha1.PodChaperon, error) {
 		newKey := common.KeyPrefix + keySplit[len(keySplit)-1]
 		labels[newKey] = v
 	}
+	// used to get pod chaperon given proxy pod ("list one" hack)
 	labels[common.LabelKeyParentUID] = string(proxyPod.UID)
-	labels[common.LabelKeyParentName] = proxyPod.Name
 
 	delegatePod := &v1alpha1.PodChaperon{
 		ObjectMeta: metav1.ObjectMeta{
@@ -64,6 +65,8 @@ func MakeDelegatePod(proxyPod *corev1.Pod) (*v1alpha1.PodChaperon, error) {
 			Labels:       labels,
 			Annotations:  annotations},
 		Spec: *srcPod.Spec.DeepCopy()}
+
+	controller.AddRemoteControllerReference(delegatePod, proxyPod)
 
 	removeServiceAccount(&delegatePod.Spec)
 	// TODO? add compatible fields instead of removing incompatible ones
