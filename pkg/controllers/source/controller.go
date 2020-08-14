@@ -18,7 +18,6 @@ package source
 
 import (
 	"context"
-	"fmt"
 	"reflect"
 	"time"
 
@@ -39,6 +38,7 @@ import (
 	"admiralty.io/multicluster-scheduler/pkg/controller"
 	informers "admiralty.io/multicluster-scheduler/pkg/generated/informers/externalversions/multicluster/v1alpha1"
 	listers "admiralty.io/multicluster-scheduler/pkg/generated/listers/multicluster/v1alpha1"
+	"admiralty.io/multicluster-scheduler/pkg/name"
 )
 
 var clusterRoleRefSource = rbacv1.RoleRef{
@@ -112,13 +112,13 @@ func (c *reconciler) Handle(obj interface{}) (requeueAfter *time.Duration, err e
 	ctx := context.Background()
 
 	key := obj.(string)
-	namespace, name, err := cache.SplitMetaNamespaceKey(key)
+	namespace, srcName, err := cache.SplitMetaNamespaceKey(key)
 	utilruntime.Must(err)
 
-	var userName, saName, saNamespace, crbNamePrefix, rbNamePrefix string
+	var userName, saName, saNamespace, crbName, rbName, clusterSummaryViewerCRBName string
 	var ownerRef *metav1.OwnerReference
 	if namespace == "" {
-		clusterSource, err := c.clusterSourceLister.Get(name)
+		clusterSource, err := c.clusterSourceLister.Get(srcName)
 		if err != nil {
 			if errors.IsNotFound(err) {
 				return nil, nil
@@ -134,9 +134,12 @@ func (c *reconciler) Handle(obj interface{}) (requeueAfter *time.Duration, err e
 
 		userName = clusterSource.Spec.UserName
 
-		crbNamePrefix = fmt.Sprintf("admiralty-cluster-source-%s", clusterSource.Name)
+		crbName = name.FromParts(name.Long, []int{0}, nil,
+			"admiralty-cluster-source", clusterSource.Name)
+		clusterSummaryViewerCRBName = name.FromParts(name.Long, []int{0, 2}, nil,
+			"admiralty-cluster-source", clusterSource.Name, "cluster-summary-viewer")
 	} else {
-		source, err := c.sourceLister.Sources(namespace).Get(name)
+		source, err := c.sourceLister.Sources(namespace).Get(srcName)
 		if err != nil {
 			if errors.IsNotFound(err) {
 				return nil, nil
@@ -150,8 +153,10 @@ func (c *reconciler) Handle(obj interface{}) (requeueAfter *time.Duration, err e
 
 		userName = source.Spec.UserName
 
-		crbNamePrefix = fmt.Sprintf("admiralty-source-%s-%s", source.Namespace, source.Name)
-		rbNamePrefix = fmt.Sprintf("admiralty-source-%s", source.Name)
+		rbName = name.FromParts(name.Long, []int{0}, nil,
+			"admiralty-source", source.Name)
+		clusterSummaryViewerCRBName = name.FromParts(name.Long, []int{0, 3}, nil,
+			"admiralty-source", source.Namespace, source.Name, "cluster-summary-viewer")
 	}
 
 	if saName != "" {
@@ -173,18 +178,18 @@ func (c *reconciler) Handle(obj interface{}) (requeueAfter *time.Duration, err e
 
 	if userName != "" || saName != "" {
 		if namespace == "" {
-			requeueAfter, err := c.ensureClusterRoleBinding(ctx, crbNamePrefix, clusterRoleRefSource, userName, saName, saNamespace, ownerRef)
+			requeueAfter, err := c.ensureClusterRoleBinding(ctx, crbName, clusterRoleRefSource, userName, saName, saNamespace, ownerRef)
 			if requeueAfter != nil || err != nil {
 				return requeueAfter, err
 			}
 		} else {
-			requeueAfter, err := c.ensureRoleBinding(ctx, rbNamePrefix, namespace, clusterRoleRefSource, userName, saName, saNamespace, ownerRef)
+			requeueAfter, err := c.ensureRoleBinding(ctx, rbName, namespace, clusterRoleRefSource, userName, saName, saNamespace, ownerRef)
 			if requeueAfter != nil || err != nil {
 				return requeueAfter, err
 			}
 		}
 
-		requeueAfter, err := c.ensureClusterRoleBinding(ctx, fmt.Sprintf("%s-%s", crbNamePrefix, "cluster-summary-viewer"),
+		requeueAfter, err := c.ensureClusterRoleBinding(ctx, clusterSummaryViewerCRBName,
 			clusterRoleRefClusterSummaryViewer, userName, saName, saNamespace, ownerRef)
 		if requeueAfter != nil || err != nil {
 			return requeueAfter, err
@@ -213,9 +218,9 @@ func (c *reconciler) ensureClusterRoleBinding(ctx context.Context, name string, 
 			return nil, err
 		}
 	} else if !reflect.DeepEqual(crb.Subjects, subjects) {
-		copy := crb.DeepCopy()
-		copy.Subjects = subjects
-		crb, err = c.kubeClient.RbacV1().ClusterRoleBindings().Update(ctx, copy, metav1.UpdateOptions{})
+		actualCopy := crb.DeepCopy()
+		actualCopy.Subjects = subjects
+		crb, err = c.kubeClient.RbacV1().ClusterRoleBindings().Update(ctx, actualCopy, metav1.UpdateOptions{})
 		if err != nil {
 			return nil, err
 		}
@@ -243,9 +248,9 @@ func (c *reconciler) ensureRoleBinding(ctx context.Context, name, namespace stri
 			return nil, err
 		}
 	} else if !reflect.DeepEqual(rb.Subjects, subjects) {
-		copy := rb.DeepCopy()
-		copy.Subjects = subjects
-		rb, err = c.kubeClient.RbacV1().RoleBindings(namespace).Update(ctx, copy, metav1.UpdateOptions{})
+		actualCopy := rb.DeepCopy()
+		actualCopy.Subjects = subjects
+		rb, err = c.kubeClient.RbacV1().RoleBindings(namespace).Update(ctx, actualCopy, metav1.UpdateOptions{})
 		if err != nil {
 			return nil, err
 		}

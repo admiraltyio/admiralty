@@ -58,7 +58,7 @@ func (pl *Plugin) Name() string {
 }
 
 func virtualNodeNameToClusterName(nodeName string) string {
-	return nodeName[10:]
+	return nodeName
 }
 
 func (pl *Plugin) getCandidate(ctx context.Context, proxyPod *v1.Pod, clusterName string) (*v1alpha1.PodChaperon, error) {
