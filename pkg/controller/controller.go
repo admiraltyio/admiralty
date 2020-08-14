@@ -166,13 +166,20 @@ func (c *Controller) EnqueueController(ownerKind string, getOwner GetOwner) func
 func (c *Controller) EnqueueRemoteController(ownerKind string, getOwner GetOwner) func(obj interface{}) {
 	return func(obj interface{}) {
 		object := obj.(metav1.Object)
-		l := object.GetLabels()
-		if parentUID, ok := l[common.LabelKeyParentUID]; ok {
-			parentNamespace := l[common.LabelKeyParentNamespace]
+		a := object.GetAnnotations()
+		parentUID, ok := a[common.LabelKeyParentUID]
+		if !ok {
+			// for backward compatibility use labels instead,
+			// even though didn't work for parent names longer than 63 characters
+			a = object.GetLabels()
+			parentUID, ok = a[common.LabelKeyParentUID]
+		}
+		if ok {
+			parentNamespace := a[common.LabelKeyParentNamespace]
 			if parentNamespace == "" {
 				parentNamespace = object.GetNamespace()
 			}
-			parentName := l[common.LabelKeyParentName]
+			parentName := a[common.LabelKeyParentName]
 			if parentName == "" {
 				parentName = object.GetName()
 			}
@@ -190,4 +197,20 @@ func (c *Controller) EnqueueRemoteController(ownerKind string, getOwner GetOwner
 			return
 		}
 	}
+}
+
+func AddRemoteControllerReference(child metav1.Object, parent metav1.Object) {
+	a := child.GetAnnotations()
+	if a == nil {
+		a = map[string]string{}
+		child.SetAnnotations(a)
+	}
+	a[common.LabelKeyParentUID] = string(parent.GetUID())
+	a[common.LabelKeyParentNamespace] = parent.GetNamespace()
+	a[common.LabelKeyParentName] = parent.GetName()
+}
+
+func ParentControlsChild(child metav1.Object, parent metav1.Object) bool {
+	return child.GetAnnotations()[common.LabelKeyParentUID] == string(parent.GetUID()) ||
+		child.GetLabels()[common.LabelKeyParentUID] == string(parent.GetUID()) // for backward compatibility
 }

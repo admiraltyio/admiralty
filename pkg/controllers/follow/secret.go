@@ -218,7 +218,7 @@ func (r secretReconciler) Handle(obj interface{}) (requeueAfter *time.Duration, 
 			}
 			continue
 		}
-		if remoteSecret.Labels[common.LabelKeyParentUID] == string(secret.UID) {
+		if controller.ParentControlsChild(remoteSecret, secret) {
 			remoteSecrets[targetName] = remoteSecret
 		}
 	}
@@ -323,8 +323,7 @@ func (r secretReconciler) removeFinalizer(ctx context.Context, secret *corev1.Se
 func makeRemoteSecret(secret *corev1.Secret) *corev1.Secret {
 	gold := &corev1.Secret{}
 	gold.Name = secret.Name
-	gold.Labels = make(map[string]string, len(secret.Labels)+1)
-	gold.Labels[common.LabelKeyParentUID] = string(secret.UID) // cross-cluster "owner reference"
+	gold.Labels = make(map[string]string, len(secret.Labels))
 	for k, v := range secret.Labels {
 		gold.Labels[k] = v
 	}
@@ -332,6 +331,7 @@ func makeRemoteSecret(secret *corev1.Secret) *corev1.Secret {
 	for k, v := range secret.Annotations {
 		gold.Annotations[k] = v
 	}
+	controller.AddRemoteControllerReference(gold, secret)
 	gold.Type = secret.Type
 	gold.Data = make(map[string][]byte, len(secret.Data))
 	for k, v := range secret.Data {
