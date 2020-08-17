@@ -20,6 +20,21 @@
 
 -->
 
+## v0.10.0
+
+### New Features
+
+- The Source CRD and controller make it easy to create service accounts and role bindings for source clusters in a target cluster. (PR #48)
+- The Target CRD and controller allow defining targets of a source cluster at runtime, rather than as Helm release values. (PR #49)
+
+### Bugfixes
+
+- Fix name collisions and length issues (PR #56)
+- Fix cross-cluster references when parent-child names differ and parent name ins longer than 63 characters, including proxy-delegate pods (PR #57)
+- Fix source cluster role references (PR #58)
+
+See further changes already listed for release candidates below.
+
 ## v0.10.0-rc.1
 
 This release fixes cluster summary RBAC for namespaced targets. (ClusterSummary is a new CRD introduced in v0.10.0-rc.0.)

@@ -17,20 +17,15 @@
 
 set -euo pipefail
 
-DEFAULT_REGISTRY="quay.io/admiralty"
+BEFORE_VERSION="$1"
+AFTER_VERSION="$2"
 
-VERSION="$1"
-REGISTRY="${2:-$DEFAULT_REGISTRY}"
+sed_opt="-i"
+regex_opt=""
+#sed_opt="--quiet"
+#regex_opt="p"
 
-CMDS=(
-  "agent"
-  "remove-finalizers"
-  "scheduler"
-  "restarter"
-)
-
-for CMD in "${CMDS[@]}"; do
-  IMG="multicluster-scheduler-$CMD"
-  docker tag "$DEFAULT_REGISTRY/$IMG:$VERSION" "$REGISTRY/$IMG:$VERSION"
-  docker push "$REGISTRY/$IMG:$VERSION"
-done
+sed $sed_opt "s/--version $BEFORE_VERSION/--version $AFTER_VERSION/g$regex_opt" README.md
+sed $sed_opt "s/^version: $BEFORE_VERSION$/version: $AFTER_VERSION/$regex_opt" charts/multicluster-scheduler/Chart.yaml
+sed $sed_opt "s/^appVersion: $BEFORE_VERSION$/appVersion: $AFTER_VERSION/$regex_opt" charts/multicluster-scheduler/Chart.yaml
+sed $sed_opt "s/$BEFORE_VERSION/$AFTER_VERSION/g$regex_opt" charts/multicluster-scheduler/README.md
