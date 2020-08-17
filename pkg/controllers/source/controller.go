@@ -33,7 +33,6 @@ import (
 	corelisters "k8s.io/client-go/listers/core/v1"
 	rbaclisters "k8s.io/client-go/listers/rbac/v1"
 	"k8s.io/client-go/tools/cache"
-	"k8s.io/klog"
 
 	multiclusterv1alpha1 "admiralty.io/multicluster-scheduler/pkg/apis/multicluster/v1alpha1"
 	"admiralty.io/multicluster-scheduler/pkg/controller"
@@ -82,8 +81,6 @@ func NewController(
 		roleBindingLister:        roleBindingInformer.Lister(),
 		clusterRoleBindingLister: clusterRoleBindingInformer.Lister(),
 	}
-
-	klog.Info("Setting up event handlers")
 
 	c := controller.New("source", r,
 		sourceInformer.Informer().HasSynced,
