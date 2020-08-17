@@ -26,7 +26,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/klog"
 
 	"admiralty.io/multicluster-scheduler/pkg/controller"
 	informers "admiralty.io/multicluster-scheduler/pkg/generated/informers/externalversions/multicluster/v1alpha1"
@@ -55,8 +54,6 @@ func NewController(kubeClient kubernetes.Interface, installNamespace string, clu
 
 		installNamespace: installNamespace,
 	}
-
-	klog.Info("Setting up event handlers")
 
 	c := controller.New("source", r,
 		clusterTargetInformer.Informer().HasSynced,
