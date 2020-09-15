@@ -1,4 +1,7 @@
-# Scheduling
+---
+title: Configuring Scheduling
+custom_edit_url: https://github.com/admiraltyio/admiralty/edit/master/docs/operator_guide/scheduling.md
+---
 
 If your cluster needs to send pods to another cluster, you should create a [Target or ClusterTarget](#targets-and-cluster-targets) object.
 
@@ -6,11 +9,11 @@ If your cluster needs to receive pods from another cluster, you should create a 
 
 ## Targets and Cluster Targets
 
-ClusterTargets and Targets are Kubernetes custom resources installed with the Admiralty operator:
+ClusterTargets and Targets are Kubernetes custom resources installed with the Admiralty agent:
 
-- A cluster-scoped ClusterTarget references a kubeconfig secret (name and namespace; can be in any namespace, though it makes sense to store these in the Admiralty operator's installation namespace, e.g., `admiralty`). The Admiralty operator will use the kubeconfig to interact with resources in the target cluster at the cluster scope, so it must be authorized to do so there (i.e., the target cluster must have a ClusterSource authorizing the kubeconfig's identity, see below).
+- A cluster-scoped ClusterTarget references a kubeconfig secret (name and namespace; can be in any namespace, though it makes sense to store these in the Admiralty agent's installation namespace, e.g., `admiralty`). The Admiralty agent will use the kubeconfig to interact with resources in the target cluster at the cluster scope, so it must be authorized to do so there (i.e., the target cluster must have a ClusterSource authorizing the kubeconfig's identity, see below).
 
-- A namespaced Target references a kubeconfig secret in the same namespace. The Admiralty operator will use the kubeconfig to interact with resources in the target cluster in that namespace (except to view the cluster-scoped ClusterSummary, as explained below), so it must be authorized to do so there (i.e., the target cluster must have a Source authorizing the kubeconfig's identity in that namespace).
+- A namespaced Target references a kubeconfig secret in the same namespace. The Admiralty agent will use the kubeconfig to interact with resources in the target cluster in that namespace (except to view the cluster-scoped ClusterSummary, as explained below), so it must be authorized to do so there (i.e., the target cluster must have a Source authorizing the kubeconfig's identity in that namespace).
 
 Depending on your use case, you may define a mix of ClusterTargets and Targets.
 
@@ -89,3 +92,46 @@ metadata:
 spec:
   userName: spiffe://source-cluster/ns/namespace-a/id/default
 ```
+
+:::note
+
+If you don't want multicluster-controller to control RBAC, you can disable the source controller (with the Helm chart value `sourceController.enabled=false`) and create a ServiceAccount and ClusterRoleBindings and/or RoleBindings directly, e.g.:
+
+```bash
+cat <<EOF | kubectl --context "$CLUSTER2" apply -f -
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: c1
+  namespace: $NAMESPACE
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: admiralty-source-c1
+  namespace: $NAMESPACE
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: multicluster-scheduler-source
+subjects:
+  - kind: ServiceAccount
+    name: c1
+    namespace: $NAMESPACE
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: admiralty-source-$NAMESPACE-c1-cluster-summary-viewer
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: multicluster-scheduler-cluster-summary-viewer
+subjects:
+  - kind: ServiceAccount
+    name: c1
+    namespace: $NAMESPACE
+EOF
+```
+
+:::
