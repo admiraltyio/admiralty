@@ -17,6 +17,8 @@
 package node
 
 import (
+	"os"
+
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -77,12 +79,12 @@ func NodeFromOpts(c Opts) *v1.Node {
 				//	LastTransitionTime: metav1.Now(),
 				//},
 			},
-			//Addresses: []v1.NodeAddress{
-			//	{
-			//		Type:    "InternalIP",
-			//		Address: os.Getenv("VKUBELET_POD_IP"),
-			//	},
-			//},
+			Addresses: []v1.NodeAddress{
+				{
+					Type:    "InternalIP",
+					Address: os.Getenv("VKUBELET_POD_IP"),
+				},
+			},
 			//DaemonEndpoints: v1.NodeDaemonEndpoints{
 			//	KubeletEndpoint: v1.DaemonEndpoint{
 			//		Port: int32(c.ListenPort),

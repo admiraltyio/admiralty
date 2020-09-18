@@ -152,6 +152,27 @@ rules:
       - nodes/status
     verbs:
       - patch
+  - apiGroups:
+    - certificates.k8s.io
+    resources:
+    - certificatesigningrequests
+    verbs:
+    - create
+    - get
+  - apiGroups:
+    - certificates.k8s.io
+    resources:
+    - certificatesigningrequests/approval
+    verbs:
+    - update
+  - apiGroups:
+    - certificates.k8s.io
+    resources:
+    - signers
+    resourceNames:
+    - kubernetes.io/kubelet-serving
+    verbs:
+    - approve
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -185,6 +206,15 @@ rules:
       - create
       - update
       - delete
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["list"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get"]
+  - apiGroups: [""]
+    resources: ["pods/exec"]
+    verbs: ["create"]
 ---
 kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1

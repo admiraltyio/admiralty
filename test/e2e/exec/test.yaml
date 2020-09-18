@@ -1,0 +1,17 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: exec
+spec:
+  template:
+    metadata:
+      annotations:
+        multicluster.admiralty.io/elect: ""
+    spec:
+      nodeSelector:
+        a: b
+      restartPolicy: Never
+      containers:
+        - name: logs
+          image: busybox
+          command: [ "/bin/sh", "-c", "sleep 100" ]

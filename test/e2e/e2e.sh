@@ -1,4 +1,20 @@
 #!/usr/bin/env bash
+#
+# Copyright 2020 The Multicluster-Scheduler Authors.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
 set -euo pipefail
 
 VERSION="$1"
@@ -9,6 +25,8 @@ source test/e2e/argo.sh
 source test/e2e/cert-manager.sh
 source test/e2e/kind.sh
 source test/e2e/follow/test.sh
+source test/e2e/logs/test.sh
+source test/e2e/exec/test.sh
 source test/e2e/webhook_ready.sh
 
 argo_setup_once
@@ -44,6 +62,8 @@ trap cluster_dump EXIT
 
 argo_test 1 2
 follow_test 1 2
+logs_test 1 2
+exec_test 1 2
 
 # check that we didn't add finalizers to uncontrolled resources
 finalizer="multicluster.admiralty.io/multiclusterForegroundDeletion"

@@ -22,9 +22,14 @@ spec:
               value: {{ include "fullname" . }}-source
             - name: CLUSTER_SUMMARY_VIEWER_CLUSTER_ROLE_NAME
               value: {{ include "fullname" . }}-cluster-summary-viewer
+            - name: VKUBELET_POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
           image: {{ .Values.controllerManager.image.repository }}:{{ default .Chart.AppVersion .Values.controllerManager.image.tag }}
           ports:
               - containerPort: 9443
+              - containerPort: 10250
           volumeMounts:
             - mountPath: /tmp/k8s-webhook-server/serving-certs
               name: cert
