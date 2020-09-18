@@ -56,6 +56,8 @@ import (
 	clientset "admiralty.io/multicluster-scheduler/pkg/generated/clientset/versioned"
 	informers "admiralty.io/multicluster-scheduler/pkg/generated/informers/externalversions"
 	"admiralty.io/multicluster-scheduler/pkg/generated/informers/externalversions/multicluster/v1alpha1"
+	"admiralty.io/multicluster-scheduler/pkg/vk/csr"
+	"admiralty.io/multicluster-scheduler/pkg/vk/http"
 	"admiralty.io/multicluster-scheduler/pkg/vk/node"
 	"admiralty.io/multicluster-scheduler/pkg/webhooks/proxypod"
 )
@@ -279,12 +281,37 @@ func startVirtualKubelet(ctx context.Context, agentCfg agentconfig.Config, k kub
 		logrus.SetLevel(lvl)
 	}
 
+	targetConfigs := make(map[string]*rest.Config, len(agentCfg.Targets))
+	targetClients := make(map[string]kubernetes.Interface, len(agentCfg.Targets))
 	for _, target := range agentCfg.Targets {
 		n := target.GetKey()
-		go func(nodeName string) {
+		targetConfigs[n] = target.ClientConfig
+		targetClient, err := kubernetes.NewForConfig(target.ClientConfig)
+		utilruntime.Must(err)
+		targetClients[n] = targetClient
+
+		go func() {
 			if err := node.Run(ctx, node.Opts{NodeName: n}, k); err != nil && errors.Cause(err) != context.Canceled {
 				vklog.G(ctx).Fatal(err)
 			}
-		}(n)
+		}()
 	}
+
+	certPEM, keyPEM, err := csr.GetCertificateFromKubernetesAPIServer(ctx, k)
+	utilruntime.Must(err) // likely RBAC issue
+
+	cancelHTTP, err := http.SetupHTTPServer(ctx, &http.LogsExecProvider{
+		SourceClient:  k,
+		TargetConfigs: targetConfigs,
+		TargetClients: targetClients,
+	}, certPEM, keyPEM)
+	utilruntime.Must(err)
+
+	// this is a little convoluted, TODO: check the close/cancel/context mess with SetupHTTPServer
+	go func() {
+		select {
+		case <-ctx.Done():
+			cancelHTTP()
+		}
+	}()
 }
