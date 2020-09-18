@@ -36,7 +36,6 @@ import (
 	agentconfig "admiralty.io/multicluster-scheduler/pkg/config/agent"
 	"admiralty.io/multicluster-scheduler/pkg/generated/clientset/versioned"
 	"admiralty.io/multicluster-scheduler/pkg/model/delegatepod"
-	"admiralty.io/multicluster-scheduler/pkg/model/proxypod"
 )
 
 type Plugin struct {
@@ -92,10 +91,6 @@ func (pl *Plugin) allowCandidate(ctx context.Context, c *v1alpha1.PodChaperon, c
 const filterWaitDuration = 30 * time.Second // TODO configure
 
 func (pl *Plugin) Filter(ctx context.Context, state *framework.CycleState, pod *v1.Pod, nodeInfo *nodeinfo.NodeInfo) *framework.Status {
-	if !proxypod.IsProxy(pod) {
-		return nil
-	}
-
 	if nodeInfo.Node().Labels[common.LabelAndTaintKeyVirtualKubeletProvider] != common.VirtualKubeletProviderName {
 		return framework.NewStatus(framework.UnschedulableAndUnresolvable, "")
 	}
@@ -155,10 +150,6 @@ func (pl *Plugin) Filter(ctx context.Context, state *framework.CycleState, pod *
 }
 
 func (pl *Plugin) Reserve(ctx context.Context, state *framework.CycleState, p *v1.Pod, nodeName string) *framework.Status {
-	if !proxypod.IsProxy(p) {
-		return nil
-	}
-
 	targetClusterName := virtualNodeNameToClusterName(nodeName)
 	c, err := pl.getCandidate(ctx, p, targetClusterName)
 	if err != nil {
@@ -177,10 +168,6 @@ func (pl *Plugin) Reserve(ctx context.Context, state *framework.CycleState, p *v
 const preBindWaitDuration = 30 * time.Second
 
 func (pl *Plugin) PreBind(ctx context.Context, state *framework.CycleState, p *v1.Pod, nodeName string) *framework.Status {
-	if !proxypod.IsProxy(p) {
-		return nil
-	}
-
 	// wait for candidate to be bound or not
 	targetClusterName := virtualNodeNameToClusterName(nodeName)
 
@@ -222,10 +209,6 @@ func (pl *Plugin) candidateIsBound(ctx context.Context, p *v1.Pod, targetCluster
 }
 
 func (pl *Plugin) PostBind(ctx context.Context, state *framework.CycleState, p *v1.Pod, nodeName string) {
-	if !proxypod.IsProxy(p) {
-		return
-	}
-
 	targetClusterName := virtualNodeNameToClusterName(nodeName)
 	for clusterName, target := range pl.targets {
 		if clusterName == targetClusterName {
