@@ -26,8 +26,13 @@ import (
 )
 
 func IsProxy(pod *corev1.Pod) bool {
-	_, isProxy := pod.Annotations[common.AnnotationKeyElect]
-	return isProxy
+	// The scheduler name is the best indication that a pod is a proxy pod.
+	// The elect annotation can be added in namespaces where admiralty isn't enabled;
+	// pod would skip mutating admission webhook and be scheduled normally (not a proxy pod),
+	// which would cause issues for controllers looking up target client from node name.
+	// The node name is only an indicator after scheduling, and feedback needs to be able to remove finalizer even if pod wasn't scheduled;
+	// Also, service reroute can start working earlier this way.
+	return pod.Spec.SchedulerName == common.ProxySchedulerName
 }
 
 func GetSourcePod(proxyPod *corev1.Pod) (*corev1.Pod, error) {
