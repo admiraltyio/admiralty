@@ -32,7 +32,6 @@ import (
 
 	"admiralty.io/multicluster-scheduler/pkg/common"
 	"admiralty.io/multicluster-scheduler/pkg/generated/clientset/versioned"
-	"admiralty.io/multicluster-scheduler/pkg/model/proxypod"
 )
 
 type Plugin struct {
@@ -53,10 +52,6 @@ func (pl *Plugin) Name() string {
 }
 
 func (pl *Plugin) PreFilter(ctx context.Context, state *framework.CycleState, p *v1.Pod) *framework.Status {
-	if proxypod.IsProxy(p) {
-		return nil
-	}
-
 	// reset annotations
 	patch := []byte(`{"metadata":{"annotations":{
 "` + common.AnnotationKeyIsReserved + `":null,
@@ -72,10 +67,6 @@ func (pl *Plugin) PreFilterExtensions() framework.PreFilterExtensions {
 }
 
 func (pl *Plugin) Reserve(ctx context.Context, state *framework.CycleState, p *v1.Pod, nodeName string) *framework.Status {
-	if proxypod.IsProxy(p) {
-		return nil
-	}
-
 	patch := []byte(`{"metadata":{"annotations":{"` + common.AnnotationKeyIsReserved + `":"true"}}}`)
 	if _, err := pl.client.MulticlusterV1alpha1().PodChaperons(p.Namespace).Patch(ctx, p.Name, types.MergePatchType, patch, metav1.PatchOptions{}); err != nil {
 		return framework.NewStatus(framework.Error, err.Error())
@@ -86,10 +77,6 @@ func (pl *Plugin) Reserve(ctx context.Context, state *framework.CycleState, p *v
 const waitDuration = 30 * time.Second
 
 func (pl *Plugin) PreBind(ctx context.Context, state *framework.CycleState, p *v1.Pod, nodeName string) *framework.Status {
-	if proxypod.IsProxy(p) {
-		return nil
-	}
-
 	ctx, cancel := context.WithTimeout(ctx, waitDuration)
 	defer cancel()
 
