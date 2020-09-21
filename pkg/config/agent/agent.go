@@ -18,7 +18,7 @@ package agent
 
 import (
 	"context"
-	"fmt"
+	"log"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -77,12 +77,18 @@ func NewFromCRD(ctx context.Context) Config {
 
 func addClusterTarget(ctx context.Context, k *kubernetes.Clientset, agentCfg *Config, t v1alpha1.ClusterTarget) {
 	if t.Spec.Self == (t.Spec.KubeconfigSecret != nil) {
-		utilruntime.Must(fmt.Errorf("self XOR kubeconfigSecret != nil"))
+		log.Printf("invalid ClusterTarget %s: self XOR kubeconfigSecret != nil", t.Name)
+		return
 		// TODO validating webhook to catch user error upstream
 	}
 	var cfg *rest.Config
 	if kcfg := t.Spec.KubeconfigSecret; kcfg != nil {
-		cfg = getConfigFromKubeconfigSecretOrDie(ctx, k, kcfg.Namespace, kcfg.Name, kcfg.Key, kcfg.Context)
+		var err error
+		cfg, err = getConfigFromKubeconfigSecretOrDie(ctx, k, kcfg.Namespace, kcfg.Name, kcfg.Key, kcfg.Context)
+		if err != nil {
+			log.Printf("invalid ClusterTarget %s: %v", t.Name, err)
+			return
+		}
 	} else {
 		cfg = config.GetConfigOrDie()
 	}
@@ -93,12 +99,18 @@ func addClusterTarget(ctx context.Context, k *kubernetes.Clientset, agentCfg *Co
 
 func addTarget(ctx context.Context, k *kubernetes.Clientset, agentCfg *Config, t v1alpha1.Target) {
 	if t.Spec.Self == (t.Spec.KubeconfigSecret != nil) {
-		utilruntime.Must(fmt.Errorf("self XOR kubeconfigSecret != nil"))
+		log.Printf("invalid Target %s in namespace %s: self XOR kubeconfigSecret != nil", t.Name, t.Namespace)
+		return
 		// TODO validating webhook to catch user error upstream
 	}
 	var cfg *rest.Config
 	if kcfg := t.Spec.KubeconfigSecret; kcfg != nil {
-		cfg = getConfigFromKubeconfigSecretOrDie(ctx, k, t.Namespace, kcfg.Name, kcfg.Key, kcfg.Context)
+		var err error
+		cfg, err = getConfigFromKubeconfigSecretOrDie(ctx, k, t.Namespace, kcfg.Name, kcfg.Key, kcfg.Context)
+		if err != nil {
+			log.Printf("invalid Target %s in namespace %s: %v", t.Name, t.Namespace, err)
+			return
+		}
 	} else {
 		cfg = config.GetConfigOrDie()
 	}
@@ -107,21 +119,27 @@ func addTarget(ctx context.Context, k *kubernetes.Clientset, agentCfg *Config, t
 	agentCfg.Targets = append(agentCfg.Targets, c)
 }
 
-func getConfigFromKubeconfigSecretOrDie(ctx context.Context, k *kubernetes.Clientset, namespace, name, key, context string) *rest.Config {
+func getConfigFromKubeconfigSecretOrDie(ctx context.Context, k *kubernetes.Clientset, namespace, name, key, context string) (*rest.Config, error) {
 	if key == "" {
 		key = "config"
 	}
 
 	s, err := k.CoreV1().Secrets(namespace).Get(ctx, name, metav1.GetOptions{})
-	utilruntime.Must(err)
+	if err != nil {
+		return nil, err
+	}
 
 	cfg0, err := clientcmd.Load(s.Data[key])
-	utilruntime.Must(err)
+	if err != nil {
+		return nil, err
+	}
 
 	cfg1 := clientcmd.NewDefaultClientConfig(*cfg0, &clientcmd.ConfigOverrides{CurrentContext: context})
 
 	cfg2, err := cfg1.ClientConfig()
-	utilruntime.Must(err)
+	if err != nil {
+		return nil, err
+	}
 
-	return cfg2
+	return cfg2, nil
 }
