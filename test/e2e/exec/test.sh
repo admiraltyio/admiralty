@@ -25,6 +25,7 @@ exec_test() {
 
   k $j label node --all a=b --overwrite
   k $i apply -f test/e2e/exec/test.yaml
+  while [ $(k $i get pod -l job-name=exec | wc -l) = 0 ]; do sleep 1; done
   k $i wait pod -l job-name=exec --for=condition=ContainersReady
   k $i exec job/exec ls | grep bin
   k $i delete -f test/e2e/exec/test.yaml
