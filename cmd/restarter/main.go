@@ -21,6 +21,7 @@ import (
 
 	"admiralty.io/multicluster-service-account/pkg/config"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	kubeinformers "k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	"k8s.io/sample-controller/pkg/signals"
@@ -42,12 +43,15 @@ func main() {
 	customClient, err := client.NewForConfig(cfg)
 	utilruntime.Must(err)
 
+	kubeInformerFactory := kubeinformers.NewSharedInformerFactory(k, time.Second*30)
 	customInformerFactory := informers.NewSharedInformerFactory(customClient, time.Second*30)
 
 	targetCtrl := target.NewController(k, ns,
 		customInformerFactory.Multicluster().V1alpha1().ClusterTargets(),
-		customInformerFactory.Multicluster().V1alpha1().Targets())
+		customInformerFactory.Multicluster().V1alpha1().Targets(),
+		kubeInformerFactory.Core().V1().Secrets())
 
+	kubeInformerFactory.Start(stopCh)
 	customInformerFactory.Start(stopCh)
 
 	utilruntime.Must(targetCtrl.Run(1, stopCh))
