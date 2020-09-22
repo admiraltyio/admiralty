@@ -95,7 +95,7 @@ func (r downstream) Handle(_ interface{}) (requeueAfter *time.Duration, err erro
 		}
 	}
 
-	ClusterSummary, err := r.customclientset.MulticlusterV1alpha1().ClusterSummaries().Get(ctx, singletonName, v1.GetOptions{})
+	actual, err := r.customclientset.MulticlusterV1alpha1().ClusterSummaries().Get(ctx, singletonName, v1.GetOptions{})
 	if err != nil {
 		if errors.IsNotFound(err) {
 			gold := &v1alpha1.ClusterSummary{
@@ -103,18 +103,18 @@ func (r downstream) Handle(_ interface{}) (requeueAfter *time.Duration, err erro
 				Capacity:    capacity,
 			}
 			gold.Name = singletonName
-			ClusterSummary, err = r.customclientset.MulticlusterV1alpha1().ClusterSummaries().Create(ctx, gold, v1.CreateOptions{})
+			actual, err = r.customclientset.MulticlusterV1alpha1().ClusterSummaries().Create(ctx, gold, v1.CreateOptions{})
 			if err != nil {
 				return nil, err
 			}
 		}
 	}
 
-	if !reflect.DeepEqual(capacity, ClusterSummary.Capacity) || !reflect.DeepEqual(allocatable, ClusterSummary.Allocatable) {
-		copy := ClusterSummary.DeepCopy()
-		copy.Allocatable = allocatable
-		copy.Capacity = capacity
-		ClusterSummary, err = r.customclientset.MulticlusterV1alpha1().ClusterSummaries().Update(ctx, copy, v1.UpdateOptions{})
+	if !reflect.DeepEqual(capacity, actual.Capacity) || !reflect.DeepEqual(allocatable, actual.Allocatable) {
+		actualCopy := actual.DeepCopy()
+		actualCopy.Allocatable = allocatable
+		actualCopy.Capacity = capacity
+		actual, err = r.customclientset.MulticlusterV1alpha1().ClusterSummaries().Update(ctx, actualCopy, v1.UpdateOptions{})
 		if err != nil {
 			return nil, err
 		}
