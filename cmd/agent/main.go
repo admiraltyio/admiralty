@@ -79,20 +79,27 @@ func main() {
 	k, err := kubernetes.NewForConfig(cfg)
 	utilruntime.Must(err)
 
-	startOldStyleControllers(ctx, stopCh, agentCfg, cfg, k)
 	startWebhook(stopCh, cfg)
-
+	var nodeStatusUpdaters map[string]resources.NodeStatusUpdater
 	if len(agentCfg.Targets) > 0 {
 		startControllers(ctx, stopCh, agentCfg, cfg)
-		startVirtualKubelet(ctx, agentCfg, k)
+		nodeStatusUpdaters = startVirtualKubelet(ctx, agentCfg, k)
 	}
+	startOldStyleControllers(ctx, stopCh, agentCfg, cfg, k, nodeStatusUpdaters)
 
 	<-stopCh
 }
 
 // TODO: this is very messy, we need to refactor using a pattern similar to the one of multicluster-controller,
 // but for "old-style" controllers, i.e., using typed informers
-func startOldStyleControllers(ctx context.Context, stopCh <-chan struct{}, agentCfg agentconfig.Config, cfg *rest.Config, k *kubernetes.Clientset) {
+func startOldStyleControllers(
+	ctx context.Context,
+	stopCh <-chan struct{},
+	agentCfg agentconfig.Config,
+	cfg *rest.Config,
+	k *kubernetes.Clientset,
+	nodeStatusUpdaters map[string]resources.NodeStatusUpdater,
+) {
 	customClient, err := versioned.NewForConfig(cfg)
 	utilruntime.Must(err)
 
@@ -161,7 +168,7 @@ func startOldStyleControllers(ctx context.Context, stopCh <-chan struct{}, agent
 	var upstreamResCtrl *controller.Controller
 	if n > 0 {
 		feedbackCtrl = feedback.NewController(k, targetCustomClients, podInformer, targetPodChaperonInformers)
-		upstreamResCtrl = resources.NewUpstreamController(k, nodeInformer, targetClusterSummaryInformers)
+		upstreamResCtrl = resources.NewUpstreamController(k, nodeInformer, targetClusterSummaryInformers, nodeStatusUpdaters)
 	}
 	var cmFollowCtrl *controller.Controller
 	var secretFollowCtrl *controller.Controller
@@ -266,7 +273,7 @@ func startWebhook(stopCh <-chan struct{}, cfg *rest.Config) {
 	}()
 }
 
-func startVirtualKubelet(ctx context.Context, agentCfg agentconfig.Config, k kubernetes.Interface) {
+func startVirtualKubelet(ctx context.Context, agentCfg agentconfig.Config, k kubernetes.Interface) map[string]resources.NodeStatusUpdater {
 	var logLevel string
 	flag.StringVar(&logLevel, "log-level", "info", `set the log level, e.g. "debug", "info", "warn", "error"`)
 	klog.InitFlags(nil)
@@ -283,6 +290,7 @@ func startVirtualKubelet(ctx context.Context, agentCfg agentconfig.Config, k kub
 
 	targetConfigs := make(map[string]*rest.Config, len(agentCfg.Targets))
 	targetClients := make(map[string]kubernetes.Interface, len(agentCfg.Targets))
+	nodeStatusUpdaters := make(map[string]resources.NodeStatusUpdater, len(agentCfg.Targets))
 	for _, target := range agentCfg.Targets {
 		n := target.GetKey()
 		targetConfigs[n] = target.ClientConfig
@@ -290,8 +298,10 @@ func startVirtualKubelet(ctx context.Context, agentCfg agentconfig.Config, k kub
 		utilruntime.Must(err)
 		targetClients[n] = targetClient
 
+		p := &node.NodeProvider{}
+		nodeStatusUpdaters[n] = p
 		go func() {
-			if err := node.Run(ctx, node.Opts{NodeName: n}, k); err != nil && errors.Cause(err) != context.Canceled {
+			if err := node.Run(ctx, node.Opts{NodeName: n, EnableNodeLease: true}, k, p); err != nil && errors.Cause(err) != context.Canceled {
 				vklog.G(ctx).Fatal(err)
 			}
 		}()
@@ -314,4 +324,6 @@ func startVirtualKubelet(ctx context.Context, agentCfg agentconfig.Config, k kub
 			cancelHTTP()
 		}
 	}()
+
+	return nodeStatusUpdaters
 }
