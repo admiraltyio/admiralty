@@ -28,7 +28,7 @@ import (
 	"k8s.io/client-go/kubernetes/typed/coordination/v1beta1"
 )
 
-func Run(ctx context.Context, c Opts, client kubernetes.Interface) error {
+func Run(ctx context.Context, c Opts, client kubernetes.Interface, p node.NodeProvider) error {
 	ctx = log.WithLogger(ctx, log.G(ctx).WithFields(log.Fields{"node": c.NodeName}))
 
 	var leaseClient v1beta1.LeaseInterface
@@ -38,7 +38,7 @@ func Run(ctx context.Context, c Opts, client kubernetes.Interface) error {
 
 	n := NodeFromOpts(c)
 	nodeRunner, err := node.NewNodeController(
-		node.NaiveNodeProvider{},
+		p,
 		n,
 		client.CoreV1().Nodes(),
 		node.WithNodeEnableLeaseV1Beta1(leaseClient, nil),

@@ -136,6 +136,14 @@ metadata:
   labels: {{ include "labels" . | nindent 4 }}
 rules:
   - apiGroups:
+      - coordination.k8s.io
+    resources:
+      - leases # only needed in kube-node-leases namespaces (TODO: split and bind in RoleBinding)
+    verbs:
+      - create
+      - update
+      - delete
+  - apiGroups:
       - ""
     resources:
       - nodes
