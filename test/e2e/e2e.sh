@@ -17,8 +17,6 @@
 
 set -euo pipefail
 
-VERSION="$1"
-
 source test/e2e/aliases.sh
 source test/e2e/admiralty.sh
 source test/e2e/argo.sh
@@ -35,7 +33,7 @@ cert_manager_setup_once
 for i in 1 2; do
   kind_setup $i
   cert_manager_setup $i
-  admiralty_setup $i test/e2e/values.yaml $VERSION
+  admiralty_setup $i test/e2e/values.yaml
 done
 
 k 2 apply -f test/e2e/topologies/namespaced-burst/cluster2/source.yaml

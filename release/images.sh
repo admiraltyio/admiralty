@@ -17,20 +17,13 @@
 
 set -euo pipefail
 
-DEFAULT_REGISTRY="quay.io/admiralty"
-
-VERSION="$1"
-REGISTRY="${2:-$DEFAULT_REGISTRY}"
-
-CMDS=(
-  "agent"
-  "remove-finalizers"
-  "scheduler"
-  "restarter"
+imgs=(
+  multicluster-scheduler-agent
+  multicluster-scheduler-remove-finalizers
+  multicluster-scheduler-scheduler
+  multicluster-scheduler-restarter
 )
 
-for CMD in "${CMDS[@]}"; do
-  IMG="multicluster-scheduler-$CMD"
-  docker tag "$DEFAULT_REGISTRY/$IMG:$VERSION" "$REGISTRY/$IMG:$VERSION"
-  docker push "$REGISTRY/$IMG:$VERSION"
+for img in "${imgs[@]}"; do
+  IMG="$img" ARCHS="amd64 arm64 ppc64le s390x" ./release/image.sh
 done
