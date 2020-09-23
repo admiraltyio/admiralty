@@ -178,6 +178,7 @@ func (c *reconciler) Handle(obj interface{}) (requeueAfter *time.Duration, err e
 			return nil, err
 		}
 		c.targetSpecs = targetSpecs
+		c.kubeconfigSecretData = kubeconfigSecretData
 	}
 
 	return nil, nil
