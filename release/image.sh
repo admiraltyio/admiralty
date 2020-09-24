@@ -18,23 +18,28 @@
 set -euo pipefail
 
 # constants
-root_package=admiralty.io/multicluster-scheduler
+default_registry="quay.io/admiralty"
 
 # environment variables
+# required
+IMG="${IMG}"
+VERSION="${VERSION}"
 # optional
-VERSION="${VERSION:-dev}"
+REGISTRY="${REGISTRY:-$default_registry}"
+ARCHS="${ARCHS:-amd64}"
 
-if [ "$VERSION" = dev ] || [ "${CI:-}" = true ]; then
-  linux_archs=(amd64)
-else
-  linux_archs=(amd64 arm64 ppc64le s390x)
-fi
+read -ra archs <<<"$ARCHS"
 
-for arch in "${linux_archs[@]}"; do
-  export ARCH=$arch
-  PKG=$root_package/cmd/agent ./build/build_one.sh
-  PKG=$root_package/cmd/remove-finalizers ./build/build_one.sh
-  PKG=$root_package/cmd/restarter ./build/build_one.sh
-  PKG=$root_package/cmd/scheduler ./build/build_one.sh
-  unset ARCH
+arch_imgs=()
+for arch in "${archs[@]}"; do
+  arch_img="$REGISTRY/$IMG:$VERSION-$arch"
+  docker tag "$IMG:$VERSION-$arch" "$arch_img"
+  docker push "$arch_img"
+  arch_imgs+=("$arch_img")
 done
+
+docker manifest create "$REGISTRY/$IMG:$VERSION" "${arch_imgs[@]}"
+for arch in "${archs[@]}"; do
+  docker manifest annotate --arch "$arch" "$REGISTRY/$IMG:$VERSION" "$REGISTRY/$IMG:$VERSION-$arch"
+done
+docker manifest push --purge "$REGISTRY/$IMG:$VERSION"

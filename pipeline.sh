@@ -1,16 +1,30 @@
 #!/usr/bin/env bash
-set -euo pipefail
+#
+# Copyright 2020 The Multicluster-Scheduler Authors.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
 
-VERSION="$1"
+set -euo pipefail
 
 echo "test"
 test/test.sh
 echo "build"
-build/build.sh "$VERSION"
+build/build.sh
 echo "e2e test"
-test/e2e/e2e.sh "$VERSION"
+test/e2e/e2e.sh
 echo "release images"
-release/images.sh "$VERSION"
+release/images.sh
 echo "release chart"
 release/chart.sh
 # TODO: create release on GitHub

@@ -32,13 +32,13 @@ jobs:
         run: ./build/install_docker.sh
 
       - name: go build, docker build
-        run: ./build/build.sh $GITHUB_SHA
+        run: VERSION=$GITHUB_SHA ./build/build.sh
 
       - name: Install kubectl, helm, kind
         run: ./test/e2e/install_dependencies.sh
 
       - name: End-to-end test
-        run: ./test/e2e/e2e.sh $GITHUB_SHA
+        run: VERSION=$GITHUB_SHA ./test/e2e/e2e.sh
 
       - name: Archive cluster dump
         if: ${{ failure() }}
