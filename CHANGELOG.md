@@ -20,6 +20,20 @@
 
 -->
 
+## v0.11.0
+
+### New Features
+
+- 2b696b0 Support `kubectl logs` and `kubectl exec`.
+- d3832f6 Misconfigured Targets are now skipped, instead of crashing. A partially functioning system is better than failure in this case.
+- 21483dc Multi-arch Docker image manifests! In addition to amd64, we now release images for arm64, ppc64le, and s390x, per user requests. Binaries are cross-compiled and untested but _should_ work. If not, please submit an issue. If you need other architectures, please submit an issue or PR.
+- 21483dc Smaller images, compressed with UPX.
+
+### Bugfixes
+
+- c81cbc5 Allow source clusters that have the HugePageStorageMediumSize feature gate disabled (Kubernetes pre-1.19) to work with target clusters that have multiple huge page sizes.
+- 2922775 Don't crash if user annotates pod but forgot to label namespace.
+
 ## v0.10.0
 
 ### New Features
