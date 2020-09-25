@@ -93,7 +93,7 @@ func addClusterTarget(ctx context.Context, k *kubernetes.Clientset, agentCfg *Co
 		cfg = config.GetConfigOrDie()
 	}
 
-	c := Target{Name: t.Name, ClientConfig: cfg, Namespace: corev1.NamespaceAll}
+	c := Target{Name: t.Name, ClientConfig: cfg, Namespace: corev1.NamespaceAll, Self: t.Spec.Self}
 	agentCfg.Targets = append(agentCfg.Targets, c)
 }
 
@@ -115,7 +115,7 @@ func addTarget(ctx context.Context, k *kubernetes.Clientset, agentCfg *Config, t
 		cfg = config.GetConfigOrDie()
 	}
 
-	c := Target{Name: t.Name, ClientConfig: cfg, Namespace: t.Namespace}
+	c := Target{Name: t.Name, ClientConfig: cfg, Namespace: t.Namespace, Self: t.Spec.Self}
 	agentCfg.Targets = append(agentCfg.Targets, c)
 }
 
