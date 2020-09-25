@@ -149,11 +149,7 @@ rules:
       - nodes
     verbs:
       - get
-      - list
-      - watch
       - create
-      - update
-      - delete
   - apiGroups:
       - ""
     resources:
