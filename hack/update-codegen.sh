@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
-# Copyright 2017 The Kubernetes Authors.
+#
+# Copyright 2020 The Multicluster-Scheduler Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,6 +14,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+#
 
 set -o errexit
 set -o nounset
@@ -23,7 +25,7 @@ GOPATH="${GOPATH:-"$HOME/go"}"
 SCRIPT_ROOT=$(dirname "${BASH_SOURCE[0]}")/..
 CODEGEN_PKG=${CODEGEN_PKG:-$(
   cd "${SCRIPT_ROOT}"
-  ls -d -1 $GOPATH/pkg/mod/k8s.io/code-generator@v0.18.4 2>/dev/null || echo ../code-generator
+  ls -d -1 $GOPATH/pkg/mod/k8s.io/code-generator@v0.18.9 2>/dev/null || echo ../code-generator
 )}
 
 # generate the code with:
