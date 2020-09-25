@@ -12,9 +12,23 @@ This guide provides copy-and-paste instructions to try out Admiralty ([open sour
 
 We're going to model a centralized cluster topology made of a management cluster (named `cd`) where applications are deployed, and two workload clusters (named `us` and `eu`) where containers actually run. We'll deploy a batch job utilizing both workload clusters, and another targeting a specific region. If you're interested in other [topologies](./concepts/topologies.md) or other kinds of applications (e.g., micro-services), this guide is still helpful to get familiar with Admiralty in general.
 
+<Tabs
+defaultValue="global"
+values={[
+{label: 'Global batch', value: 'global'},
+{label: 'Regional batch', value: 'regional'},
+]}>
+<TabItem value="global">
+
 ![](quick_start_data_plane_global_batch.svg)
 
+</TabItem>
+<TabItem value="regional">
+
 ![](quick_start_data_plane_regional_batch.svg)
+
+</TabItem>
+</Tabs>
 
 ## Prerequisites
 
@@ -48,6 +62,34 @@ We're going to model a centralized cluster topology made of a management cluster
     Most cloud distributions of Kubernetes pre-label nodes with the names of their cloud regions.
     :::
 
+1.  (optional speed-up) Pull images on your machine and load them into the kind clusters. Otherwise, each kind cluster would pull images, which could take three times as long.
+
+    ```shell script
+    images=(
+      # cert-manager dependency
+      quay.io/jetstack/cert-manager-controller:v0.16.1
+      quay.io/jetstack/cert-manager-webhook:v0.16.1
+      quay.io/jetstack/cert-manager-cainjector:v0.16.1
+      # admiralty open source
+      quay.io/admiralty/multicluster-scheduler-agent:0.11.0
+      quay.io/admiralty/multicluster-scheduler-scheduler:0.11.0
+      quay.io/admiralty/multicluster-scheduler-remove-finalizers:0.11.0
+      quay.io/admiralty/multicluster-scheduler-restarter:0.11.0
+      # admiralty developer/enterprise
+      quay.io/admiralty/admiralty-cloud-controller-manager:0.11.0
+      quay.io/admiralty/kube-mtls-proxy:0.10.0
+      quay.io/admiralty/kube-oidc-proxy:v0.3.0 # jetstack's image rebuilt for multiple architectures
+    )
+    for image in "${images[@]}"
+    do
+      docker pull $image
+      for CLUSTER_NAME in cd us eu
+      do
+        kind load docker-image $image --name $CLUSTER_NAME
+      done
+    done
+    ```
+
 1.  Install [cert-manager](https://cert-manager.io/) in each cluster:
 
     ```shell script
@@ -62,7 +104,10 @@ We're going to model a centralized cluster topology made of a management cluster
         --kube-context kind-$CLUSTER_NAME \
         --namespace cert-manager \
         --version v0.16.1 \
-        --wait
+        --wait --debug
+      # --wait to ensure release is ready before next steps
+      # --debug to show progress, for lack of a better way,
+      # as this may take a few minutes
     done
     ```
 
@@ -99,43 +144,62 @@ values={[
     defaultValue="linux-amd64"
     values={[
     {label: 'Linux/amd64', value: 'linux-amd64'},
-    {label: 'Linux/arm64', value: 'linux-arm64'},
     {label: 'Mac', value: 'mac'},
     {label: 'Windows', value: 'windows'},
+    {label: 'Linux/arm64', value: 'linux-arm64'},
+    {label: 'Linux/ppc64le', value: 'linux-ppc64le'},
+    {label: 'Linux/s390x', value: 'linux-s390x'},
     ]
     }>
     <TabItem value="linux-amd64">
 
     ```shell script
-    curl -Lo admiralty "https://artifacts.admiralty.io/admiralty-v0.10.0-linux-amd64"
+    curl -Lo admiralty "https://artifacts.admiralty.io/admiralty-v0.11.0-linux-amd64"
     chmod +x admiralty
     sudo mv admiralty /usr/local/bin
+    ```
+
+    </TabItem>
+    <TabItem value="linux-ppc64le">
+
+    ```shell script
+    curl -Lo admiralty "https://artifacts.admiralty.io/admiralty-v0.11.0-darwin-amd64"
+    chmod +x admiralty
+    sudo mv admiralty /usr/local/bin
+    ```
+
+    </TabItem>
+    <TabItem value="linux-s390x">
+
+    ```shell script
+    curl -Lo admiralty "https://artifacts.admiralty.io/admiralty-v0.11.0-windows-amd64"
     ```
 
     </TabItem>
     <TabItem value="linux-arm64">
 
     ```shell script
-    curl -Lo admiralty "https://artifacts.admiralty.io/admiralty-v0.10.0-linux-arm64"
+    curl -Lo admiralty "https://artifacts.admiralty.io/admiralty-v0.11.0-linux-arm64"
     chmod +x admiralty
     sudo mv admiralty /usr/local/bin
     ```
 
     </TabItem>
-    <TabItem value="mac">
+    <TabItem value="linux-ppc64le">
 
     ```shell script
-    curl -Lo admiralty "https://artifacts.admiralty.io/admiralty-v0.10.0-darwin-amd64"
+    curl -Lo admiralty "https://artifacts.admiralty.io/admiralty-v0.11.0-linux-ppc64le"
     chmod +x admiralty
     sudo mv admiralty /usr/local/bin
     ```
 
     </TabItem>
-    <TabItem value="windows">
+    <TabItem value="linux-s390x">
 
     ```shell script
-    curl -Lo admiralty "https://artifacts.admiralty.io/admiralty-v0.10.0-windows-amd64"
-    # Add the binary to your PATH
+    curl -Lo admiralty "https://artifacts.admiralty.io/admiralty-v0.11.0-linux-s390x"
+    chmod +x admiralty
+    sudo mv admiralty /usr/local/bin
     ```
 
     </TabItem>
@@ -163,10 +227,13 @@ values={[
       helm install admiralty admiralty/admiralty \
         --kube-context kind-$CLUSTER_NAME \
         --namespace admiralty \
-        --version 0.10.0 \
+        --version 0.11.0 \
         --set accountName=$(admiralty get-account-name) \
         --set clusterName=$CLUSTER_NAME \
-        --wait
+        --wait --debug
+      # --wait to ensure release is ready before next steps
+      # --debug to show progress, for lack of a better way,
+      # as this may take a few minutes
     done
     ```
 
@@ -194,8 +261,11 @@ do
   helm install admiralty admiralty/multicluster-scheduler \
     --kube-context kind-$CLUSTER_NAME \
     --namespace admiralty \
-    --version 0.10.0 \
-    --wait
+    --version 0.11.0 \
+    --wait --debug
+  # --wait to ensure release is ready before next steps
+  # --debug to show progress, for lack of a better way,
+  # as this may take a few minutes
 done
 ```
 
@@ -377,7 +447,9 @@ values={[
 1.  Check that virtual nodes have been created in the management cluster to represent workload clusters:
 
     ```shell script
-    kubectl --context kind-cd get nodes
+    kubectl --context kind-cd get nodes --watch
+    # --watch until virtual nodes are created,
+    # this may take a few minutes, then control-C
     ```
 
 1.  Label the `default` namespace in the management cluster to enable multi-cluster scheduling at the namespace level:
@@ -417,10 +489,16 @@ values={[
 1.  Check that [proxy pods](concepts/scheduling.md#proxy-pods) for this job have been created in the management cluster, "running" on virtual nodes, and [delegate pods](concepts/scheduling.md#delegate-pods) have been created in the workload clusters, _actually_ running their containers on _real_ nodes:
 
     ```shell script
-    for CLUSTER_NAME in cd us eu
+    while true
     do
-      kubectl --context kind-$CLUSTER_NAME get pods -o wide
+      clear
+      for CLUSTER_NAME in cd us eu
+      do
+        kubectl --context kind-$CLUSTER_NAME get pods -o wide
+      done
+      sleep 2
     done
+    # control-C when all pods have Completed
     ```
 
 1.  Create Kubernetes Jobs in the management cluster, targeting a specific region with a node selector:
@@ -456,10 +534,16 @@ values={[
 1.  Check that proxy pods for this job have been created in the management cluster, and delegate pods have been created in the `eu` cluster only:
 
     ```shell script
-    for CLUSTER_NAME in cd us eu
+    while true
     do
-      kubectl --context kind-$CLUSTER_NAME get pods -o wide
+      clear
+      for CLUSTER_NAME in cd us eu
+      do
+        kubectl --context kind-$CLUSTER_NAME get pods -o wide
+      done
+      sleep 2
     done
+    # control-C when all pods have Completed
     ```
 
     You may observe transient pending [candidate pods](concepts/scheduling.md#candidate-pods) in the `us` cluster.

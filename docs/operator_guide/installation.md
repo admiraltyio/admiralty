@@ -12,8 +12,8 @@ import TabItem from '@theme/TabItem';
 groupId="oss-or-cloud"
 defaultValue="cloud"
 values={[
-{label: 'With Admiralty Cloud', value: 'cloud'},
-{label: 'Without Admiralty Cloud', value: 'oss'},
+{label: 'Developer/Enterprise', value: 'cloud'},
+{label: 'Open Source', value: 'oss'},
 ]
 }>
 <TabItem value="cloud">
@@ -25,7 +25,7 @@ The Admiralty command line interface (CLI) helps you sign up for an Admiralty Cl
     ```shell script
     OS=linux # or darwin (i.e., OS X) or windows
     ARCH=amd64 # or arm64 (linux only)
-    curl -Lo admiralty "https://artifacts.admiralty.io/admiralty-v0.10.0-$OS-$ARCH"
+    curl -Lo admiralty "https://artifacts.admiralty.io/admiralty-v0.11.0-$OS-$ARCH"
     chmod +x admiralty
     sudo mv admiralty /usr/local/bin
     ```
@@ -70,8 +70,8 @@ The Admiralty command line interface (CLI) isn't required if you don't use Admir
 groupId="oss-or-cloud"
 defaultValue="cloud"
 values={[
-{label: 'With Admiralty Cloud', value: 'cloud'},
-{label: 'Without Admiralty Cloud', value: 'oss'},
+{label: 'Developer/Enterprise', value: 'cloud'},
+{label: 'Open Source', value: 'oss'},
 ]
 }>
 <TabItem value="cloud">
@@ -88,7 +88,7 @@ values={[
     kubectl create namespace admiralty
     helm install admiralty admiralty/admiralty \
         --namespace admiralty \
-        --version 0.10.0 \
+        --version 0.11.0 \
         --set accountName=$(admiralty get-account-name) \
         --set clusterName=$CLUSTER_NAME \
         --wait
@@ -111,7 +111,7 @@ values={[
     kubectl create namespace admiralty
     helm install admiralty admiralty/multicluster-scheduler \
         --namespace admiralty \
-        --version 0.10.0 \
+        --version 0.11.0 \
         --wait
     ```
 
