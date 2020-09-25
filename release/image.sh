@@ -38,6 +38,8 @@ for arch in "${archs[@]}"; do
   arch_imgs+=("$arch_img")
 done
 
+export DOCKER_CLI_EXPERIMENTAL=enabled
+
 docker manifest create "$REGISTRY/$IMG:$VERSION" "${arch_imgs[@]}"
 for arch in "${archs[@]}"; do
   docker manifest annotate --arch "$arch" "$REGISTRY/$IMG:$VERSION" "$REGISTRY/$IMG:$VERSION-$arch"

@@ -18,13 +18,13 @@
 set -euo pipefail
 
 # constants
-DEFAULT_BIN_PREFIX=multicluster-scheduler-
+default_bin_prefix=multicluster-scheduler-
 
 # environment variables
 # required
 PKG="${PKG}"
 # optional
-BIN="${BIN:-$DEFAULT_BIN_PREFIX$(basename "$PKG")}"
+BIN="${BIN:-$default_bin_prefix$(basename "$PKG")}"
 OS="${OS:-linux}"
 ARCH="${ARCH:-amd64}"
 BUILD_IMG="${BUILD_IMG:-true}"

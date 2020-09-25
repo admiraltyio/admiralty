@@ -18,9 +18,12 @@
 set -euo pipefail
 
 helm package charts/multicluster-scheduler -d _out
-helm repo index _out --merge <(curl -s https://charts.admiralty.io/index.yaml) --url https://charts.admiralty.io
+curl -s https://charts.admiralty.io/index.yaml >_out/index_old.yaml
+helm repo index _out --merge _out/index_old.yaml --url https://charts.admiralty.io
+
+# TODO: revert datetime created override for old versions (submit GitHub issue)
 
 # release CRDs separately, esp. for `helm upgrade`
 cat charts/multicluster-scheduler/crds/* >_out/admiralty.crds.yaml
 
-# TODO: upload Helm chart and new index
+# TODO: upload Helm chart and new index (with no-cache, max-age=0)

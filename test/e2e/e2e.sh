@@ -58,6 +58,11 @@ cluster_dump() {
 }
 trap cluster_dump EXIT
 
+# TODO simulate route controller not being able to create network routes to virtual nodes
+#k 1 taint nodes -l virtual-kubelet.io/provider=admiralty node.kubernetes.io/network-unavailable=:NoSchedule
+# unfortunately, we can't use kubectl to taint nodes with node.kubernetes.io/network-unavailable
+# some system defaulting admission controller overwriting the reserved taint?
+
 argo_test 1 2
 follow_test 1 2
 logs_test 1 2
