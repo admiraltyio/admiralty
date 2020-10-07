@@ -22,7 +22,6 @@ import (
 	"reflect"
 	"time"
 
-	"admiralty.io/multicluster-controller/pkg/patterns"
 	"github.com/go-test/deep"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -185,7 +184,7 @@ func (c *reconciler) Handle(obj interface{}) (requeueAfter *time.Duration, err e
 			podCopy.Finalizers = append(podCopy.Finalizers[:j], podCopy.Finalizers[j+1:]...)
 			var err error
 			if proxyPod, err = c.kubeclientset.CoreV1().Pods(namespace).Update(ctx, podCopy, metav1.UpdateOptions{}); err != nil {
-				if patterns.IsOptimisticLockError(err) {
+				if controller.IsOptimisticLockError(err) {
 					d := time.Second
 					return &d, nil
 				} else {
@@ -199,7 +198,7 @@ func (c *reconciler) Handle(obj interface{}) (requeueAfter *time.Duration, err e
 		podCopy.Finalizers = append(podCopy.Finalizers, common.CrossClusterGarbageCollectionFinalizer)
 		var err error
 		if proxyPod, err = c.kubeclientset.CoreV1().Pods(namespace).Update(ctx, podCopy, metav1.UpdateOptions{}); err != nil {
-			if patterns.IsOptimisticLockError(err) {
+			if controller.IsOptimisticLockError(err) {
 				d := time.Second
 				return &d, nil
 			} else {
@@ -225,7 +224,7 @@ func (c *reconciler) Handle(obj interface{}) (requeueAfter *time.Duration, err e
 
 				var err error
 				if proxyPod, err = c.kubeclientset.CoreV1().Pods(namespace).Update(ctx, podCopy, metav1.UpdateOptions{}); err != nil {
-					if patterns.IsOptimisticLockError(err) {
+					if controller.IsOptimisticLockError(err) {
 						d := time.Second
 						return &d, nil
 					} else {
@@ -245,7 +244,7 @@ func (c *reconciler) Handle(obj interface{}) (requeueAfter *time.Duration, err e
 
 				var err error
 				if proxyPod, err = c.kubeclientset.CoreV1().Pods(namespace).UpdateStatus(ctx, podCopy, metav1.UpdateOptions{}); err != nil {
-					if patterns.IsOptimisticLockError(err) {
+					if controller.IsOptimisticLockError(err) {
 						d := time.Second
 						return &d, nil
 					} else {

@@ -3,7 +3,6 @@ module admiralty.io/multicluster-scheduler
 go 1.13
 
 require (
-	admiralty.io/multicluster-controller v0.6.0
 	admiralty.io/multicluster-service-account v0.6.1
 	github.com/ghodss/yaml v1.0.0
 	github.com/go-logr/zapr v0.1.1 // indirect

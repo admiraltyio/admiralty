@@ -22,7 +22,6 @@ import (
 	"reflect"
 	"time"
 
-	"admiralty.io/multicluster-controller/pkg/patterns"
 	"github.com/go-test/deep"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -180,7 +179,7 @@ func (c *reconciler) Handle(obj interface{}) (requeueAfter *time.Duration, err e
 		var err error
 		podChaperon, err = c.customclientset.MulticlusterV1alpha1().PodChaperons(podChaperon.Namespace).UpdateStatus(ctx, podChaperonCopy, metav1.UpdateOptions{})
 		if err != nil {
-			if patterns.IsOptimisticLockError(err) {
+			if controller.IsOptimisticLockError(err) {
 				requeueAfter := time.Second
 				return &requeueAfter, nil
 			}
@@ -199,7 +198,7 @@ func (c *reconciler) Handle(obj interface{}) (requeueAfter *time.Duration, err e
 		var err error
 		podChaperon, err = c.customclientset.MulticlusterV1alpha1().PodChaperons(podChaperon.Namespace).Update(ctx, podChaperonCopy, metav1.UpdateOptions{})
 		if err != nil {
-			if patterns.IsOptimisticLockError(err) {
+			if controller.IsOptimisticLockError(err) {
 				requeueAfter := time.Second
 				return &requeueAfter, nil
 			}
