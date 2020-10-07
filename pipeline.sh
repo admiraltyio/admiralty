@@ -23,6 +23,11 @@ echo "build"
 build/build.sh
 echo "e2e test"
 test/e2e/e2e.sh
+
+if [ "${VERSION:-dev}" = dev ]; then
+  exit 0
+fi
+
 echo "release images"
 release/images.sh
 echo "release chart"
