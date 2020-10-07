@@ -30,6 +30,7 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	kubeinformers "k8s.io/client-go/informers"
 	v1 "k8s.io/client-go/informers/core/v1"
+	"k8s.io/client-go/informers/networking/v1beta1"
 	"k8s.io/client-go/kubernetes"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	"k8s.io/client-go/rest"
@@ -44,6 +45,7 @@ import (
 	"admiralty.io/multicluster-scheduler/pkg/controllers/chaperon"
 	"admiralty.io/multicluster-scheduler/pkg/controllers/feedback"
 	"admiralty.io/multicluster-scheduler/pkg/controllers/follow"
+	"admiralty.io/multicluster-scheduler/pkg/controllers/follow/ingress"
 	"admiralty.io/multicluster-scheduler/pkg/controllers/follow/service"
 	"admiralty.io/multicluster-scheduler/pkg/controllers/resources"
 	"admiralty.io/multicluster-scheduler/pkg/controllers/source"
@@ -125,6 +127,7 @@ func startOldStyleControllers(
 	targetConfigMapInformers := make(map[string]v1.ConfigMapInformer, nt)
 	targetServiceInformers := make(map[string]v1.ServiceInformer, nt)
 	targetSecretInformers := make(map[string]v1.SecretInformer, nt)
+	targetIngressInformers := make(map[string]v1beta1.IngressInformer, nt)
 
 	selfTargetKeys := make(map[string]bool, n-nt)
 
@@ -155,6 +158,7 @@ func startOldStyleControllers(
 			targetConfigMapInformers[target.GetKey()] = kf.Core().V1().ConfigMaps()
 			targetServiceInformers[target.GetKey()] = kf.Core().V1().Services()
 			targetSecretInformers[target.GetKey()] = kf.Core().V1().Secrets()
+			targetIngressInformers[target.GetKey()] = kf.Networking().V1beta1().Ingresses()
 		}
 	}
 
@@ -169,6 +173,7 @@ func startOldStyleControllers(
 	var cmFollowCtrl *controller.Controller
 	var svcFollowCtrl *controller.Controller
 	var secretFollowCtrl *controller.Controller
+	var ingressFollowCtrl *controller.Controller
 	if nt > 0 {
 		cmFollowCtrl = follow.NewConfigMapController(k, targetKubeClients, podInformer,
 			kubeInformerFactory.Core().V1().ConfigMaps(), targetConfigMapInformers, selfTargetKeys)
@@ -183,6 +188,8 @@ func startOldStyleControllers(
 		)
 		secretFollowCtrl = follow.NewSecretController(k, targetKubeClients, podInformer,
 			kubeInformerFactory.Core().V1().Secrets(), targetSecretInformers, selfTargetKeys)
+		ingressFollowCtrl = ingress.NewIngressController(k, targetKubeClients, kubeInformerFactory.Core().V1().Services(),
+			kubeInformerFactory.Networking().V1beta1().Ingresses(), targetIngressInformers, selfTargetKeys)
 	}
 
 	var srcCtrl *controller.Controller
@@ -221,6 +228,7 @@ func startOldStyleControllers(
 		go func() { utilruntime.Must(cmFollowCtrl.Run(2, stopCh)) }()
 		go func() { utilruntime.Must(svcFollowCtrl.Run(2, stopCh)) }()
 		go func() { utilruntime.Must(secretFollowCtrl.Run(2, stopCh)) }()
+		go func() { utilruntime.Must(ingressFollowCtrl.Run(2, stopCh)) }()
 	}
 	if srcCtrlEnabled {
 		go func() { utilruntime.Must(srcCtrl.Run(2, stopCh)) }()

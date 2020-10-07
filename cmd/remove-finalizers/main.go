@@ -44,6 +44,7 @@ func main() {
 	p.patchServices(ctx)
 	p.patchConfigMaps(ctx)
 	p.patchSecrets(ctx)
+	p.patchIngresses(ctx)
 }
 
 type patchAll struct {
@@ -100,6 +101,20 @@ func (p patchAll) patchSecrets(ctx context.Context) {
 		for _, f := range o.Finalizers {
 			if f == common.CrossClusterGarbageCollectionFinalizer {
 				_, err := p.k.CoreV1().Secrets(o.Namespace).Patch(ctx, o.Name, types.StrategicMergePatchType, []byte(p.patch), metav1.PatchOptions{})
+				utilruntime.Must(err)
+				break
+			}
+		}
+	}
+}
+
+func (p patchAll) patchIngresses(ctx context.Context) {
+	l, err := p.k.NetworkingV1beta1().Ingresses("").List(ctx, metav1.ListOptions{LabelSelector: common.LabelKeyHasFinalizer})
+	utilruntime.Must(err)
+	for _, o := range l.Items {
+		for _, f := range o.Finalizers {
+			if f == common.CrossClusterGarbageCollectionFinalizer {
+				_, err := p.k.NetworkingV1beta1().Ingresses(o.Namespace).Patch(ctx, o.Name, types.StrategicMergePatchType, []byte(p.patch), metav1.PatchOptions{})
 				utilruntime.Must(err)
 				break
 			}

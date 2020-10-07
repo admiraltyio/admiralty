@@ -89,6 +89,16 @@ rules:
       - nodes/status
     verbs:
       - update
+  - apiGroups:
+      - extensions
+      - networking.k8s.io
+    resources:
+      - ingresses
+    verbs:
+      - get
+      - list
+      - watch
+      - update
 {{- if .Values.sourceController.enabled }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -203,6 +213,18 @@ rules:
       - services
       - secrets
       - configmaps
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - update
+      - delete
+  - apiGroups:
+      - extensions
+      - networking.k8s.io
+    resources:
+      - ingresses
     verbs:
       - get
       - list
