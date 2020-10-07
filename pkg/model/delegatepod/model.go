@@ -28,6 +28,10 @@ import (
 	"admiralty.io/multicluster-scheduler/pkg/model/proxypod"
 )
 
+func IsDelegate(pod *corev1.Pod) bool {
+	return pod.Spec.SchedulerName == common.CandidateSchedulerName
+}
+
 func MakeDelegatePod(proxyPod *corev1.Pod) (*v1alpha1.PodChaperon, error) {
 	srcPod, err := proxypod.GetSourcePod(proxyPod)
 	if err != nil {
@@ -44,17 +48,7 @@ func MakeDelegatePod(proxyPod *corev1.Pod) (*v1alpha1.PodChaperon, error) {
 		}
 	}
 
-	labels := make(map[string]string)
-	for k, v := range srcPod.Labels {
-		// we need to change the labels so as not to confuse potential controller of proxy pod, e.g., replica set
-		// if the original label key has a domain prefix, replace it with ours
-		// if it doesn't, add our domain prefix
-		// TODO: resolve conflict two keys have same name but different prefixes
-		// TODO: ensure we don't go over length limits
-		keySplit := strings.Split(k, "/") // note: assume no empty key (enforced by Kubernetes)
-		newKey := common.KeyPrefix + keySplit[len(keySplit)-1]
-		labels[newKey] = v
-	}
+	labels, _ := ChangeLabels(srcPod.Labels)
 	// used to get pod chaperon given proxy pod ("list one" hack)
 	labels[common.LabelKeyParentUID] = string(proxyPod.UID)
 
@@ -76,6 +70,31 @@ func MakeDelegatePod(proxyPod *corev1.Pod) (*v1alpha1.PodChaperon, error) {
 	delegatePod.Spec.SchedulerName = common.CandidateSchedulerName
 
 	return delegatePod, nil
+}
+
+// ChangeLabels changes a delegate pod's labels so as not to confuse potential controller of proxy pod, e.g., replica set.
+// If the original label key has a domain prefix, replace it with ours;
+// if it doesn't, add our domain prefix.
+// Also used to optionally reroute service selector.
+// Length is not an issue:
+// "Valid label keys have two segments: an optional prefix and name, separated by a slash (/).
+// The name segment is required and must be 63 characters or less"
+// https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#syntax-and-character-set
+// TODO: resolve conflict two keys have same name but different prefixes
+func ChangeLabels(labels map[string]string) (map[string]string, bool) {
+	changed := false
+	newLabels := make(map[string]string)
+	for k, v := range labels {
+		keySplit := strings.Split(k, "/") // note: assume no empty key (enforced by Kubernetes)
+		if len(keySplit) == 1 || keySplit[0] != common.KeyPrefix {
+			changed = true
+			newKey := common.KeyPrefix + keySplit[len(keySplit)-1]
+			newLabels[newKey] = v
+		} else {
+			newLabels[k] = v
+		}
+	}
+	return newLabels, changed
 }
 
 func removeServiceAccount(podSpec *corev1.PodSpec) {
