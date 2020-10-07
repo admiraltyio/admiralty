@@ -154,7 +154,7 @@ values={[
     <TabItem value="linux-amd64">
 
     ```shell script
-    curl -Lo admiralty "https://artifacts.admiralty.io/admiralty-v0.11.0-linux-amd64"
+    curl -Lo admiralty "https://artifacts.admiralty.io/admiralty-v0.11.1-linux-amd64"
     chmod +x admiralty
     sudo mv admiralty /usr/local/bin
     ```
@@ -163,7 +163,7 @@ values={[
     <TabItem value="linux-ppc64le">
 
     ```shell script
-    curl -Lo admiralty "https://artifacts.admiralty.io/admiralty-v0.11.0-darwin-amd64"
+    curl -Lo admiralty "https://artifacts.admiralty.io/admiralty-v0.11.1-darwin-amd64"
     chmod +x admiralty
     sudo mv admiralty /usr/local/bin
     ```
@@ -172,14 +172,14 @@ values={[
     <TabItem value="linux-s390x">
 
     ```shell script
-    curl -Lo admiralty "https://artifacts.admiralty.io/admiralty-v0.11.0-windows-amd64"
+    curl -Lo admiralty "https://artifacts.admiralty.io/admiralty-v0.11.1-windows-amd64"
     ```
 
     </TabItem>
     <TabItem value="linux-arm64">
 
     ```shell script
-    curl -Lo admiralty "https://artifacts.admiralty.io/admiralty-v0.11.0-linux-arm64"
+    curl -Lo admiralty "https://artifacts.admiralty.io/admiralty-v0.11.1-linux-arm64"
     chmod +x admiralty
     sudo mv admiralty /usr/local/bin
     ```
@@ -188,7 +188,7 @@ values={[
     <TabItem value="linux-ppc64le">
 
     ```shell script
-    curl -Lo admiralty "https://artifacts.admiralty.io/admiralty-v0.11.0-linux-ppc64le"
+    curl -Lo admiralty "https://artifacts.admiralty.io/admiralty-v0.11.1-linux-ppc64le"
     chmod +x admiralty
     sudo mv admiralty /usr/local/bin
     ```
@@ -197,7 +197,7 @@ values={[
     <TabItem value="linux-s390x">
 
     ```shell script
-    curl -Lo admiralty "https://artifacts.admiralty.io/admiralty-v0.11.0-linux-s390x"
+    curl -Lo admiralty "https://artifacts.admiralty.io/admiralty-v0.11.1-linux-s390x"
     chmod +x admiralty
     sudo mv admiralty /usr/local/bin
     ```

@@ -24,8 +24,8 @@ The Admiralty command line interface (CLI) helps you sign up for an Admiralty Cl
 
     ```shell script
     OS=linux # or darwin (i.e., OS X) or windows
-    ARCH=amd64 # or arm64 (linux only)
-    curl -Lo admiralty "https://artifacts.admiralty.io/admiralty-v0.11.0-$OS-$ARCH"
+    ARCH=amd64 # or, for linux, any of arm64, ppc64le, s390x
+    curl -Lo admiralty "https://artifacts.admiralty.io/admiralty-v0.11.1-$OS-$ARCH"
     chmod +x admiralty
     sudo mv admiralty /usr/local/bin
     ```
