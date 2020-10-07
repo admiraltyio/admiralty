@@ -160,7 +160,7 @@ values={[
     ```
 
     </TabItem>
-    <TabItem value="linux-ppc64le">
+    <TabItem value="mac">
 
     ```shell script
     curl -Lo admiralty "https://artifacts.admiralty.io/admiralty-v0.11.1-darwin-amd64"
@@ -169,7 +169,7 @@ values={[
     ```
 
     </TabItem>
-    <TabItem value="linux-s390x">
+    <TabItem value="windows">
 
     ```shell script
     curl -Lo admiralty "https://artifacts.admiralty.io/admiralty-v0.11.1-windows-amd64"
