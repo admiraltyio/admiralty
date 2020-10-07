@@ -22,7 +22,6 @@ import (
 	"reflect"
 	"time"
 
-	"admiralty.io/multicluster-controller/pkg/patterns"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -294,7 +293,7 @@ func (r secretReconciler) addFinalizer(ctx context.Context, secret *corev1.Secre
 	secretCopy.Labels[common.LabelKeyHasFinalizer] = "true"
 	var err error
 	if _, err = r.kubeclientset.CoreV1().Secrets(secret.Namespace).Update(ctx, secretCopy, metav1.UpdateOptions{}); err != nil {
-		if patterns.IsOptimisticLockError(err) {
+		if controller.IsOptimisticLockError(err) {
 			d := time.Second
 			return &d, nil
 		} else {
@@ -310,7 +309,7 @@ func (r secretReconciler) removeFinalizer(ctx context.Context, secret *corev1.Se
 	delete(secretCopy.Labels, common.LabelKeyHasFinalizer)
 	var err error
 	if _, err = r.kubeclientset.CoreV1().Secrets(secret.Namespace).Update(ctx, secretCopy, metav1.UpdateOptions{}); err != nil {
-		if patterns.IsOptimisticLockError(err) {
+		if controller.IsOptimisticLockError(err) {
 			d := time.Second
 			return &d, nil
 		} else {

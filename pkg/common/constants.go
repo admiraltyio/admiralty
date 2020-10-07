@@ -40,7 +40,11 @@ var (
 	AnnotationKeyIsReserved = KeyPrefix + "is-reserved"
 	AnnotationKeyIsAllowed  = KeyPrefix + "is-allowed"
 
-	// annotations on delegate services (by global service controller)
+	// annotations on following services and ingresses (for cloud controller manager to configure DNS)
+
+	AnnotationKeyGlobal = KeyPrefix + "global"
+
+	// annotations on following objects (by follow controllers)
 
 	AnnotationKeyIsDelegate = KeyPrefix + "is-delegate"
 
@@ -55,4 +59,8 @@ var (
 	// finalizer for cross-cluster garbage collection
 
 	CrossClusterGarbageCollectionFinalizer = KeyPrefix + "multiclusterForegroundDeletion"
+
+	AnnotationKeyCiliumGlobalService = "io.cilium/global-service"
+
+	AnnotationKeyOriginalSelector = KeyPrefix + "original-selector"
 )

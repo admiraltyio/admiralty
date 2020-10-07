@@ -20,11 +20,8 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"log"
 	"time"
 
-	"admiralty.io/multicluster-controller/pkg/cluster"
-	mcmgr "admiralty.io/multicluster-controller/pkg/manager"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	vklog "github.com/virtual-kubelet/virtual-kubelet/log"
@@ -42,16 +39,14 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
-	"admiralty.io/multicluster-scheduler/pkg/apis"
 	agentconfig "admiralty.io/multicluster-scheduler/pkg/config/agent"
 	"admiralty.io/multicluster-scheduler/pkg/controller"
 	"admiralty.io/multicluster-scheduler/pkg/controllers/chaperon"
 	"admiralty.io/multicluster-scheduler/pkg/controllers/feedback"
 	"admiralty.io/multicluster-scheduler/pkg/controllers/follow"
-	"admiralty.io/multicluster-scheduler/pkg/controllers/globalsvc"
+	"admiralty.io/multicluster-scheduler/pkg/controllers/follow/service"
 	"admiralty.io/multicluster-scheduler/pkg/controllers/resources"
 	"admiralty.io/multicluster-scheduler/pkg/controllers/source"
-	"admiralty.io/multicluster-scheduler/pkg/controllers/svcreroute"
 	"admiralty.io/multicluster-scheduler/pkg/generated/clientset/versioned"
 	clientset "admiralty.io/multicluster-scheduler/pkg/generated/clientset/versioned"
 	informers "admiralty.io/multicluster-scheduler/pkg/generated/informers/externalversions"
@@ -82,7 +77,6 @@ func main() {
 	startWebhook(stopCh, cfg)
 	var nodeStatusUpdaters map[string]resources.NodeStatusUpdater
 	if len(agentCfg.Targets) > 0 {
-		startControllers(ctx, stopCh, agentCfg, cfg)
 		nodeStatusUpdaters = startVirtualKubelet(ctx, agentCfg, k)
 	}
 	startOldStyleControllers(ctx, stopCh, agentCfg, cfg, k, nodeStatusUpdaters)
@@ -129,6 +123,7 @@ func startOldStyleControllers(
 	targetPodChaperonInformers := make(map[string]v1alpha1.PodChaperonInformer, n)
 	targetClusterSummaryInformers := make(map[string]v1alpha1.ClusterSummaryInformer, n)
 	targetConfigMapInformers := make(map[string]v1.ConfigMapInformer, nt)
+	targetServiceInformers := make(map[string]v1.ServiceInformer, nt)
 	targetSecretInformers := make(map[string]v1.SecretInformer, nt)
 
 	selfTargetKeys := make(map[string]bool, n-nt)
@@ -158,6 +153,7 @@ func startOldStyleControllers(
 			targetPodChaperonInformers[target.GetKey()] = f.Multicluster().V1alpha1().PodChaperons()
 			targetClusterSummaryInformers[target.GetKey()] = f.Multicluster().V1alpha1().ClusterSummaries()
 			targetConfigMapInformers[target.GetKey()] = kf.Core().V1().ConfigMaps()
+			targetServiceInformers[target.GetKey()] = kf.Core().V1().Services()
 			targetSecretInformers[target.GetKey()] = kf.Core().V1().Secrets()
 		}
 	}
@@ -171,10 +167,20 @@ func startOldStyleControllers(
 		upstreamResCtrl = resources.NewUpstreamController(k, nodeInformer, targetClusterSummaryInformers, nodeStatusUpdaters)
 	}
 	var cmFollowCtrl *controller.Controller
+	var svcFollowCtrl *controller.Controller
 	var secretFollowCtrl *controller.Controller
 	if nt > 0 {
 		cmFollowCtrl = follow.NewConfigMapController(k, targetKubeClients, podInformer,
 			kubeInformerFactory.Core().V1().ConfigMaps(), targetConfigMapInformers, selfTargetKeys)
+		svcFollowCtrl = service.NewController(
+			k,
+			targetKubeClients,
+			kubeInformerFactory.Core().V1().Endpoints(),
+			kubeInformerFactory.Core().V1().Services(),
+			kubeInformerFactory.Core().V1().Pods(),
+			targetServiceInformers,
+			selfTargetKeys,
+		)
 		secretFollowCtrl = follow.NewSecretController(k, targetKubeClients, podInformer,
 			kubeInformerFactory.Core().V1().Secrets(), targetSecretInformers, selfTargetKeys)
 	}
@@ -213,48 +219,12 @@ func startOldStyleControllers(
 	}
 	if nt > 0 {
 		go func() { utilruntime.Must(cmFollowCtrl.Run(2, stopCh)) }()
+		go func() { utilruntime.Must(svcFollowCtrl.Run(2, stopCh)) }()
 		go func() { utilruntime.Must(secretFollowCtrl.Run(2, stopCh)) }()
 	}
 	if srcCtrlEnabled {
 		go func() { utilruntime.Must(srcCtrl.Run(2, stopCh)) }()
 	}
-}
-
-func startControllers(ctx context.Context, stopCh <-chan struct{}, agentCfg agentconfig.Config, cfg *rest.Config) {
-	m := mcmgr.New()
-
-	o := cluster.Options{}
-	resync := 30 * time.Second
-	o.Resync = &resync
-	src := cluster.New("local", cfg, cluster.Options{})
-	if err := apis.AddToScheme(src.GetScheme()); err != nil {
-		log.Fatalf("adding APIs to member cluster's scheme: %v", err)
-	}
-	sourceClusters := []*cluster.Cluster{src}
-
-	var targetClusters []*cluster.Cluster
-	for _, target := range agentCfg.Targets {
-		if !target.Self {
-			o := cluster.Options{}
-			o.Namespace = target.Namespace
-			o.Resync = &resync
-			t := cluster.New(target.GetKey(), target.ClientConfig, o)
-			if err := apis.AddToScheme(t.GetScheme()); err != nil {
-				log.Fatalf("adding APIs to member cluster's scheme: %v", err)
-			}
-			targetClusters = append(targetClusters, t)
-		}
-	}
-
-	co, err := svcreroute.NewController(ctx, src)
-	utilruntime.Must(err)
-	m.AddController(co)
-
-	co, err = globalsvc.NewController(ctx, sourceClusters, targetClusters)
-	utilruntime.Must(err)
-	m.AddController(co)
-
-	go func() { utilruntime.Must(m.Start(stopCh)) }()
 }
 
 func startWebhook(stopCh <-chan struct{}, cfg *rest.Config) {
