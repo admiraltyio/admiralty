@@ -36,7 +36,7 @@ spec:
     certificateAuthorityData: "..." # a base64-encoded PEM X.509 certificate
 ```
 
-If you don't use Admiralty Cloud, you can actually omit the `admiraltyReference` and specify `server` and `certificateAuthorityData` directly. Their values will depend on where the other cluster exposes its kube-mtls-proxy.
+If you don't use the Admiralty Cloud API, you can actually omit the `admiraltyReference` and specify `server` and `certificateAuthorityData` directly. Their values will depend on where the other cluster exposes its kube-mtls-proxy.
 
 By default, Kubeconfigs use the certificate secret of the default Identity (see below) of the namespace where they're created as mTLS client certificate and private key. If you want to use a specific certificate secret instead, e.g., from a specific Identity, add this:
 
@@ -46,7 +46,7 @@ spec:
     certificateSecretName: some-cert-secret
 ```
 
-You can technically use any certificate, as long as it is signed by a CA that is trusted by the other cluster's kube-mtls-proxy (i.e., by a TrustedIdentityProvider object in the other cluster, see below). The Admiralty agent includes a cert-manager Issuer that, among other things, signs Identity certificates. Admiralty Cloud facilitates the distribution of that CA's registered certificate to other clusters using Admiralty references, so we recommend you to use Identities, including the default ones.
+You can technically use any certificate, as long as it is signed by a CA that is trusted by the other cluster's kube-mtls-proxy (i.e., by a TrustedIdentityProvider object in the other cluster, see below). The Admiralty agent includes a cert-manager Issuer that, among other things, signs Identity certificates. The Admiralty Cloud API facilitates the distribution of that CA's registered certificate to other clusters using Admiralty references, so we recommend you to use Identities, including the default ones.
 
 ## Identities
 
@@ -104,6 +104,6 @@ spec:
   certificateAuthorityData: "..." # a base64-encoded PEM X.509 certificate
 ```
 
-If you don't use Admiralty Cloud, you can actually omit the `admiraltyReference` and specify `certificateAuthorityData` directly. It can actually be any CA, especially if the other cluster doesn't use Admiralty agent Identities (see above), i.e., if it runs its own public key infrastructure (PKI).
+If you don't use the Admiralty Cloud API, you can actually omit the `admiraltyReference` and specify `certificateAuthorityData` directly. It can actually be any CA, especially if the other cluster doesn't use Admiralty agent Identities (see above), i.e., if it runs its own public key infrastructure (PKI).
 
 The `prefix` field is important. It is combined with client certificate common names (over which this cluster has no control) to form Kubernetes user names, which are matched to RBAC rules. To avoid unwanted impersonation, it is recommended to use prefixes to isolate TrustedIdentityProviders by trust domain, typically one prefix by TrustedIdentityProvider. By convention (following the [SPIFFE](https://spiffe.io/) standard used by other mTLS projects like service meshes), trust domain prefixes usually start with `spiffe://` and end with a forward slash. Combined with Identity certificate common names (see above), Kubernetes user names look like `spiffe://source-cluster/ns/namespace-a/id/default`. Use them as subjects of RBAC rules to authorize requests. For multi-cluster scheduling, Admiralty generates the right RBAC rules from [Source and ClusterSource](scheduling.md#sources-and-cluster-sources) objects.

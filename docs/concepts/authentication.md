@@ -32,7 +32,7 @@ Details about (2) and (4) can be found [in the Operator Guide](../operator_guide
 
 ## Cluster Identity Federation
 
-Cluster identity federation is available in Admiralty's free Developer tier.
+Cluster identity federation is available in Admiralty Cloud and Admiralty Enterprise.
 
 :::caution Under Construction
 We're working on documenting how this feature works. For now, please check out the [Operator Guide](../operator_guide/authentication.md) on how to use it.

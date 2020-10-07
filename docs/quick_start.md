@@ -6,7 +6,7 @@ custom_edit_url: https://github.com/admiraltyio/admiralty/edit/master/docs/quick
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-This guide provides copy-and-paste instructions to try out Admiralty ([open source](../pricing) cluster agent) with or without Admiralty Cloud (available in the [free Developer plan](../pricing) and in the [Enterprise plan](../pricing)). We use [kind](https://kind.sigs.k8s.io/) (Kubernetes in Docker) to create Kubernetes clusters, but feel free to use something else—though don't just copy and paste instructions then (especially for cross-cluster authentication without Admiralty Cloud).
+This guide provides copy-and-paste instructions to try out the Admiralty open source cluster agent with or without Admiralty Cloud. We use [kind](https://kind.sigs.k8s.io/) (Kubernetes in Docker) to create Kubernetes clusters, but feel free to use something else—though don't just copy and paste instructions then.
 
 ## Example Use Case
 
@@ -75,7 +75,7 @@ values={[
       quay.io/admiralty/multicluster-scheduler-scheduler:0.11.0
       quay.io/admiralty/multicluster-scheduler-remove-finalizers:0.11.0
       quay.io/admiralty/multicluster-scheduler-restarter:0.11.0
-      # admiralty developer/enterprise
+      # admiralty cloud/enterprise
       quay.io/admiralty/admiralty-cloud-controller-manager:0.11.0
       quay.io/admiralty/kube-mtls-proxy:0.10.0
       quay.io/admiralty/kube-oidc-proxy:v0.3.0 # jetstack's image rebuilt for multiple architectures
@@ -112,7 +112,7 @@ values={[
     ```
 
     :::note
-    Admiralty Open Source uses cert-manager to generate a server certificate for its [mutating pod admission webhook](concepts/scheduling.md#proxy-pods). In addition, Admiralty Developer/Enterprise use cert-manager to generate server certificates for Kubernetes API authenticating proxies (mTLS for clusters, OIDC for users), and client certificates for cluster [identities](operator_guide/authentication.md#identities) (talking to the mTLS proxies of other clusters).
+    Admiralty Open Source uses cert-manager to generate a server certificate for its [mutating pod admission webhook](concepts/scheduling.md#proxy-pods). In addition, Admiralty Cloud and Admiralty Enterprise use cert-manager to generate server certificates for Kubernetes API authenticating proxies (mTLS for clusters, OIDC for users), and client certificates for cluster [identities](operator_guide/authentication.md#identities) (talking to the mTLS proxies of other clusters).
     :::
 
 ## Installation
@@ -131,7 +131,7 @@ If you decide to use the open-source cluster agent only, no problem. There's no 
 groupId="oss-or-cloud"
 defaultValue="cloud"
 values={[
-{label: 'Developer/Enterprise', value: 'cloud'},
+{label: 'Cloud/Enterprise', value: 'cloud'},
 {label: 'Open Source', value: 'oss'},
 ]
 }>
@@ -280,7 +280,7 @@ done
 groupId="oss-or-cloud"
 defaultValue="cloud"
 values={[
-{label: 'Developer/Enterprise', value: 'cloud'},
+{label: 'Cloud/Enterprise', value: 'cloud'},
 {label: 'Open Source', value: 'oss'},
 ]
 }>
@@ -402,7 +402,7 @@ values={[
     groupId="oss-or-cloud"
     defaultValue="cloud"
     values={[
-    {label: 'Developer/Enterprise', value: 'cloud'},
+    {label: 'Cloud/Enterprise', value: 'cloud'},
     {label: 'Open Source', value: 'oss'},
     ]
     }>

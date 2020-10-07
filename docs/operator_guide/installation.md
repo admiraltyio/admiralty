@@ -12,7 +12,7 @@ import TabItem from '@theme/TabItem';
 groupId="oss-or-cloud"
 defaultValue="cloud"
 values={[
-{label: 'Developer/Enterprise', value: 'cloud'},
+{label: 'Cloud/Enterprise', value: 'cloud'},
 {label: 'Open Source', value: 'oss'},
 ]
 }>
@@ -70,7 +70,7 @@ The Admiralty command line interface (CLI) isn't required if you don't use Admir
 groupId="oss-or-cloud"
 defaultValue="cloud"
 values={[
-{label: 'Developer/Enterprise', value: 'cloud'},
+{label: 'Cloud/Enterprise', value: 'cloud'},
 {label: 'Open Source', value: 'oss'},
 ]
 }>
