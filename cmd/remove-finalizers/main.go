@@ -31,7 +31,7 @@ import (
 func main() {
 	ctx := context.Background()
 
-	patch := `{"metadata":{"$deleteFromPrimitiveList/finalizers":[` + common.CrossClusterGarbageCollectionFinalizer + `]}}`
+	patch := `{"metadata":{"$deleteFromPrimitiveList/finalizers":["` + common.CrossClusterGarbageCollectionFinalizer + `"]}}`
 
 	cfg := config.GetConfigOrDie()
 
