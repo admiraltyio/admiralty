@@ -25,6 +25,11 @@ In a nutshell, here's how Admiralty works:
 1. Install Admiralty in each cluster that you want to federate. Configure clusters as sources and/or targets to build a centralized or decentralized topology.
 1. Annotate any pod or pod template (e.g., of a Deployment, Job, or [Argo](https://argoproj.github.io/projects/argo) Workflow, among others) in any source cluster with `multicluster.admiralty.io/elect=""`.
 1. Admiralty mutates the elected pods into _proxy pods_ scheduled on [virtual-kubelet](https://virtual-kubelet.io/) nodes representing target clusters, and creates _delegate pods_ in the remote clusters (actually running the containers).
-1. Pod dependencies (configmaps and secrets only, for now) "follow" delegate pods, i.e., they are copied as needed to target clusters.
+1. Pod dependencies (config maps and secrets) and dependents (services and ingresses) "follow" delegate pods, i.e., they are copied as needed to target clusters.
 1. A feedback loop updates the statuses and annotations of the proxy pods to reflect the statuses and annotations of the delegate pods.
-1. Services that target proxy pods are rerouted to their delegates, replicated across clusters, and annotated with `io.cilium/global-service=true` to be [load-balanced across a Cilium cluster mesh](http://docs.cilium.io/en/stable/gettingstarted/clustermesh/#load-balancing-with-global-services), if installed. (Other integrations are possible, e.g., with [Linkerd](https://linkerd.io/2/features/multicluster/) or [Istio](https://istio.io/latest/docs/ops/deployment/deployment-models/#multiple-clusters); please [tell us about your network setup](https://admiralty.io/contact).)
+1. `kubectl logs` and `kubectl exec` work as expected.
+1. Integrate with Admiralty Cloud/Enterprise, [Cilium](https://cilium.io/blog/2019/03/12/clustermesh/) and other third-party solutions to enable north-south and east-west networking across clusters.
+
+:::note Open Source and Admiralty Cloud/Enterprise
+This documentation covers both the Admiralty open source cluster agent and Admiralty Cloud/Enterprise. Features only available with Admiralty Cloud/Enterprise are clearly marked; in that case, as much as possible, open source and commercial third-party alternatives are discussed.
+:::

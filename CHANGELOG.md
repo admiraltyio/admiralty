@@ -20,6 +20,21 @@
 
 -->
 
+## v0.12.0
+
+### New Features
+
+- 8865647 Ingresses follow services that follow matching cross-cluster pods to integrate with global ingress controllers, e.g., Admiralty Cloud.
+
+### Bugfixes
+
+- 3e4da1c Fix Helm chart post-delete hook. The patch was missing quotes. Uninstall would hang, with the job crash-looping.
+- ec86d72 Fix service reroute, which didn't stick after service was updated or re-applied.
+
+### Internals
+
+- ec86d72 Refactor service controllers (reroute and global) into a new follow controller similar to the others. As a consequence, remove multicluster-controller dependency.
+
 ## v0.11.0
 
 ### New Features

@@ -88,7 +88,7 @@ values={[
     kubectl create namespace admiralty
     helm install admiralty admiralty/admiralty \
         --namespace admiralty \
-        --version 0.11.0 \
+        --version 0.12.0 \
         --set accountName=$(admiralty get-account-name) \
         --set clusterName=$CLUSTER_NAME \
         --wait
@@ -111,7 +111,7 @@ values={[
     kubectl create namespace admiralty
     helm install admiralty admiralty/multicluster-scheduler \
         --namespace admiralty \
-        --version 0.11.0 \
+        --version 0.12.0 \
         --wait
     ```
 

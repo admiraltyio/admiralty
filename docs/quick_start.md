@@ -71,12 +71,12 @@ values={[
       quay.io/jetstack/cert-manager-webhook:v0.16.1
       quay.io/jetstack/cert-manager-cainjector:v0.16.1
       # admiralty open source
-      quay.io/admiralty/multicluster-scheduler-agent:0.11.0
-      quay.io/admiralty/multicluster-scheduler-scheduler:0.11.0
-      quay.io/admiralty/multicluster-scheduler-remove-finalizers:0.11.0
-      quay.io/admiralty/multicluster-scheduler-restarter:0.11.0
+      quay.io/admiralty/multicluster-scheduler-agent:0.12.0
+      quay.io/admiralty/multicluster-scheduler-scheduler:0.12.0
+      quay.io/admiralty/multicluster-scheduler-remove-finalizers:0.12.0
+      quay.io/admiralty/multicluster-scheduler-restarter:0.12.0
       # admiralty cloud/enterprise
-      quay.io/admiralty/admiralty-cloud-controller-manager:0.11.0
+      quay.io/admiralty/admiralty-cloud-controller-manager:0.12.0
       quay.io/admiralty/kube-mtls-proxy:0.10.0
       quay.io/admiralty/kube-oidc-proxy:v0.3.0 # jetstack's image rebuilt for multiple architectures
     )
@@ -227,7 +227,7 @@ values={[
       helm install admiralty admiralty/admiralty \
         --kube-context kind-$CLUSTER_NAME \
         --namespace admiralty \
-        --version 0.11.0 \
+        --version 0.12.0 \
         --set accountName=$(admiralty get-account-name) \
         --set clusterName=$CLUSTER_NAME \
         --wait --debug
@@ -261,7 +261,7 @@ do
   helm install admiralty admiralty/multicluster-scheduler \
     --kube-context kind-$CLUSTER_NAME \
     --namespace admiralty \
-    --version 0.11.0 \
+    --version 0.12.0 \
     --wait --debug
   # --wait to ensure release is ready before next steps
   # --debug to show progress, for lack of a better way,

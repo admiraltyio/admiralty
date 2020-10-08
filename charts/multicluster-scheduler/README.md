@@ -19,7 +19,7 @@ Multicluster-scheduler uses [finalizers](https://kubernetes.io/docs/tasks/access
 | fullnameOverride | string | `""` | Override chart and release names in object names |
 | imagePullSecretName | string | `""` |  |
 | controllerManager.image.repository | string | `"quay.io/admiralty/multicluster-scheduler-agent"` |  |
-| controllerManager.image.tag | string | `"0.11.0"` |  |
+| controllerManager.image.tag | string | `"0.12.0"` |  |
 | controllerManager.image.pullPolicy | string | `"IfNotPresent"` |  |
 | controllerManager.resources | object | `{}` |  |
 | controllerManager.nodeSelector | object | `{}` |  |
@@ -27,7 +27,7 @@ Multicluster-scheduler uses [finalizers](https://kubernetes.io/docs/tasks/access
 | controllerManager.affinity | object | `{}` |  |
 | controllerManager.tolerations | array | `[]` |  |
 | scheduler.image.repository | string | `"quay.io/admiralty/multicluster-scheduler-scheduler"` |  |
-| scheduler.image.tag | string | `"0.11.0"` |  |
+| scheduler.image.tag | string | `"0.12.0"` |  |
 | scheduler.image.pullPolicy | string | `"IfNotPresent"` |  |
 | scheduler.resources | object | `{}` |  |
 | scheduler.nodeSelector | object | `{}` |  |
@@ -35,7 +35,7 @@ Multicluster-scheduler uses [finalizers](https://kubernetes.io/docs/tasks/access
 | scheduler.affinity | object | `{}` |  |
 | scheduler.tolerations | array | `[]` |  |
 | postDeleteJob.image.repository | string | `"quay.io/admiralty/multicluster-scheduler-remove-finalizers"` |  |
-| postDeleteJob.image.tag | string | `"0.11.0"` |  |
+| postDeleteJob.image.tag | string | `"0.12.0"` |  |
 | postDeleteJob.image.pullPolicy | string | `"IfNotPresent"` |  |
 | postDeleteJob.resources | object | `{}` |  |
 | postDeleteJob.nodeSelector | object | `{}` |  |
@@ -43,7 +43,7 @@ Multicluster-scheduler uses [finalizers](https://kubernetes.io/docs/tasks/access
 | postDeleteJob.affinity | object | `{}` |  |
 | postDeleteJob.tolerations | array | `[]` |  |
 | restarter.image.repository | string | `"quay.io/admiralty/multicluster-scheduler-remove-finalizers"` |  |
-| restarter.image.tag | string | `"0.11.0"` |  |
+| restarter.image.tag | string | `"0.12.0"` |  |
 | restarter.image.pullPolicy | string | `"IfNotPresent"` |  |
 | restarter.resources | object | `{}` |  |
 | restarter.nodeSelector | object | `{}` |  |
