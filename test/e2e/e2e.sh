@@ -25,6 +25,7 @@ source test/e2e/kind.sh
 source test/e2e/follow/test.sh
 source test/e2e/logs/test.sh
 source test/e2e/exec/test.sh
+source test/e2e/ingress/test.sh
 source test/e2e/webhook_ready.sh
 
 argo_setup_once
@@ -67,10 +68,11 @@ argo_test 1 2
 follow_test 1 2
 logs_test 1 2
 exec_test 1 2
+ingress_test 1 2
 
 # check that we didn't add finalizers to uncontrolled resources
 finalizer="multicluster.admiralty.io/multiclusterForegroundDeletion"
-for resource in pods configmaps secrets services; do
+for resource in pods configmaps secrets services ingresses; do
   [ $(k 1 get $resource -A -o custom-columns=FINALIZERS:.metadata.finalizers | grep -c $finalizer) -eq 0 ]
 done
 
