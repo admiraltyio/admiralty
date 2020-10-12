@@ -345,10 +345,10 @@ values={[
       # ii.
       SECRET_NAME=$(kubectl --context kind-$CLUSTER_NAME get serviceaccount cd \
         --output json | \
-        jq -r .secrets[0].name)
+        jq -r '.secrets[0].name')
       TOKEN=$(kubectl --context kind-$CLUSTER_NAME get secret $SECRET_NAME \
         --output json | \
-        jq -r .data.token | \
+        jq -r '.data.token' | \
         base64 --decode)
 
       # iii.
