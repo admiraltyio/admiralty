@@ -142,7 +142,7 @@ func (r reconciler) Handle(obj interface{}) (requeueAfter *time.Duration, err er
 	}
 	hasFinalizer := j > -1
 
-	shouldFollow, err := r.shouldFollow(svc)
+	shouldFollow, originalSelector, err := r.shouldFollow(svc)
 	if err != nil {
 		return nil, err
 	}
@@ -196,6 +196,10 @@ func (r reconciler) Handle(obj interface{}) (requeueAfter *time.Duration, err er
 			needUpdateLocal = true
 			svcCopy.Annotations[common.AnnotationKeyGlobal] = "true"
 		}
+		if originalSelector != svcCopy.Annotations[common.AnnotationKeyOriginalSelector] {
+			needUpdateLocal = true
+			svcCopy.Annotations[common.AnnotationKeyOriginalSelector] = originalSelector
+		}
 		if r.serviceRerouteEnabled {
 			selector, changed := delegatepod.ChangeLabels(svcCopy.Spec.Selector)
 			if changed {
@@ -248,11 +252,11 @@ func (r reconciler) Handle(obj interface{}) (requeueAfter *time.Duration, err er
 	return requeueAfter, nil
 }
 
-func (r reconciler) shouldFollow(service *corev1.Service) (bool, error) {
+func (r reconciler) shouldFollow(service *corev1.Service) (bool, string, error) {
 	// an empty selector would list everything!
 	// when it actually means the service doesn't select pods (e.g., uses custom Endpoints or external name)
 	if len(service.Spec.Selector) == 0 {
-		return false, nil
+		return false, "", nil
 	}
 	// delegate pods may not be in the same cluster, so we need to select proxy pods
 	// if service was never rerouted, we can use the selector as is
@@ -262,7 +266,7 @@ func (r reconciler) shouldFollow(service *corev1.Service) (bool, error) {
 	// unless the current selector includes labels NOT prefixed with out domain,
 	// which means it's been updated (or the original selector has been reapplied)
 	// in that case, use those labels
-	selector := map[string]string{}
+	selector := labels.Set{}
 	for k, v := range service.Spec.Selector {
 		if !strings.HasPrefix(k, common.KeyPrefix) { // user shouldn't use our domain (which is ok by convention)
 			selector[k] = v
@@ -271,24 +275,24 @@ func (r reconciler) shouldFollow(service *corev1.Service) (bool, error) {
 	if len(selector) == 0 {
 		s, ok := service.Annotations[common.AnnotationKeyOriginalSelector]
 		if !ok {
-			return false, fmt.Errorf("original selector not found")
+			return false, "", fmt.Errorf("original selector not found")
 		}
 		var err error
 		selector, err = labels.ConvertSelectorToLabelsMap(s)
 		if err != nil {
-			return false, fmt.Errorf("original selector is invalid (was tampered with?): %v", err)
+			return false, "", fmt.Errorf("original selector is invalid (was tampered with?): %v", err)
 		}
 	}
 	pods, err := r.podLister.Pods(service.Namespace).List(labels.SelectorFromValidatedSet(selector))
 	if err != nil {
-		return false, err
+		return false, "", err
 	}
 	for _, pod := range pods {
 		if proxypod.IsProxy(pod) {
-			return true, nil
+			return true, selector.String(), nil
 		}
 	}
-	return false, nil
+	return false, selector.String(), nil
 }
 
 func addFinalizer(actualCopy *corev1.Service) {
