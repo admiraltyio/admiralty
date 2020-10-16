@@ -23,19 +23,14 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"admiralty.io/multicluster-scheduler/pkg/common"
+	"admiralty.io/multicluster-scheduler/pkg/model/virtualnode"
 )
 
 func NodeFromOpts(c Opts) *v1.Node {
 	node := &v1.Node{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: c.NodeName,
-			Labels: map[string]string{
-				"type": "virtual-kubelet",
-				common.LabelAndTaintKeyVirtualKubeletProvider: common.VirtualKubeletProviderName,
-				"kubernetes.io/role":                          "cluster",
-				//"kubernetes.io/hostname": c.NodeName,
-				"alpha.service-controller.kubernetes.io/exclude-balancer": "true",
-			},
+			Name:   c.NodeName,
+			Labels: virtualnode.BaseLabels(),
 		},
 		Spec: v1.NodeSpec{
 			Taints: []v1.Taint{

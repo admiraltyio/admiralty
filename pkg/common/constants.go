@@ -36,6 +36,10 @@ var (
 	// TODO: an alternative option would be to schedule based on virtual node info only (like tensile-kube).
 	AnnotationKeyNoReservation = KeyPrefix + "no-reservation"
 
+	AnnotationKeyProxyPodSchedulingConstraints = KeyPrefix + "proxy-pod-scheduling-constraints"
+
+	AnnotationKeyUseConstraintsFromSpecForProxyPodScheduling = KeyPrefix + "use-constraints-from-spec-for-proxy-pod-scheduling"
+
 	// annotations on proxy pods (by mutating admission webhook)
 
 	KeyPrefixSourcePod = KeyPrefix + "sourcepod-"

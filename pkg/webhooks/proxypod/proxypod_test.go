@@ -57,6 +57,9 @@ var testCases = map[string]struct {
 				Finalizers: []string{common.CrossClusterGarbageCollectionFinalizer},
 			},
 			Spec: corev1.PodSpec{
+				NodeSelector: map[string]string{
+					common.LabelAndTaintKeyVirtualKubeletProvider: common.VirtualKubeletProviderName,
+				},
 				Containers: []corev1.Container{{
 					Name:  "nginx",
 					Image: "nginx",
@@ -115,6 +118,9 @@ var testCases = map[string]struct {
 				Finalizers: []string{common.CrossClusterGarbageCollectionFinalizer},
 			},
 			Spec: corev1.PodSpec{
+				NodeSelector: map[string]string{
+					common.LabelAndTaintKeyVirtualKubeletProvider: common.VirtualKubeletProviderName,
+				},
 				Containers: []corev1.Container{{
 					Name:  "nginx",
 					Image: "nginx",

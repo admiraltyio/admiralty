@@ -72,14 +72,21 @@ func (m mutator) mutate(pod *corev1.Pod) error {
 	// webhooks may be run multiple times on the same object
 	// and have to be idempotent
 	// if we didn't check, we could lose the source scheduling constraints that we remove below
+	var srcPod *corev1.Pod
 	if _, ok := pod.Annotations[common.AnnotationKeySourcePodManifest]; !ok {
-		srcPodManifest, err := yaml.Marshal(pod)
+		srcPod = pod.DeepCopy()
+
+		srcPodManifest, err := yaml.Marshal(srcPod)
 		if err != nil {
 			return err
 		}
 
 		// pod.Annotations is not nil because we checked it contains AnnotationKeyElect
 		pod.Annotations[common.AnnotationKeySourcePodManifest] = string(srcPodManifest)
+	} else {
+		if err := yaml.UnmarshalStrict([]byte(pod.Annotations[common.AnnotationKeySourcePodManifest]), srcPod); err != nil {
+			return err
+		}
 	}
 
 	pod.Spec.NodeSelector = map[string]string{common.LabelAndTaintKeyVirtualKubeletProvider: common.VirtualKubeletProviderName}
@@ -96,10 +103,41 @@ func (m mutator) mutate(pod *corev1.Pod) error {
 	// because we have no control over it.
 
 	// remove other scheduling constraints (will be respected in target cluster, from source pod manifest)
-	pod.Spec.SchedulerName = common.ProxySchedulerName
-	pod.Spec.NodeSelector = nil
 	pod.Spec.Affinity = nil
 	pod.Spec.TopologySpreadConstraints = nil
+
+	proxyPodSched := &corev1.PodSpec{}
+	if s, ok := pod.Annotations[common.AnnotationKeyProxyPodSchedulingConstraints]; ok {
+		if err := yaml.UnmarshalStrict([]byte(s), proxyPodSched); err != nil {
+			return err
+		}
+
+		// add user-defined proxy pod scheduling constraints
+		for k, v := range proxyPodSched.NodeSelector {
+			pod.Spec.NodeSelector[k] = v
+		}
+
+		for _, t := range proxyPodSched.Tolerations {
+			pod.Spec.Tolerations = append(pod.Spec.Tolerations, t)
+		}
+
+		pod.Spec.Affinity = proxyPodSched.Affinity
+		pod.Spec.TopologySpreadConstraints = proxyPodSched.TopologySpreadConstraints
+	} else if _, ok := pod.Annotations[common.AnnotationKeyUseConstraintsFromSpecForProxyPodScheduling]; ok {
+		for k, v := range srcPod.Spec.NodeSelector {
+			pod.Spec.NodeSelector[k] = v
+		}
+
+		for _, t := range srcPod.Spec.Tolerations {
+			pod.Spec.Tolerations = append(pod.Spec.Tolerations, t)
+		}
+
+		pod.Spec.Affinity = srcPod.Spec.Affinity
+		pod.Spec.TopologySpreadConstraints = srcPod.Spec.TopologySpreadConstraints
+	}
+
+	pod.Spec.SchedulerName = common.ProxySchedulerName // we don't allow bypassing the proxy scheduler for now
+	// TODO we would need to create delegate pod chaperons for proxy pods bound to virtual nodes outside of proxy scheduler
 
 	// pods are usually deleted with a grace period of 30 seconds
 	// and it is the kubelet's responsibility to force delete after that

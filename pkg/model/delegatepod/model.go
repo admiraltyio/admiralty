@@ -62,6 +62,13 @@ func MakeDelegatePod(proxyPod *corev1.Pod) (*v1alpha1.PodChaperon, error) {
 
 	controller.AddRemoteControllerReference(delegatePod, proxyPod)
 
+	if _, ok := srcPod.Annotations[common.AnnotationKeyUseConstraintsFromSpecForProxyPodScheduling]; ok {
+		delegatePod.Spec.NodeSelector = nil
+		delegatePod.Spec.Tolerations = nil
+		delegatePod.Spec.Affinity = nil
+		delegatePod.Spec.TopologySpreadConstraints = nil
+	}
+
 	removeServiceAccount(&delegatePod.Spec)
 	// TODO? add compatible fields instead of removing incompatible ones
 	// (for forward compatibility and we've certainly forgotten incompatible fields...)
