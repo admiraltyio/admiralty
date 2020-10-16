@@ -29,6 +29,13 @@ var (
 
 	AnnotationKeyElect = KeyPrefix + "elect"
 
+	// AnnotationKeyNoReservation tells the proxy scheduler to work with a custom scheduler in the target cluster,
+	// instead of the candidate scheduler, waiting for candidate pods to be scheduled, instead of reserved,
+	// to pass the proxy plugin filter test. Pods deleted in the post-bind plugin (those that didn't pass the score test)
+	// may be scheduled already, not just pending. That is an acceptable compromise to work with a custom scheduler.
+	// TODO: an alternative option would be to schedule based on virtual node info only (like tensile-kube).
+	AnnotationKeyNoReservation = KeyPrefix + "no-reservation"
+
 	// annotations on proxy pods (by mutating admission webhook)
 
 	KeyPrefixSourcePod = KeyPrefix + "sourcepod-"
