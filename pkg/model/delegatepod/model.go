@@ -67,7 +67,9 @@ func MakeDelegatePod(proxyPod *corev1.Pod) (*v1alpha1.PodChaperon, error) {
 	// (for forward compatibility and we've certainly forgotten incompatible fields...)
 	// TODO... maybe make this configurable, sort of like Federation v2 Overrides
 
-	delegatePod.Spec.SchedulerName = common.CandidateSchedulerName
+	if _, ok := srcPod.Annotations[common.AnnotationKeyNoReservation]; !ok {
+		delegatePod.Spec.SchedulerName = common.CandidateSchedulerName
+	}
 
 	return delegatePod, nil
 }

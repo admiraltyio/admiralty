@@ -19,6 +19,7 @@ package proxy
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	v1 "k8s.io/api/core/v1"
@@ -41,10 +42,14 @@ import (
 type Plugin struct {
 	handle  framework.FrameworkHandle
 	targets map[string]*versioned.Clientset
+
+	failedNodeNamesByPodUID map[types.UID]map[string]bool
+	mx                      sync.RWMutex
 }
 
 var _ framework.FilterPlugin = &Plugin{}
 var _ framework.ReservePlugin = &Plugin{}
+var _ framework.UnreservePlugin = &Plugin{}
 var _ framework.PreBindPlugin = &Plugin{}
 var _ framework.PostBindPlugin = &Plugin{}
 
@@ -93,6 +98,15 @@ const filterWaitDuration = 30 * time.Second // TODO configure
 func (pl *Plugin) Filter(ctx context.Context, state *framework.CycleState, pod *v1.Pod, nodeInfo *nodeinfo.NodeInfo) *framework.Status {
 	if nodeInfo.Node().Labels[common.LabelAndTaintKeyVirtualKubeletProvider] != common.VirtualKubeletProviderName {
 		return framework.NewStatus(framework.UnschedulableAndUnresolvable, "")
+	}
+
+	if pl.unreservedInAPreviousCycle(pod.UID, nodeInfo.Node().Name) {
+		return framework.NewStatus(framework.UnschedulableAndUnresolvable, "unreserved in a previous cycle")
+	}
+
+	// working without a candidate scheduler, we'll create a single candidate AFTER a virtual node is selected
+	if _, ok := pod.Annotations[common.AnnotationKeyNoReservation]; ok {
+		return nil
 	}
 
 	targetClusterName := virtualNodeNameToClusterName(nodeInfo.Node().Name)
@@ -149,6 +163,12 @@ func (pl *Plugin) Filter(ctx context.Context, state *framework.CycleState, pod *
 	return nil
 }
 
+func (pl *Plugin) unreservedInAPreviousCycle(podUID types.UID, nodeName string) bool {
+	pl.mx.RLock()
+	defer pl.mx.RUnlock()
+	return pl.failedNodeNamesByPodUID[podUID][nodeName]
+}
+
 func (pl *Plugin) Reserve(ctx context.Context, state *framework.CycleState, p *v1.Pod, nodeName string) *framework.Status {
 	targetClusterName := virtualNodeNameToClusterName(nodeName)
 	c, err := pl.getCandidate(ctx, p, targetClusterName)
@@ -156,6 +176,20 @@ func (pl *Plugin) Reserve(ctx context.Context, state *framework.CycleState, p *v
 		return framework.NewStatus(framework.Error, err.Error())
 	}
 	if c == nil {
+		if _, ok := p.Annotations[common.AnnotationKeyNoReservation]; ok {
+			c, err := delegatepod.MakeDelegatePod(p)
+			if err != nil {
+				return framework.NewStatus(framework.Error, err.Error())
+			}
+
+			_, err = pl.targets[targetClusterName].MulticlusterV1alpha1().PodChaperons(c.Namespace).Create(ctx, c, metav1.CreateOptions{})
+			if err != nil {
+				// may be forbidden, or namespace doesn't exist, or target cluster is unavailable
+				return framework.NewStatus(framework.Error, err.Error())
+			}
+
+			return nil
+		}
 		return framework.NewStatus(framework.Error, "candidate not found")
 	}
 	if err = pl.allowCandidate(ctx, c, targetClusterName); err != nil {
@@ -165,7 +199,23 @@ func (pl *Plugin) Reserve(ctx context.Context, state *framework.CycleState, p *v
 	return nil
 }
 
-const preBindWaitDuration = 30 * time.Second
+func (pl *Plugin) Unreserve(ctx context.Context, state *framework.CycleState, p *v1.Pod, nodeName string) {
+	// remember that this virtual node should be filtered out in next scheduling cycle (a.k.a. "filter a posteriori")
+	// unless we've filtered out all other nodes already
+	// in which case we reset the memory and try again to see if things have changed
+	pl.mx.Lock()
+	defer pl.mx.Unlock()
+
+	if pl.failedNodeNamesByPodUID[p.UID] == nil {
+		pl.failedNodeNamesByPodUID[p.UID] = map[string]bool{}
+	}
+	pl.failedNodeNamesByPodUID[p.UID][nodeName] = true
+	if len(pl.failedNodeNamesByPodUID[p.UID]) == len(pl.targets) {
+		pl.failedNodeNamesByPodUID[p.UID] = nil
+	}
+}
+
+const preBindWaitDuration = 60 * time.Second // increased from arbitrary 30 seconds, because Fargate takes 30-60 seconds
 
 func (pl *Plugin) PreBind(ctx context.Context, state *framework.CycleState, p *v1.Pod, nodeName string) *framework.Status {
 	// wait for candidate to be bound or not
@@ -217,6 +267,12 @@ func (pl *Plugin) PostBind(ctx context.Context, state *framework.CycleState, p *
 		err := target.MulticlusterV1alpha1().PodChaperons(p.Namespace).DeleteCollection(ctx, metav1.DeleteOptions{}, metav1.ListOptions{LabelSelector: common.LabelKeyParentUID + "=" + string(p.UID)})
 		utilruntime.HandleError(err)
 	}
+
+	pl.mx.Lock()
+	defer pl.mx.Unlock()
+	delete(pl.failedNodeNamesByPodUID, p.UID)
+	// TODO if a proxy pod is deleted while pending, with failed node names, PostBind won't be called,
+	// so we're leaking memory, but there's no multi-cycle "FinalUnreserve" plugin, we'd have to listen to deletions...
 }
 
 // New initializes a new plugin and returns it.
@@ -231,5 +287,5 @@ func New(args *runtime.Unknown, h framework.FrameworkHandle) (framework.Plugin, 
 	}
 	// TODO... cache podchaperons with lister
 
-	return &Plugin{handle: h, targets: clients}, nil
+	return &Plugin{handle: h, targets: clients, failedNodeNamesByPodUID: map[types.UID]map[string]bool{}}, nil
 }
