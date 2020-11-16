@@ -25,5 +25,5 @@ imgs=(
 )
 
 for img in "${imgs[@]}"; do
-  IMG="$img" ARCHS="amd64 arm64 ppc64le s390x" ./release/image.sh
+  IMG="$img" ./release/image.sh
 done
