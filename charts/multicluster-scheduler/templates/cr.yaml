@@ -160,6 +160,7 @@ rules:
     verbs:
       - get
       - create
+      - patch
   - apiGroups:
       - ""
     resources:

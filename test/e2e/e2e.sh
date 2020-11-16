@@ -70,6 +70,9 @@ logs_test 1 2
 exec_test 1 2
 ingress_test 1 2
 
+# give time to delete and remove finalizers
+sleep 10 # TODO: optimize
+
 # check that we didn't add finalizers to uncontrolled resources
 finalizer="multicluster.admiralty.io/multiclusterForegroundDeletion"
 for resource in pods configmaps secrets services ingresses; do

@@ -69,6 +69,8 @@ func (r downstream) Handle(_ interface{}) (requeueAfter *time.Duration, err erro
 
 	capacity := corev1.ResourceList{}
 	allocatable := corev1.ResourceList{}
+	l := map[string]string{}
+	keysWithMultipleValues := map[string]bool{}
 
 	sel, err := labels.Parse(fmt.Sprintf("%s!=%s", common.LabelAndTaintKeyVirtualKubeletProvider, common.VirtualKubeletProviderName))
 	utilruntime.Must(err)
@@ -93,6 +95,17 @@ func (r downstream) Handle(_ interface{}) (requeueAfter *time.Duration, err erro
 				allocatable[res] = qty
 			}
 		}
+		for k, v := range node.Labels {
+			c, ok := l[k]
+			if !ok {
+				if !keysWithMultipleValues[k] {
+					l[k] = v
+				}
+			} else if c != v {
+				keysWithMultipleValues[k] = true
+				delete(l, k)
+			}
+		}
 	}
 
 	actual, err := r.customclientset.MulticlusterV1alpha1().ClusterSummaries().Get(ctx, singletonName, v1.GetOptions{})
@@ -102,6 +115,7 @@ func (r downstream) Handle(_ interface{}) (requeueAfter *time.Duration, err erro
 				Allocatable: allocatable,
 				Capacity:    capacity,
 			}
+			gold.Labels = l
 			gold.Name = singletonName
 			actual, err = r.customclientset.MulticlusterV1alpha1().ClusterSummaries().Create(ctx, gold, v1.CreateOptions{})
 			if err != nil {
@@ -110,10 +124,11 @@ func (r downstream) Handle(_ interface{}) (requeueAfter *time.Duration, err erro
 		}
 	}
 
-	if !reflect.DeepEqual(capacity, actual.Capacity) || !reflect.DeepEqual(allocatable, actual.Allocatable) {
+	if !reflect.DeepEqual(capacity, actual.Capacity) || !reflect.DeepEqual(allocatable, actual.Allocatable) || !labels.Equals(l, actual.Labels) {
 		actualCopy := actual.DeepCopy()
 		actualCopy.Allocatable = allocatable
 		actualCopy.Capacity = capacity
+		actualCopy.Labels = l
 		actual, err = r.customclientset.MulticlusterV1alpha1().ClusterSummaries().Update(ctx, actualCopy, v1.UpdateOptions{})
 		if err != nil {
 			return nil, err

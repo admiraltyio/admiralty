@@ -17,11 +17,16 @@
 package resources
 
 import (
+	"context"
 	"reflect"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/json"
+	"k8s.io/apimachinery/pkg/util/strategicpatch"
 	coreinformers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes"
 	corelisters "k8s.io/client-go/listers/core/v1"
@@ -32,6 +37,7 @@ import (
 	"admiralty.io/multicluster-scheduler/pkg/controller"
 	informers "admiralty.io/multicluster-scheduler/pkg/generated/informers/externalversions/multicluster/v1alpha1"
 	listers "admiralty.io/multicluster-scheduler/pkg/generated/listers/multicluster/v1alpha1"
+	"admiralty.io/multicluster-scheduler/pkg/model/virtualnode"
 )
 
 type NodeStatusUpdater interface {
@@ -85,6 +91,7 @@ func NewUpstreamController(kubeclientset kubernetes.Interface,
 }
 
 func (r upstream) Handle(key interface{}) (requeueAfter *time.Duration, err error) {
+	ctx := context.Background()
 	targetName := key.(string)
 
 	clusterSummary, err := r.clusterSummaryListers[targetName].Get(singletonName)
@@ -116,9 +123,41 @@ func (r upstream) Handle(key interface{}) (requeueAfter *time.Duration, err erro
 		purgeHugePageResources(clusterSummary.Allocatable)
 	}
 
+	l := virtualnode.BaseLabels()
+	for k, v := range clusterSummary.Labels {
+		l[k] = v
+	}
+
 	virtualNode, err := r.nodeLister.Get(targetName)
 	if err != nil {
 		return nil, err
+	}
+
+	// we can't group status update with label update because status update POSTs to the status subresource
+	// also, we use patch, not update, because for some reason EKS cloud controller deletes nodes if we use update
+	if !labels.Equals(virtualNode.Labels, l) {
+		actualCopy := virtualNode.DeepCopy()
+		actualCopy.Labels = l
+
+		oldData, err := json.Marshal(virtualNode)
+		if err != nil {
+			return nil, err
+		}
+
+		newData, err := json.Marshal(actualCopy)
+		if err != nil {
+			return nil, err
+		}
+
+		patchBytes, err := strategicpatch.CreateTwoWayMergePatch(oldData, newData, corev1.Node{})
+		if err != nil {
+			return nil, err
+		}
+
+		virtualNode, err = r.kubeclientset.CoreV1().Nodes().Patch(ctx, targetName, types.StrategicMergePatchType, patchBytes, metav1.PatchOptions{})
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	if !reflect.DeepEqual(virtualNode.Status.Capacity, clusterSummary.Capacity) ||
