@@ -19,6 +19,7 @@ set -euo pipefail
 
 # constants
 default_registry="quay.io/admiralty"
+default_archs="amd64 arm64 ppc64le s390x"
 
 # environment variables
 # required
@@ -26,7 +27,7 @@ IMG="${IMG}"
 VERSION="${VERSION}"
 # optional
 REGISTRY="${REGISTRY:-$default_registry}"
-ARCHS="${ARCHS:-amd64}"
+ARCHS="${ARCHS:-$default_archs}"
 
 read -ra archs <<<"$ARCHS"
 
