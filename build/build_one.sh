@@ -50,7 +50,7 @@ fi
 mkdir -p "$context_dir"
 
 CGO_ENABLED=0 GOOS=$OS GOARCH=$ARCH go build -trimpath -o "$context_dir/$BIN" "${extra_args[@]}" "$PKG"
-if [ "$VERSION" != dev ] && [ "$ARCH" != s390x ]; then
+if [ "$VERSION" != dev ] && [ "$ARCH" = amd64 ]; then
   upx-ucl "$context_dir/$BIN"
 fi
 
