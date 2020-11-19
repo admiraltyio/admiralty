@@ -25,7 +25,7 @@ The Admiralty command line interface (CLI) helps you sign up for an Admiralty Cl
     ```shell script
     OS=linux # or darwin (i.e., OS X) or windows
     ARCH=amd64 # or, for linux, any of arm64, ppc64le, s390x
-    curl -Lo admiralty "https://artifacts.admiralty.io/admiralty-v0.11.1-$OS-$ARCH"
+    curl -Lo admiralty "https://artifacts.admiralty.io/admiralty-v0.13.1-$OS-$ARCH"
     chmod +x admiralty
     sudo mv admiralty /usr/local/bin
     ```
@@ -35,8 +35,6 @@ The Admiralty command line interface (CLI) helps you sign up for an Admiralty Cl
     ```shell script
     admiralty configure
     ```
-
-    This will create a cluster, user, and context in your current kubeconfig (e.g., `~/.kube/config`, or whatever the `KUBECONFIG` environment variable points to), targeting the Admiralty Cloud API, which is a Kubernetes-like API. It will also set the current context to the new one, so don't forget to switch contexts to interact with your clusters, or switch kubeconfigs if using multiple files.
 
 </TabItem>
 <TabItem value="oss">
@@ -88,7 +86,7 @@ values={[
     kubectl create namespace admiralty
     helm install admiralty admiralty/admiralty \
         --namespace admiralty \
-        --version 0.12.0 \
+        --version 0.13.1 \
         --set accountName=$(admiralty get-account-name) \
         --set clusterName=$CLUSTER_NAME \
         --wait
@@ -111,7 +109,7 @@ values={[
     kubectl create namespace admiralty
     helm install admiralty admiralty/multicluster-scheduler \
         --namespace admiralty \
-        --version 0.12.0 \
+        --version 0.13.1 \
         --wait
     ```
 

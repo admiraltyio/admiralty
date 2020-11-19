@@ -41,7 +41,7 @@ We're working on documenting how this feature works. For now, please check out t
 ## Using Kubernetes Service Account Tokens From Target Clusters
 
 :::caution Under Construction
-While we work on this section, please refer to Admiralty's readme on GitHub.
+While we work on this section, please refer to the Open Source tab of the Cross-Cluster Authentication section in the [quick start guide](../quick_start.md#cross-cluster-authentication).
 :::
 
 ## Other Solutions

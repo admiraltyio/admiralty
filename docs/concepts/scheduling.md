@@ -25,7 +25,11 @@ The proxy and candidate schedulers extend the standard Kubernetes scheduler with
 :::
 
 :::caution
-Admiralty is not compatible with third-party custom schedulers. That being said, if your custom scheduler is based on the Scheduler Framework as well, it shouldn't be too hard to build a new scheduler using both your plugins and the candidate scheduler's. [Please reach out for assistance](https://admiralty.io/contact).
+Admiralty's main multi-cluster scheduling algorithm is not compatible with third-party custom schedulers. That being said, if your custom scheduler is based on the Scheduler Framework as well, it shouldn't be too hard to build a new scheduler using both your plugins and the candidate scheduler's. [Please reach out for assistance](https://admiralty.io/contact).
+
+However, if you can't modify the custom scheduler, e.g., the [AWS Fargate](../tutorials/fargate.md) scheduler, use the `multicluster.admiralty.io/no-reservation` pod annotation to use Admiralty's alternate algorithm, illustrated below, to be documented:
+
+![](scheduling_alt.svg)
 :::
 
 ## Proxy Pods

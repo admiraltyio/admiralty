@@ -10,7 +10,7 @@ This guide provides copy-and-paste instructions to try out the Admiralty open so
 
 ## Example Use Case
 
-We're going to model a centralized cluster topology made of a management cluster (named `cd`) where applications are deployed, and two workload clusters (named `us` and `eu`) where containers actually run. We'll deploy a batch job utilizing both workload clusters, and another targeting a specific region. If you're interested in other [topologies](./concepts/topologies.md) or other kinds of applications (e.g., micro-services), this guide is still helpful to get familiar with Admiralty in general.
+We're going to model a centralized cluster topology made of a management cluster (named `cd`) where applications are deployed, and two workload clusters (named `us` and `eu`) where containers actually run. We'll deploy a batch job utilizing both workload clusters, and another targeting a specific region. If you're interested in other [topologies](./concepts/topologies.md) or other kinds of applications (e.g., micro-services), this guide is still helpful to get familiar with Admiralty in general. When you're done, you may want to continue with the ["Multi-Region AWS Fargate on EKS" tutorial](tutorials/fargate.md).
 
 <Tabs
 defaultValue="global"
@@ -71,12 +71,12 @@ values={[
       quay.io/jetstack/cert-manager-webhook:v0.16.1
       quay.io/jetstack/cert-manager-cainjector:v0.16.1
       # admiralty open source
-      quay.io/admiralty/multicluster-scheduler-agent:0.12.0
-      quay.io/admiralty/multicluster-scheduler-scheduler:0.12.0
-      quay.io/admiralty/multicluster-scheduler-remove-finalizers:0.12.0
-      quay.io/admiralty/multicluster-scheduler-restarter:0.12.0
+      quay.io/admiralty/multicluster-scheduler-agent:0.13.1
+      quay.io/admiralty/multicluster-scheduler-scheduler:0.13.1
+      quay.io/admiralty/multicluster-scheduler-remove-finalizers:0.13.1
+      quay.io/admiralty/multicluster-scheduler-restarter:0.13.1
       # admiralty cloud/enterprise
-      quay.io/admiralty/admiralty-cloud-controller-manager:0.12.0
+      quay.io/admiralty/admiralty-cloud-controller-manager:0.13.1
       quay.io/admiralty/kube-mtls-proxy:0.10.0
       quay.io/admiralty/kube-oidc-proxy:v0.3.0 # jetstack's image rebuilt for multiple architectures
     )
@@ -154,7 +154,7 @@ values={[
     <TabItem value="linux-amd64">
 
     ```shell script
-    curl -Lo admiralty "https://artifacts.admiralty.io/admiralty-v0.11.1-linux-amd64"
+    curl -Lo admiralty "https://artifacts.admiralty.io/admiralty-v0.13.1-linux-amd64"
     chmod +x admiralty
     sudo mv admiralty /usr/local/bin
     ```
@@ -163,7 +163,7 @@ values={[
     <TabItem value="mac">
 
     ```shell script
-    curl -Lo admiralty "https://artifacts.admiralty.io/admiralty-v0.11.1-darwin-amd64"
+    curl -Lo admiralty "https://artifacts.admiralty.io/admiralty-v0.13.1-darwin-amd64"
     chmod +x admiralty
     sudo mv admiralty /usr/local/bin
     ```
@@ -172,14 +172,14 @@ values={[
     <TabItem value="windows">
 
     ```shell script
-    curl -Lo admiralty "https://artifacts.admiralty.io/admiralty-v0.11.1-windows-amd64"
+    curl -Lo admiralty "https://artifacts.admiralty.io/admiralty-v0.13.1-windows-amd64"
     ```
 
     </TabItem>
     <TabItem value="linux-arm64">
 
     ```shell script
-    curl -Lo admiralty "https://artifacts.admiralty.io/admiralty-v0.11.1-linux-arm64"
+    curl -Lo admiralty "https://artifacts.admiralty.io/admiralty-v0.13.1-linux-arm64"
     chmod +x admiralty
     sudo mv admiralty /usr/local/bin
     ```
@@ -188,7 +188,7 @@ values={[
     <TabItem value="linux-ppc64le">
 
     ```shell script
-    curl -Lo admiralty "https://artifacts.admiralty.io/admiralty-v0.11.1-linux-ppc64le"
+    curl -Lo admiralty "https://artifacts.admiralty.io/admiralty-v0.13.1-linux-ppc64le"
     chmod +x admiralty
     sudo mv admiralty /usr/local/bin
     ```
@@ -197,7 +197,7 @@ values={[
     <TabItem value="linux-s390x">
 
     ```shell script
-    curl -Lo admiralty "https://artifacts.admiralty.io/admiralty-v0.11.1-linux-s390x"
+    curl -Lo admiralty "https://artifacts.admiralty.io/admiralty-v0.13.1-linux-s390x"
     chmod +x admiralty
     sudo mv admiralty /usr/local/bin
     ```
@@ -212,7 +212,7 @@ values={[
     ```
 
     :::note
-    The `admiralty configure` command takes you through an OIDC log-in/sign-up flow, and eventually merges a context, cluster and user into the current kubeconfig (it also sets the current context!). The context is used to register clusters with the Admiralty Cloud API. Admiralty Cloud user tokens are saved in `~/.admiralty/tokens.json` (don't forget to run `admiralty logout` to delete this sensitive file if needed when you're done).
+    The `admiralty configure` command takes you through an OIDC log-in/sign-up flow, and eventually saves an Admiralty Cloud API kubeconfig—used to register clusters—and user tokens under `~/.admiralty`. Don't forget to run `admiralty logout` to delete the tokens if needed when you're done.
     :::
 
 1.  Install Admiralty in each cluster:
@@ -227,7 +227,7 @@ values={[
       helm install admiralty admiralty/admiralty \
         --kube-context kind-$CLUSTER_NAME \
         --namespace admiralty \
-        --version 0.12.0 \
+        --version 0.13.1 \
         --set accountName=$(admiralty get-account-name) \
         --set clusterName=$CLUSTER_NAME \
         --wait --debug
@@ -261,7 +261,7 @@ do
   helm install admiralty admiralty/multicluster-scheduler \
     --kube-context kind-$CLUSTER_NAME \
     --namespace admiralty \
-    --version 0.12.0 \
+    --version 0.13.1 \
     --wait --debug
   # --wait to ensure release is ready before next steps
   # --debug to show progress, for lack of a better way,

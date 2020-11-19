@@ -3,8 +3,12 @@ name: Continuous Integration
 on:
   push:
     branches: [ master, setup-ci ]
+    paths-ignore:
+      - 'docs/**'
   pull_request:
     branches: [ master ]
+    paths-ignore:
+      - 'docs/**'
 
 jobs:
 

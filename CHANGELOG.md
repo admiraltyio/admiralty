@@ -20,6 +20,23 @@
 
 -->
 
+## v0.13.1
+
+### Bugfixes
+
+- 0d39a1d Fix amd64 image. UPX was guilty, but we didn't notice. Disable UPX for non-amd64 images until we e2e-test all archs in general, and make UPX work with arm64 in particular.
+
+## v0.13.0
+
+### New Features
+
+- a1c88bc Alternative scheduling algorithm, enabled with `multicluster.admiralty.io/no-reservation` pod annotation, to work with third-party schedulers in target clusters, e.g., AWS Fargate (instead of candidate scheduler).
+- 7a231d3 Support cluster-level, i.e., virtual-node-level scheduling constraints, in addition (with `multicluster.admiralty.io/proxy-pod-scheduling-constraints` pod annotation) or instead of (with `multicluster.admiralty.io/use-constraints-from-spec-for-proxy-pod-scheduling` pod annotation) target-cluster-node-level scheduling constraints. To inform this new type of scheduling, aggregate target cluster node labels on virtual nodes: labels with unique values across all nodes of a target cluster, though not necessarily present on all nodes of that cluster, are added to the corresponding virtual node.
+
+### Bugfixes
+
+- a04da55 Fix multi-cluster service deletion.
+
 ## v0.12.0
 
 ### New Features
@@ -196,7 +213,7 @@ This release simplifies the design of multicluster-scheduler to enable new featu
 - Helm charts (v3) for an easier and more flexible installation
 - Multi-federation that works!
 - Better RBAC with cluster namespaces: as an option, you can setup multicluster-scheduler so that each member cluster has a dedicated namespace in the scheduler cluster for observations and decisions. This makes it possible for partially trusted clusters to participate in the same federation (they can send pods to one another, via the scheduler, but they cannot observe one another).
-- More observations (to support non-basic schedulers, including [Admiralty's advanced scheduler]())
+- More observations (to support non-basic schedulers, including Admiralty's advanced scheduler)
 
 ### Bugfixes
 
