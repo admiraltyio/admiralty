@@ -1,4 +1,3 @@
-#!/usr/bin/env bash
 #
 # Copyright 2020 The Multicluster-Scheduler Authors.
 #
@@ -19,30 +18,24 @@ set -euo pipefail
 
 source test/e2e/aliases.sh
 
-ingress_test() {
-  i=$1
-  j=$2
-
-  k $i apply -f test/e2e/ingress/test.yaml
-
-  export -f ingress_test_iteration
-  timeout --foreground 30s bash -c "until ingress_test_iteration $i $j; do sleep 1; done"
+no-rogue-finalizer_test() {
+  # give the controllers 30s to clean up after other test objects have been deleted
+  export -f no-rogue-finalizer_test_iteration
+  timeout --foreground 5s bash -c "until no-rogue-finalizer_test_iteration; do sleep 1; done"
   # use --foreground to catch ctrl-c
   # https://unix.stackexchange.com/a/233685
-
-  k $i delete -f test/e2e/ingress/test.yaml
 }
 
-ingress_test_iteration() {
-  i=$1
-  j=$2
-
+no-rogue-finalizer_test_iteration() {
   source test/e2e/aliases.sh
 
-  [ $(k "$j" get ingress | wc -l) -eq 2 ] # including header
-  [ $(k "$j" get service | wc -l) -eq 3 ] # including header and the "kubernetes" service
+  # check that we didn't add finalizers to uncontrolled resources
+  finalizer="multicluster.admiralty.io/multiclusterForegroundDeletion"
+  for resource in pods configmaps secrets services ingresses; do
+    [ $(k 1 get $resource -A -o custom-columns=FINALIZERS:.metadata.finalizers | grep -c $finalizer) -eq 0 ]
+  done
 }
 
 if [[ "${BASH_SOURCE[0]:-}" == "${0}" ]]; then
-  ingress_test "${@}"
+  no-rogue-finalizer_test "${@}"
 fi

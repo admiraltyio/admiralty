@@ -27,6 +27,7 @@ source test/e2e/logs/test.sh
 source test/e2e/exec/test.sh
 source test/e2e/ingress/test.sh
 source test/e2e/webhook_ready.sh
+source test/e2e/no-rogue-finalizer/test.sh
 
 argo_setup_once
 cert_manager_setup_once
@@ -69,14 +70,6 @@ follow_test 1 2
 logs_test 1 2
 exec_test 1 2
 ingress_test 1 2
-
-# give time to delete and remove finalizers
-sleep 10 # TODO: optimize
-
-# check that we didn't add finalizers to uncontrolled resources
-finalizer="multicluster.admiralty.io/multiclusterForegroundDeletion"
-for resource in pods configmaps secrets services ingresses; do
-  [ $(k 1 get $resource -A -o custom-columns=FINALIZERS:.metadata.finalizers | grep -c $finalizer) -eq 0 ]
-done
+no-rogue-finalizer_test
 
 echo "ALL SUCCEEDED"

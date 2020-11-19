@@ -32,4 +32,4 @@ echo "release images"
 release/images.sh
 echo "release chart"
 release/chart.sh
-# TODO: create release on GitHub
+# TODO: create release on GitHub with CRDs
