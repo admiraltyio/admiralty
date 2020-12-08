@@ -41,6 +41,9 @@ ingress_test_iteration() {
 
   [ $(k "$j" get ingress | wc -l) -eq 2 ] # including header
   [ $(k "$j" get service | wc -l) -eq 3 ] # including header and the "kubernetes" service
+
+  k "$i" annotate ing follow annotate=test
+  k "$j" get ing follow --no-headers -o custom-columns=ANNOTATIONS:.metadata.annotations | grep "annotate:test"
 }
 
 if [[ "${BASH_SOURCE[0]:-}" == "${0}" ]]; then

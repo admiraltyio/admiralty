@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"strings"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -36,6 +37,7 @@ import (
 
 	"admiralty.io/multicluster-scheduler/pkg/common"
 	"admiralty.io/multicluster-scheduler/pkg/controller"
+	"k8s.io/klog"
 )
 
 const ingressByService = "ingressByService"
@@ -221,9 +223,7 @@ func (r ingressReconciler) Handle(obj interface{}) (requeueAfter *time.Duration,
 					requeueAfter = &d // named returned
 					utilruntime.HandleError(err)
 				}
-			} else if !reflect.DeepEqual(remoteIngress.Spec, ingress.Spec) {
-				remoteIngressCopy := remoteIngress.DeepCopy()
-				remoteIngressCopy.Spec = *ingress.Spec.DeepCopy()
+			} else if remoteIngressCopy, shouldUpdate := r.shouldUpdate(remoteIngress, ingress); shouldUpdate {
 				_, err := remoteClient.NetworkingV1beta1().Ingresses(namespace).Update(ctx, remoteIngressCopy, metav1.UpdateOptions{})
 				if err != nil {
 					// error with a target shouldn't block reconciliation with other targets
@@ -238,6 +238,36 @@ func (r ingressReconciler) Handle(obj interface{}) (requeueAfter *time.Duration,
 	// TODO? cleanup remote ingresses that shouldn't follow anymore
 
 	return requeueAfter, nil
+}
+
+func (r ingressReconciler) shouldUpdate(remoteIngress *v1beta1.Ingress, ingress *v1beta1.Ingress) (*v1beta1.Ingress, bool) {
+	remoteIngressCopy := remoteIngress.DeepCopy()
+	shouldUpdate := false
+	if !reflect.DeepEqual(remoteIngress.Spec, ingress.Spec) {
+		remoteIngressCopy.Spec = *ingress.Spec.DeepCopy()
+		shouldUpdate = true
+	}
+	annotationDiff := make(map[string]string)
+	for annotationKey, annotationValue := range ingress.Annotations {
+		if !strings.HasPrefix(annotationKey, common.KeyPrefix) {
+			if _, ok := remoteIngress.Annotations[annotationKey]; ok {
+				if remoteIngress.Annotations[annotationKey] != ingress.Annotations[annotationKey] {
+					annotationDiff[annotationKey] = annotationValue
+				}
+			} else {
+				annotationDiff[annotationKey] = annotationValue
+			}
+		}
+	}
+	if len(annotationDiff) > 0 {
+		klog.Infof("Detected annotation diff: %v", annotationDiff)
+		for annotationKey, annotationValue := range annotationDiff {
+			remoteIngressCopy.Annotations[annotationKey] = annotationValue
+			klog.Infof("Adding annotation to remote Ingress: [%s:%s]", annotationKey, annotationValue)
+		}
+		shouldUpdate = true
+	}
+	return remoteIngressCopy, shouldUpdate
 }
 
 func (r ingressReconciler) shouldFollow(ingress *v1beta1.Ingress) bool {
