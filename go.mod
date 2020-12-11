@@ -12,6 +12,7 @@ require (
 	github.com/pkg/errors v0.8.1
 	github.com/sirupsen/logrus v1.4.2
 	github.com/spf13/pflag v1.0.5
+	github.com/stretchr/testify v1.4.0
 	github.com/virtual-kubelet/virtual-kubelet v1.2.1
 	go.uber.org/multierr v1.2.0 // indirect
 	gopkg.in/square/go-jose.v2 v2.3.1 // indirect
