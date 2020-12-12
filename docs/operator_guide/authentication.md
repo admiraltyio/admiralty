@@ -3,6 +3,10 @@ title: Configuring Authentication
 custom_edit_url: https://github.com/admiraltyio/admiralty/edit/master/docs/operator_guide/authentication.md
 ---
 
+:::info Admiralty Cloud/Enterprise Only
+This section discusses the cluster identity federation feature available in Admiralty Cloud/Enterprise. With Admiralty Open Source, you're in charge of creating kubeconfig Secrets. For example, you can use Service Account tokens from target clusters; [the Quick Start guide a provides a helper script for that](../quick_start#cross-cluster-authentication). For a discussion of several methods, [please refer to the related Concepts section](../concepts/authentication.md).
+:::
+
 If your cluster needs to call the Kubernetes API of another cluster, e.g., to send pods to it, you should at least create a [Kubeconfig](#kubeconfigs) object.
 
 If your cluster's Kubernetes API needs to be called by another cluster, e.g., to receive pods from it, you should create a [TrustedIdentityProvider](#trusted-identity-providers) object.
