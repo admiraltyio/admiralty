@@ -48,7 +48,7 @@ The Admiralty Cloud/Enterprise Helm chart includes the open source cluster agent
 1.  Install Admiralty Cloud/Enterprise custom resource definitions (CRDs), because Helm [doesn't support](https://github.com/helm/helm/issues/6581) adding CRDs as part of upgrades:
 
     ```shell
-    kubectl apply -f https://artifacts.admiralty.io/admiralty-v0.13.1.crds.yaml
+    kubectl apply -f https://artifacts.admiralty.io/admiralty-v0.13.2.crds.yaml
     ```
 
 1.  [Download the Admiralty CLI](installation.md#command-line-interface) if not already installed.
@@ -66,7 +66,7 @@ The Admiralty Cloud/Enterprise Helm chart includes the open source cluster agent
     helm repo update
     helm upgrade $RELEASE_NAME admiralty/admiralty \
       --namespace $NAMESPACE \
-      --version 0.13.1 \
+      --version 0.13.2 \
       -f values.yaml \
       --set accountName=$(admiralty get-account-name) \
       --set clusterName=$CLUSTER_NAME

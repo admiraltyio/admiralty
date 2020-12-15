@@ -20,11 +20,18 @@
 
 -->
 
+## v0.13.2
+
+### Bugfixes
+
+- f9dce49 (@ytsarev) Update remote Ingress on annotation change.
+
 ## v0.13.1
 
 ### Bugfixes
 
-- 0d39a1d Fix amd64 image. UPX was guilty, but we didn't notice. Disable UPX for non-amd64 images until we e2e-test all archs in general, and make UPX work with arm64 in particular.
+- 0d39a1d Fix amd64 image. UPX was guilty, but we didn't notice. Disable UPX for non-amd64 images until we e2e-test all
+  archs in general, and make UPX work with arm64 in particular.
 
 ## v0.13.0
 

@@ -62,7 +62,7 @@ values={[
     Most cloud distributions of Kubernetes pre-label nodes with the names of their cloud regions.
     :::
 
-1.  (optional speed-up) Pull images on your machine and load them into the kind clusters. Otherwise, each kind cluster would pull images, which could take three times as long.
+1. (optional speed-up) Pull images on your machine and load them into the kind clusters. Otherwise, each kind cluster would pull images, which could take three times as long.
 
     ```shell script
     images=(
@@ -71,12 +71,12 @@ values={[
       quay.io/jetstack/cert-manager-webhook:v0.16.1
       quay.io/jetstack/cert-manager-cainjector:v0.16.1
       # admiralty open source
-      quay.io/admiralty/multicluster-scheduler-agent:0.13.1
-      quay.io/admiralty/multicluster-scheduler-scheduler:0.13.1
-      quay.io/admiralty/multicluster-scheduler-remove-finalizers:0.13.1
-      quay.io/admiralty/multicluster-scheduler-restarter:0.13.1
+      quay.io/admiralty/multicluster-scheduler-agent:0.13.2
+      quay.io/admiralty/multicluster-scheduler-scheduler:0.13.2
+      quay.io/admiralty/multicluster-scheduler-remove-finalizers:0.13.2
+      quay.io/admiralty/multicluster-scheduler-restarter:0.13.2
       # admiralty cloud/enterprise
-      quay.io/admiralty/admiralty-cloud-controller-manager:0.13.1
+      quay.io/admiralty/admiralty-cloud-controller-manager:0.13.2
       quay.io/admiralty/kube-mtls-proxy:0.10.0
       quay.io/admiralty/kube-oidc-proxy:v0.3.0 # jetstack's image rebuilt for multiple architectures
     )
@@ -154,7 +154,7 @@ values={[
     <TabItem value="linux-amd64">
 
     ```shell script
-    curl -Lo admiralty "https://artifacts.admiralty.io/admiralty-v0.13.1-linux-amd64"
+    curl -Lo admiralty "https://artifacts.admiralty.io/admiralty-v0.13.2-linux-amd64"
     chmod +x admiralty
     sudo mv admiralty /usr/local/bin
     ```
@@ -163,7 +163,7 @@ values={[
     <TabItem value="mac">
 
     ```shell script
-    curl -Lo admiralty "https://artifacts.admiralty.io/admiralty-v0.13.1-darwin-amd64"
+    curl -Lo admiralty "https://artifacts.admiralty.io/admiralty-v0.13.2-darwin-amd64"
     chmod +x admiralty
     sudo mv admiralty /usr/local/bin
     ```
@@ -172,14 +172,14 @@ values={[
     <TabItem value="windows">
 
     ```shell script
-    curl -Lo admiralty "https://artifacts.admiralty.io/admiralty-v0.13.1-windows-amd64"
+    curl -Lo admiralty "https://artifacts.admiralty.io/admiralty-v0.13.2-windows-amd64"
     ```
 
     </TabItem>
     <TabItem value="linux-arm64">
 
     ```shell script
-    curl -Lo admiralty "https://artifacts.admiralty.io/admiralty-v0.13.1-linux-arm64"
+    curl -Lo admiralty "https://artifacts.admiralty.io/admiralty-v0.13.2-linux-arm64"
     chmod +x admiralty
     sudo mv admiralty /usr/local/bin
     ```
@@ -188,7 +188,7 @@ values={[
     <TabItem value="linux-ppc64le">
 
     ```shell script
-    curl -Lo admiralty "https://artifacts.admiralty.io/admiralty-v0.13.1-linux-ppc64le"
+    curl -Lo admiralty "https://artifacts.admiralty.io/admiralty-v0.13.2-linux-ppc64le"
     chmod +x admiralty
     sudo mv admiralty /usr/local/bin
     ```
@@ -197,7 +197,7 @@ values={[
     <TabItem value="linux-s390x">
 
     ```shell script
-    curl -Lo admiralty "https://artifacts.admiralty.io/admiralty-v0.13.1-linux-s390x"
+    curl -Lo admiralty "https://artifacts.admiralty.io/admiralty-v0.13.2-linux-s390x"
     chmod +x admiralty
     sudo mv admiralty /usr/local/bin
     ```
@@ -227,7 +227,7 @@ values={[
       helm install admiralty admiralty/admiralty \
         --kube-context kind-$CLUSTER_NAME \
         --namespace admiralty \
-        --version 0.13.1 \
+        --version 0.13.2 \
         --set accountName=$(admiralty get-account-name) \
         --set clusterName=$CLUSTER_NAME \
         --wait --debug
@@ -261,7 +261,7 @@ do
   helm install admiralty admiralty/multicluster-scheduler \
     --kube-context kind-$CLUSTER_NAME \
     --namespace admiralty \
-    --version 0.13.1 \
+    --version 0.13.2 \
     --wait --debug
   # --wait to ensure release is ready before next steps
   # --debug to show progress, for lack of a better way,

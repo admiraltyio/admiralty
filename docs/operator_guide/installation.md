@@ -25,7 +25,7 @@ The Admiralty command line interface (CLI) helps you sign up for an Admiralty Cl
     ```shell script
     OS=linux # or darwin (i.e., OS X) or windows
     ARCH=amd64 # or, for linux, any of arm64, ppc64le, s390x
-    curl -Lo admiralty "https://artifacts.admiralty.io/admiralty-v0.13.1-$OS-$ARCH"
+    curl -Lo admiralty "https://artifacts.admiralty.io/admiralty-v0.13.2-$OS-$ARCH"
     chmod +x admiralty
     sudo mv admiralty /usr/local/bin
     ```
@@ -86,7 +86,7 @@ values={[
     kubectl create namespace admiralty
     helm install admiralty admiralty/admiralty \
         --namespace admiralty \
-        --version 0.13.1 \
+        --version 0.13.2 \
         --set accountName=$(admiralty get-account-name) \
         --set clusterName=$CLUSTER_NAME \
         --wait
@@ -109,7 +109,7 @@ values={[
     kubectl create namespace admiralty
     helm install admiralty admiralty/multicluster-scheduler \
         --namespace admiralty \
-        --version 0.13.1 \
+        --version 0.13.2 \
         --wait
     ```
 

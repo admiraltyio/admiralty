@@ -112,7 +112,7 @@ Download the Admiralty CLI if not already installed. We'll use it to register cl
 ```shell
 os=linux # or darwin (i.e., Mac OS X) or windows
 arch=amd64 # or arm64, ppc64le, s390x (linux only)
-curl -Lo admiralty "https://artifacts.admiralty.io/admiralty-v0.13.1-$os-$arch"
+curl -Lo admiralty "https://artifacts.admiralty.io/admiralty-v0.13.2-$os-$arch"
 chmod +x admiralty
 sudo mv admiralty /usr/local/bin
 ```
@@ -139,7 +139,7 @@ do
   kubectl create namespace admiralty
   helm install admiralty admiralty/admiralty \
     --namespace admiralty \
-    --version v0.13.1 \
+    --version v0.13.2 \
     --set accountName=$(admiralty get-account-name) \
     --set clusterName=$cluster_name
 done
