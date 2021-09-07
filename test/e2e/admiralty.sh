@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Copyright 2020 The Multicluster-Scheduler Authors.
+# Copyright 2021 The Multicluster-Scheduler Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -36,6 +36,9 @@ admiralty_setup() {
     k $i create namespace admiralty
   fi
   h $i upgrade --install multicluster-scheduler charts/multicluster-scheduler -n admiralty -f $VALUES \
+    --set controllerManager.replicas=2 \
+    --set scheduler.replicas=2 \
+    --set restarter.replicas=2 \
     --set controllerManager.image.repository=multicluster-scheduler-agent \
     --set scheduler.image.repository=multicluster-scheduler-scheduler \
     --set postDeleteJob.image.repository=multicluster-scheduler-remove-finalizers \

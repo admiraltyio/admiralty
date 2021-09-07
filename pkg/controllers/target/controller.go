@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 The Multicluster-Scheduler Authors.
+ * Copyright 2021 The Multicluster-Scheduler Authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,10 +23,13 @@ import (
 	"sync"
 	"time"
 
+	"admiralty.io/multicluster-scheduler/pkg/common"
+	"github.com/hashicorp/go-multierror"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	coreinformers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes"
@@ -49,7 +52,9 @@ type reconciler struct {
 	clusterTargetIndex cache.Indexer
 	targetIndex        cache.Indexer
 
-	installNamespace string
+	installNamespace                string
+	controllerManagerDeploymentName string
+	proxySchedulerDeploymentName    string
 
 	mu                   sync.Mutex
 	targetSpecs          map[string]interface{}
@@ -64,6 +69,8 @@ const (
 func NewController(
 	kubeClient kubernetes.Interface,
 	installNamespace string,
+	controllerManagerDeploymentName string,
+	proxySchedulerDeploymentName string,
 	clusterTargetInformer informers.ClusterTargetInformer,
 	targetInformer informers.TargetInformer,
 	secretInformer coreinformers.SecretInformer,
@@ -79,7 +86,9 @@ func NewController(
 		clusterTargetIndex: clusterTargetInformer.Informer().GetIndexer(),
 		targetIndex:        targetInformer.Informer().GetIndexer(),
 
-		installNamespace: installNamespace,
+		installNamespace:                installNamespace,
+		controllerManagerDeploymentName: controllerManagerDeploymentName,
+		proxySchedulerDeploymentName:    proxySchedulerDeploymentName,
 	}
 
 	c := controller.New("source", r,
@@ -173,8 +182,17 @@ func (c *reconciler) Handle(obj interface{}) (requeueAfter *time.Duration, err e
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if !reflect.DeepEqual(c.targetSpecs, targetSpecs) || !reflect.DeepEqual(c.kubeconfigSecretData, kubeconfigSecretData) {
-		if err := c.kubeClient.CoreV1().Pods(c.installNamespace).DeleteCollection(ctx, metav1.DeleteOptions{},
-			metav1.ListOptions{LabelSelector: "component in (controller-manager, proxy-scheduler)"}); err != nil {
+		// rollout restarts
+		g := multierror.Group{}
+		for _, deployName := range []string{c.controllerManagerDeploymentName, c.proxySchedulerDeploymentName} {
+			deployName := deployName
+			g.Go(func() error {
+				p := []byte(`{"spec":{"template":{"metadata":{"annotations":{"` + common.AnnotationKeyRestartedAt + `":"` + time.Now().UTC().Format(time.RFC3339) + `"}}}}}`)
+				_, err := c.kubeClient.AppsV1().Deployments(c.installNamespace).Patch(ctx, deployName, types.MergePatchType, p, metav1.PatchOptions{})
+				return err
+			})
+		}
+		if err := g.Wait(); err != nil {
 			return nil, err
 		}
 		c.targetSpecs = targetSpecs

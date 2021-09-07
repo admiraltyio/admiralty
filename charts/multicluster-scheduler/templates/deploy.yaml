@@ -8,8 +8,9 @@ spec:
   selector:
     matchLabels: {{ include "selectorLabels" . | nindent 6 }}
       component: controller-manager
+  replicas: {{ .Values.controllerManager.replicas }}
   strategy:
-    type: Recreate
+    type: {{ gt .Values.controllerManager.replicas 1 | ternary "RollingUpdate" "Recreate" }}
   template:
     metadata:
       labels: {{ include "labels" . | nindent 8 }}
@@ -17,7 +18,16 @@ spec:
     spec:
       containers:
         - name: controller-manager
+{{- if gt .Values.controllerManager.replicas 1 }}
+          args: ["--leader-elect"]
+{{- end }}
           env:
+{{- if gt .Values.controllerManager.replicas 1 }}
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+{{- end }}
             - name: SOURCE_CLUSTER_ROLE_NAME
               value: {{ include "fullname" . }}-source
             - name: CLUSTER_SUMMARY_VIEWER_CLUSTER_ROLE_NAME
@@ -61,6 +71,18 @@ spec:
       tolerations: {{ toYaml . | nindent 8 }}
         {{- end }}
 ---
+{{- if gt .Values.controllerManager.replicas 1 }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "fullname" . }}-controller-manager
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels: {{ include "selectorLabels" . | nindent 6 }}
+      component: controller-manager
+---
+{{- end }}
 {{- end }}
   {{- if not .Values.debug.proxyScheduler }}
 apiVersion: apps/v1
@@ -72,8 +94,9 @@ spec:
   selector:
     matchLabels: {{ include "selectorLabels" . | nindent 6 }}
       component: proxy-scheduler
+  replicas: {{ .Values.scheduler.replicas }}
   strategy:
-    type: Recreate
+    type: {{ gt .Values.scheduler.replicas 1 | ternary "RollingUpdate" "Recreate" }}
   template:
     metadata:
       annotations:
@@ -114,6 +137,18 @@ spec:
       tolerations: {{ toYaml . | nindent 8 }}
         {{- end }}
 ---
+{{- if gt .Values.scheduler.replicas 1 }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "fullname" . }}-proxy-scheduler
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels: {{ include "selectorLabels" . | nindent 6 }}
+      component: proxy-scheduler
+---
+{{- end }}
 {{- end }}
   {{- if not .Values.debug.candidateScheduler }}
 apiVersion: apps/v1
@@ -125,8 +160,9 @@ spec:
   selector:
     matchLabels: {{ include "selectorLabels" . | nindent 6 }}
       component: candidate-scheduler
+  replicas: {{ .Values.scheduler.replicas }}
   strategy:
-    type: Recreate
+    type: {{ gt .Values.scheduler.replicas 1 | ternary "RollingUpdate" "Recreate" }}
   template:
     metadata:
       annotations:
@@ -167,6 +203,18 @@ spec:
       tolerations: {{ toYaml . | nindent 8 }}
         {{- end }}
 ---
+{{- if gt .Values.scheduler.replicas 1 }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "fullname" . }}-candidate-scheduler
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels: {{ include "selectorLabels" . | nindent 6 }}
+      component: candidate-scheduler
+---
+{{- end }}
 {{- end }}
   {{- if not .Values.debug.restarter }}
 apiVersion: apps/v1
@@ -178,8 +226,9 @@ spec:
   selector:
     matchLabels: {{ include "selectorLabels" . | nindent 6 }}
       component: restarter
+  replicas: {{ .Values.scheduler.replicas }}
   strategy:
-    type: Recreate
+    type: {{ gt .Values.restarter.replicas 1 | ternary "RollingUpdate" "Recreate" }}
   template:
     metadata:
       labels: {{ include "labels" . | nindent 8 }}
@@ -187,6 +236,20 @@ spec:
     spec:
       containers:
         - name: restarter
+{{- if gt .Values.restarter.replicas 1 }}
+          args: ["--leader-elect"]
+{{- end }}
+          env:
+{{- if gt .Values.controllerManager.replicas 1 }}
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+{{- end }}
+            - name: ADMIRALTY_CONTROLLER_MANAGER_DEPLOYMENT_NAME
+              value: {{ include "fullname" . }}-controller-manager
+            - name: ADMIRALTY_PROXY_SCHEDULER_DEPLOYMENT_NAME
+              value: {{ include "fullname" . }}-proxy-scheduler
           image: {{ .Values.restarter.image.repository }}:{{ default .Chart.AppVersion .Values.restarter.image.tag }}
           imagePullPolicy: {{ .Values.restarter.image.pullPolicy }}
             {{- with .Values.restarter.resources }}
@@ -210,4 +273,16 @@ spec:
       tolerations: {{ toYaml . | nindent 8 }}
         {{- end }}
 ---
+{{- if gt .Values.restarter.replicas 1 }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "fullname" . }}-restarter
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels: {{ include "selectorLabels" . | nindent 6 }}
+      component: restarter
+---
+{{- end }}
 {{- end }}
