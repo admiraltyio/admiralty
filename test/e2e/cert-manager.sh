@@ -32,7 +32,7 @@ cert_manager_setup() {
   if ! k $i get ns cert-manager; then
     k $i create ns cert-manager
   fi
-  h $i upgrade --install cert-manager jetstack/cert-manager -n cert-manager --version v0.16.1 --wait --debug
+  h $i upgrade --install cert-manager jetstack/cert-manager -n cert-manager --version v0.16.1 --wait --debug --timeout=1m
   #  webhook_ready $i cert-manager cert-manager-webhook cert-manager-webhook cert-manager-webhook-tls
 }
 
