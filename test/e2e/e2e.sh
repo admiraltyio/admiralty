@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Copyright 2020 The Multicluster-Scheduler Authors.
+# Copyright 2021 The Multicluster-Scheduler Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -32,6 +32,14 @@ source test/e2e/no-rogue-finalizer/test.sh
 argo_setup_once
 cert_manager_setup_once
 
+cluster_dump() {
+  if [ $? -ne 0 ]; then
+    k 1 cluster-info dump -A --output-directory cluster-dump/1
+    k 2 cluster-info dump -A --output-directory cluster-dump/2
+  fi
+}
+trap cluster_dump EXIT
+
 for i in 1 2; do
   kind_setup $i
   cert_manager_setup $i
@@ -51,14 +59,6 @@ k 1 apply -f test/e2e/topologies/namespaced-burst/cluster1/targets.yaml
 argo_setup_source 1
 argo_setup_target 2
 webhook_ready 1 admiralty multicluster-scheduler-controller-manager multicluster-scheduler multicluster-scheduler-cert
-
-cluster_dump() {
-  if [ $? -ne 0 ]; then
-    k 1 cluster-info dump -A --output-directory cluster-dump/1
-    k 2 cluster-info dump -A --output-directory cluster-dump/2
-  fi
-}
-trap cluster_dump EXIT
 
 # TODO simulate route controller not being able to create network routes to virtual nodes
 #k 1 taint nodes -l virtual-kubelet.io/provider=admiralty node.kubernetes.io/network-unavailable=:NoSchedule
