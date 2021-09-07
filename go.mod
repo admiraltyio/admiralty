@@ -8,6 +8,7 @@ require (
 	github.com/go-logr/zapr v0.1.1 // indirect
 	github.com/go-test/deep v1.0.2-0.20181118220953-042da051cf31
 	github.com/golang/groupcache v0.0.0-20190702054246-869f871628b6 // indirect
+	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/imdario/mergo v0.3.7 // indirect
 	github.com/pkg/errors v0.8.1
 	github.com/sirupsen/logrus v1.4.2

@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 The Multicluster-Scheduler Authors.
+ * Copyright 2021 The Multicluster-Scheduler Authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,8 +17,12 @@
 package main
 
 import (
+	"context"
+	"flag"
+	"os"
 	"time"
 
+	"admiralty.io/multicluster-scheduler/pkg/leaderelection"
 	"admiralty.io/multicluster-service-account/pkg/config"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	kubeinformers "k8s.io/client-go/informers"
@@ -33,6 +37,11 @@ import (
 
 func main() {
 	stopCh := signals.SetupSignalHandler()
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		<-stopCh
+		cancel()
+	}()
 
 	cfg, ns, err := config.ConfigAndNamespaceForKubeconfigAndContext("", "")
 	utilruntime.Must(err)
@@ -47,6 +56,8 @@ func main() {
 	customInformerFactory := informers.NewSharedInformerFactory(customClient, time.Second*30)
 
 	targetCtrl := target.NewController(k, ns,
+		os.Getenv("ADMIRALTY_CONTROLLER_MANAGER_DEPLOYMENT_NAME"),
+		os.Getenv("ADMIRALTY_PROXY_SCHEDULER_DEPLOYMENT_NAME"),
 		customInformerFactory.Multicluster().V1alpha1().ClusterTargets(),
 		customInformerFactory.Multicluster().V1alpha1().Targets(),
 		kubeInformerFactory.Core().V1().Secrets())
@@ -54,5 +65,15 @@ func main() {
 	kubeInformerFactory.Start(stopCh)
 	customInformerFactory.Start(stopCh)
 
-	utilruntime.Must(targetCtrl.Run(1, stopCh))
+	var leaderElect bool
+	flag.BoolVar(&leaderElect, "leader-elect", false, "Start a leader election client and gain leadership before executing the main loop. Enable this when running replicated components for high availability.")
+	flag.Parse()
+
+	if leaderElect {
+		leaderelection.Run(ctx, ns, "admiralty-restarter", k, func(ctx context.Context) {
+			utilruntime.Must(targetCtrl.Run(1, stopCh))
+		})
+	} else {
+		utilruntime.Must(targetCtrl.Run(1, stopCh))
+	}
 }

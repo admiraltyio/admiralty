@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 The Multicluster-Scheduler Authors.
+ * Copyright 2021 The Multicluster-Scheduler Authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,8 @@ import (
 	"fmt"
 	"time"
 
+	"admiralty.io/multicluster-scheduler/pkg/leaderelection"
+	"admiralty.io/multicluster-service-account/pkg/config"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	vklog "github.com/virtual-kubelet/virtual-kubelet/log"
@@ -36,7 +38,6 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/klog"
 	"k8s.io/sample-controller/pkg/signals"
-	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
@@ -69,20 +70,35 @@ func main() {
 		cancel()
 	}()
 
+	o := parseFlags()
+	setupLogging(ctx, o)
+
 	agentCfg := agentconfig.NewFromCRD(ctx)
 
-	cfg := config.GetConfigOrDie()
+	cfg, ns, err := config.ConfigAndNamespaceForKubeconfigAndContext("", "")
+	utilruntime.Must(err)
 
 	k, err := kubernetes.NewForConfig(cfg)
 	utilruntime.Must(err)
 
 	startWebhook(stopCh, cfg)
+	startVirtualKubeletServers(ctx, agentCfg, k)
+
+	if o.leaderElect {
+		leaderelection.Run(ctx, ns, "admiralty-controller-manager", k, func(ctx context.Context) {
+			runControllers(ctx, stopCh, agentCfg, cfg, k)
+		})
+	} else {
+		runControllers(ctx, stopCh, agentCfg, cfg, k)
+	}
+}
+
+func runControllers(ctx context.Context, stopCh <-chan struct{}, agentCfg agentconfig.Config, cfg *rest.Config, k *kubernetes.Clientset) {
 	var nodeStatusUpdaters map[string]resources.NodeStatusUpdater
 	if len(agentCfg.Targets) > 0 {
-		nodeStatusUpdaters = startVirtualKubelet(ctx, agentCfg, k)
+		nodeStatusUpdaters = startVirtualKubeletControllers(ctx, agentCfg, k)
 	}
 	startOldStyleControllers(ctx, stopCh, agentCfg, cfg, k, nodeStatusUpdaters)
-
 	<-stopCh
 }
 
@@ -251,31 +267,10 @@ func startWebhook(stopCh <-chan struct{}, cfg *rest.Config) {
 	}()
 }
 
-func startVirtualKubelet(ctx context.Context, agentCfg agentconfig.Config, k kubernetes.Interface) map[string]resources.NodeStatusUpdater {
-	var logLevel string
-	flag.StringVar(&logLevel, "log-level", "info", `set the log level, e.g. "debug", "info", "warn", "error"`)
-	klog.InitFlags(nil)
-	flag.Parse()
-
-	vklog.L = logruslogger.FromLogrus(logrus.NewEntry(logrus.StandardLogger()))
-	if logLevel != "" {
-		lvl, err := logrus.ParseLevel(logLevel)
-		if err != nil {
-			vklog.G(ctx).Fatal(errors.Wrap(err, "could not parse log level"))
-		}
-		logrus.SetLevel(lvl)
-	}
-
-	targetConfigs := make(map[string]*rest.Config, len(agentCfg.Targets))
-	targetClients := make(map[string]kubernetes.Interface, len(agentCfg.Targets))
+func startVirtualKubeletControllers(ctx context.Context, agentCfg agentconfig.Config, k kubernetes.Interface) map[string]resources.NodeStatusUpdater {
 	nodeStatusUpdaters := make(map[string]resources.NodeStatusUpdater, len(agentCfg.Targets))
 	for _, target := range agentCfg.Targets {
 		n := target.GetKey()
-		targetConfigs[n] = target.ClientConfig
-		targetClient, err := kubernetes.NewForConfig(target.ClientConfig)
-		utilruntime.Must(err)
-		targetClients[n] = targetClient
-
 		p := &node.NodeProvider{}
 		nodeStatusUpdaters[n] = p
 		go func() {
@@ -283,6 +278,19 @@ func startVirtualKubelet(ctx context.Context, agentCfg agentconfig.Config, k kub
 				vklog.G(ctx).Fatal(err)
 			}
 		}()
+	}
+	return nodeStatusUpdaters
+}
+
+func startVirtualKubeletServers(ctx context.Context, agentCfg agentconfig.Config, k kubernetes.Interface) {
+	targetConfigs := make(map[string]*rest.Config, len(agentCfg.Targets))
+	targetClients := make(map[string]kubernetes.Interface, len(agentCfg.Targets))
+	for _, target := range agentCfg.Targets {
+		n := target.GetKey()
+		targetConfigs[n] = target.ClientConfig
+		targetClient, err := kubernetes.NewForConfig(target.ClientConfig)
+		utilruntime.Must(err)
+		targetClients[n] = targetClient
 	}
 
 	certPEM, keyPEM, err := csr.GetCertificateFromKubernetesAPIServer(ctx, k)
@@ -302,6 +310,29 @@ func startVirtualKubelet(ctx context.Context, agentCfg agentconfig.Config, k kub
 			cancelHTTP()
 		}
 	}()
+}
 
-	return nodeStatusUpdaters
+type options struct {
+	logLevel    string
+	leaderElect bool
+}
+
+func parseFlags() *options {
+	o := &options{}
+	flag.StringVar(&o.logLevel, "log-level", "info", `set the log level, e.g. "debug", "info", "warn", "error"`)
+	flag.BoolVar(&o.leaderElect, "leader-elect", false, "Start a leader election client and gain leadership before executing the main loop. Enable this when running replicated components for high availability.")
+	klog.InitFlags(nil)
+	flag.Parse()
+	return o
+}
+
+func setupLogging(ctx context.Context, o *options) {
+	vklog.L = logruslogger.FromLogrus(logrus.NewEntry(logrus.StandardLogger()))
+	if o.logLevel != "" {
+		lvl, err := logrus.ParseLevel(o.logLevel)
+		if err != nil {
+			vklog.G(ctx).Fatal(errors.Wrap(err, "could not parse log level"))
+		}
+		logrus.SetLevel(lvl)
+	}
 }

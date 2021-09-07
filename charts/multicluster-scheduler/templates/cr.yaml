@@ -259,11 +259,11 @@ rules:
       - list
       - watch
   - apiGroups:
-      - ""
+      - apps
     resources:
-      - pods
+      - deployments
     verbs:
-      - deletecollection
+      - patch
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -279,3 +279,26 @@ rules:
       - get
       - list
       - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "fullname" . }}-leader-elector
+  labels: {{ include "labels" . | nindent 4 }}
+rules:
+  - apiGroups:
+      - coordination.k8s.io
+    resources:
+      - leases # TODO limit resource names
+    verbs:
+      - get
+      - create
+      - update
+  - apiGroups:
+      - ""
+    resources:
+      - endpoints # TODO limit resource names
+    verbs:
+      - get
+      - create
+      - update
