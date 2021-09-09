@@ -48,10 +48,15 @@ jobs:
     name: End-to-end test
     needs: build
     runs-on: ubuntu-latest
+    continue-on-error: ${{ matrix.experimental }}
     strategy:
       fail-fast: false
       matrix:
-        k8s_version: [ "1.17", "1.18", "1.19", "1.20", "1.21", "1.22" ]
+        k8s_version: [ "1.17", "1.18", "1.19", "1.20", "1.21" ]
+        experimental: [ false ]
+        include:
+          - k8s_version: "1.22"
+            experimental: true
     steps:
 
       - name: Check out code into the Go module directory
