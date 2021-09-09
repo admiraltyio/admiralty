@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Copyright 2020 The Multicluster-Scheduler Authors.
+# Copyright 2021 The Multicluster-Scheduler Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -33,6 +33,7 @@ BASE_IMG="${BASE_IMG:-scratch}"
 VERSION="${VERSION:-dev}"
 LDFLAGS="${LDFLAGS:-}"
 DEBUG="${DEBUG:-false}"
+OUTPUT_TAR_GZ="${OUTPUT_TAR_GZ:-false}"
 
 extra_args=()
 if [ -n "$LDFLAGS" ]; then
@@ -74,4 +75,8 @@ EOF
   cat "$context_dir"/Dockerfile
 
   docker build -t "$IMG:$VERSION-$ARCH" "$context_dir"
+  if [ "$OUTPUT_TAR_GZ" = true ]; then
+    mkdir -p images
+    docker save "$IMG:$VERSION-$ARCH" | gzip > images/"$IMG"_"$VERSION-$ARCH".tar.gz
+  fi
 fi
