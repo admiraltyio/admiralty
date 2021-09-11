@@ -45,6 +45,7 @@ spec:
             {{- with .Values.controllerManager.resources }}
           resources: {{ toYaml . | nindent 12 }}
             {{- end }}
+      priorityClassName: system-cluster-critical
       serviceAccountName: {{ include "fullname" . }}
       volumes:
         - name: cert
@@ -112,6 +113,7 @@ spec:
             {{- with .Values.scheduler.resources }}
           resources: {{ toYaml . | nindent 12 }}
             {{- end }}
+      priorityClassName: system-cluster-critical
       serviceAccountName: {{ include "fullname" . }}
       volumes:
         - name: config
@@ -178,6 +180,7 @@ spec:
             {{- with .Values.scheduler.resources }}
           resources: {{ toYaml . | nindent 12 }}
             {{- end }}
+      priorityClassName: system-cluster-critical
       serviceAccountName: {{ include "fullname" . }}
       volumes:
         - name: config
@@ -249,6 +252,7 @@ spec:
             {{- with .Values.restarter.resources }}
           resources: {{ toYaml . | nindent 12 }}
             {{- end }}
+      priorityClassName: system-cluster-critical
       serviceAccountName: {{ include "fullname" . }}
         {{- with .Values.imagePullSecretName }}
       imagePullSecrets:
