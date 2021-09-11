@@ -54,9 +54,14 @@ jobs:
       matrix:
         k8s_version: [ "1.17", "1.18", "1.19", "1.20", "1.21" ]
         experimental: [ false ]
-        include:
-          - k8s_version: "1.22"
-            experimental: true
+        # workflow succeeds even if experimental job fails,
+        # but commit/PR check/status still appears as failure overall,
+        # so 1.22 job is commented out for now, cf.
+        # - https://github.community/t/continue-on-error-allow-failure-ui-indication/16773/14
+        # - https://github.com/actions/toolkit/issues/399
+    #        include:
+    #          - k8s_version: "1.22"
+    #            experimental: true
     steps:
 
       - name: Check out code into the Go module directory
