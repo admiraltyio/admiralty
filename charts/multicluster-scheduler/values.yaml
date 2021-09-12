@@ -7,7 +7,7 @@ sourceController:
   enabled: true
 
 controllerManager:
-  replicas: 1
+  replicas: 2
   image:
     repository: "quay.io/admiralty/multicluster-scheduler-agent"
     tag: "" # (default: .Chart.AppVersion)
@@ -34,7 +34,7 @@ controllerManager:
   tolerations: []
 
 scheduler:
-  replicas: 1
+  replicas: 2
   image:
     repository: "quay.io/admiralty/multicluster-scheduler-scheduler"
     tag: "" # (default: .Chart.AppVersion)
@@ -87,7 +87,7 @@ postDeleteJob:
   tolerations: []
 
 restarter:
-  replicas: 1
+  replicas: 2
   image:
     repository: "quay.io/admiralty/multicluster-scheduler-restarter"
     tag: "" # (default: .Chart.AppVersion)

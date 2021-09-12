@@ -10,7 +10,7 @@ spec:
       component: controller-manager
   replicas: {{ .Values.controllerManager.replicas }}
   strategy:
-    type: {{ gt .Values.controllerManager.replicas 1 | ternary "RollingUpdate" "Recreate" }}
+    type: RollingUpdate
   template:
     metadata:
       labels: {{ include "labels" . | nindent 8 }}
@@ -18,16 +18,13 @@ spec:
     spec:
       containers:
         - name: controller-manager
-{{- if gt .Values.controllerManager.replicas 1 }}
           args: ["--leader-elect"]
-{{- end }}
           env:
-{{- if gt .Values.controllerManager.replicas 1 }}
+            # POD_NAME for leader election
             - name: POD_NAME
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.name
-{{- end }}
             - name: SOURCE_CLUSTER_ROLE_NAME
               value: {{ include "fullname" . }}-source
             - name: CLUSTER_SUMMARY_VIEWER_CLUSTER_ROLE_NAME
@@ -48,6 +45,7 @@ spec:
             {{- with .Values.controllerManager.resources }}
           resources: {{ toYaml . | nindent 12 }}
             {{- end }}
+      priorityClassName: system-cluster-critical
       serviceAccountName: {{ include "fullname" . }}
       volumes:
         - name: cert
@@ -96,7 +94,7 @@ spec:
       component: proxy-scheduler
   replicas: {{ .Values.scheduler.replicas }}
   strategy:
-    type: {{ gt .Values.scheduler.replicas 1 | ternary "RollingUpdate" "Recreate" }}
+    type: RollingUpdate
   template:
     metadata:
       annotations:
@@ -115,6 +113,7 @@ spec:
             {{- with .Values.scheduler.resources }}
           resources: {{ toYaml . | nindent 12 }}
             {{- end }}
+      priorityClassName: system-cluster-critical
       serviceAccountName: {{ include "fullname" . }}
       volumes:
         - name: config
@@ -162,7 +161,7 @@ spec:
       component: candidate-scheduler
   replicas: {{ .Values.scheduler.replicas }}
   strategy:
-    type: {{ gt .Values.scheduler.replicas 1 | ternary "RollingUpdate" "Recreate" }}
+    type: RollingUpdate
   template:
     metadata:
       annotations:
@@ -181,6 +180,7 @@ spec:
             {{- with .Values.scheduler.resources }}
           resources: {{ toYaml . | nindent 12 }}
             {{- end }}
+      priorityClassName: system-cluster-critical
       serviceAccountName: {{ include "fullname" . }}
       volumes:
         - name: config
@@ -228,7 +228,7 @@ spec:
       component: restarter
   replicas: {{ .Values.scheduler.replicas }}
   strategy:
-    type: {{ gt .Values.restarter.replicas 1 | ternary "RollingUpdate" "Recreate" }}
+    type: RollingUpdate
   template:
     metadata:
       labels: {{ include "labels" . | nindent 8 }}
@@ -236,16 +236,13 @@ spec:
     spec:
       containers:
         - name: restarter
-{{- if gt .Values.restarter.replicas 1 }}
           args: ["--leader-elect"]
-{{- end }}
           env:
-{{- if gt .Values.controllerManager.replicas 1 }}
+            # POD_NAME for leader election
             - name: POD_NAME
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.name
-{{- end }}
             - name: ADMIRALTY_CONTROLLER_MANAGER_DEPLOYMENT_NAME
               value: {{ include "fullname" . }}-controller-manager
             - name: ADMIRALTY_PROXY_SCHEDULER_DEPLOYMENT_NAME
@@ -255,6 +252,7 @@ spec:
             {{- with .Values.restarter.resources }}
           resources: {{ toYaml . | nindent 12 }}
             {{- end }}
+      priorityClassName: system-cluster-critical
       serviceAccountName: {{ include "fullname" . }}
         {{- with .Values.imagePullSecretName }}
       imagePullSecrets:
