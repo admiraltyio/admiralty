@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 The Multicluster-Scheduler Authors.
+ * Copyright 2021 The Multicluster-Scheduler Authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +18,9 @@ package resources
 
 import (
 	"context"
+	"fmt"
 	"reflect"
+	"regexp"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -50,18 +52,22 @@ type upstream struct {
 	nodeLister            corelisters.NodeLister
 	clusterSummaryListers map[string]listers.ClusterSummaryLister
 	nodeStatusUpdaters    map[string]NodeStatusUpdater
+
+	excludedLabelsRegexp map[string]*regexp.Regexp
 }
 
 func NewUpstreamController(kubeclientset kubernetes.Interface,
 	nodeInformer coreinformers.NodeInformer,
 	clusterSummaryInformers map[string]informers.ClusterSummaryInformer,
-	nodeStatusUpdaters map[string]NodeStatusUpdater) *controller.Controller {
+	nodeStatusUpdaters map[string]NodeStatusUpdater,
+	excludedLabelsRegexp map[string]*string) (*controller.Controller, error) {
 
 	r := &upstream{
 		kubeclientset:         kubeclientset,
 		nodeLister:            nodeInformer.Lister(),
 		clusterSummaryListers: make(map[string]listers.ClusterSummaryLister, len(clusterSummaryInformers)),
 		nodeStatusUpdaters:    nodeStatusUpdaters,
+		excludedLabelsRegexp:  make(map[string]*regexp.Regexp, len(excludedLabelsRegexp)),
 	}
 
 	informersSynced := make([]cache.InformerSynced, len(clusterSummaryInformers)+1)
@@ -87,7 +93,17 @@ func NewUpstreamController(kubeclientset kubernetes.Interface,
 		}))
 	}
 
-	return c
+	for targetName, regExp := range excludedLabelsRegexp {
+		if regExp != nil {
+			var err error
+			r.excludedLabelsRegexp[targetName], err = regexp.Compile(*regExp)
+			if err != nil {
+				return nil, fmt.Errorf("cannot compile excluded aggregated labels regexp for target %s: %v", targetName, err)
+			}
+		}
+	}
+
+	return c, nil
 }
 
 func (r upstream) Handle(key interface{}) (requeueAfter *time.Duration, err error) {
@@ -123,15 +139,12 @@ func (r upstream) Handle(key interface{}) (requeueAfter *time.Duration, err erro
 		purgeHugePageResources(clusterSummary.Allocatable)
 	}
 
-	l := virtualnode.BaseLabels()
-	for k, v := range clusterSummary.Labels {
-		l[k] = v
-	}
-
 	virtualNode, err := r.nodeLister.Get(targetName)
 	if err != nil {
 		return nil, err
 	}
+
+	l := r.reconcileLabels(targetName, clusterSummary.Labels)
 
 	// we can't group status update with label update because status update POSTs to the status subresource
 	// also, we use patch, not update, because for some reason EKS cloud controller deletes nodes if we use update
@@ -170,6 +183,17 @@ func (r upstream) Handle(key interface{}) (requeueAfter *time.Duration, err erro
 	}
 
 	return nil, nil
+}
+
+func (r upstream) reconcileLabels(targetName string, clusterSummaryLabels map[string]string) map[string]string {
+	l := virtualnode.BaseLabels()
+	for k, v := range clusterSummaryLabels {
+		regExp := r.excludedLabelsRegexp[targetName]
+		if regExp == nil || !regExp.MatchString(fmt.Sprintf("%s=%s", k, v)) {
+			l[k] = v
+		}
+	}
+	return l
 }
 
 func hasMultipleHugePageSizes(rl corev1.ResourceList) bool {

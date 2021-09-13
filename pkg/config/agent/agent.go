@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 The Multicluster-Scheduler Authors.
+ * Copyright 2021 The Multicluster-Scheduler Authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,10 +38,11 @@ type Config struct {
 }
 
 type Target struct {
-	Name         string
-	ClientConfig *rest.Config
-	Self         bool // optimization to re-use clients, informers, etc.
-	Namespace    string
+	Name                 string
+	ClientConfig         *rest.Config
+	Self                 bool // optimization to re-use clients, informers, etc.
+	Namespace            string
+	ExcludedLabelsRegexp *string
 }
 
 func (t Target) GetKey() string {
@@ -93,7 +94,13 @@ func addClusterTarget(ctx context.Context, k *kubernetes.Clientset, agentCfg *Co
 		cfg = config.GetConfigOrDie()
 	}
 
-	c := Target{Name: t.Name, ClientConfig: cfg, Namespace: corev1.NamespaceAll, Self: t.Spec.Self}
+	c := Target{
+		Name:                 t.Name,
+		ClientConfig:         cfg,
+		Namespace:            corev1.NamespaceAll,
+		Self:                 t.Spec.Self,
+		ExcludedLabelsRegexp: t.Spec.ExcludedLabelsRegexp,
+	}
 	agentCfg.Targets = append(agentCfg.Targets, c)
 }
 
@@ -115,7 +122,13 @@ func addTarget(ctx context.Context, k *kubernetes.Clientset, agentCfg *Config, t
 		cfg = config.GetConfigOrDie()
 	}
 
-	c := Target{Name: t.Name, ClientConfig: cfg, Namespace: t.Namespace, Self: t.Spec.Self}
+	c := Target{
+		Name:                 t.Name,
+		ClientConfig:         cfg,
+		Namespace:            t.Namespace,
+		Self:                 t.Spec.Self,
+		ExcludedLabelsRegexp: t.Spec.ExcludedLabelsRegexp,
+	}
 	agentCfg.Targets = append(agentCfg.Targets, c)
 }
 

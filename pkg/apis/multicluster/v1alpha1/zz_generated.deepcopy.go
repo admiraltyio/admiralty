@@ -281,6 +281,11 @@ func (in *ClusterTargetSpec) DeepCopyInto(out *ClusterTargetSpec) {
 		*out = new(ClusterKubeconfigSecret)
 		**out = **in
 	}
+	if in.ExcludedLabelsRegexp != nil {
+		in, out := &in.ExcludedLabelsRegexp, &out.ExcludedLabelsRegexp
+		*out = new(string)
+		**out = **in
+	}
 	return
 }
 
@@ -563,6 +568,11 @@ func (in *TargetSpec) DeepCopyInto(out *TargetSpec) {
 	if in.KubeconfigSecret != nil {
 		in, out := &in.KubeconfigSecret, &out.KubeconfigSecret
 		*out = new(KubeconfigSecret)
+		**out = **in
+	}
+	if in.ExcludedLabelsRegexp != nil {
+		in, out := &in.ExcludedLabelsRegexp, &out.ExcludedLabelsRegexp
+		*out = new(string)
 		**out = **in
 	}
 	return

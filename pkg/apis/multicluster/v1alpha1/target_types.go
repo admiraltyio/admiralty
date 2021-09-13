@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 The Multicluster-Scheduler Authors.
+ * Copyright 2021 The Multicluster-Scheduler Authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -41,6 +41,8 @@ type TargetSpec struct {
 	Self bool `json:"self,omitempty"`
 	// +optional
 	KubeconfigSecret *KubeconfigSecret `json:"kubeconfigSecret,omitempty"`
+	// +optional
+	ExcludedLabelsRegexp *string `json:"excludedLabelsRegexp,omitempty"`
 }
 
 type KubeconfigSecret struct {

@@ -26,6 +26,7 @@ source test/e2e/follow/test.sh
 source test/e2e/logs/test.sh
 source test/e2e/exec/test.sh
 source test/e2e/ingress/test.sh
+source test/e2e/virtual-node-labels/test.sh
 source test/e2e/webhook_ready.sh
 source test/e2e/no-rogue-finalizer/test.sh
 
@@ -70,6 +71,7 @@ follow_test 1 2
 logs_test 1 2
 exec_test 1 2
 ingress_test 1 2
+virtual-node-labels_test 1 2
 no-rogue-finalizer_test
 
 echo "ALL SUCCEEDED"
