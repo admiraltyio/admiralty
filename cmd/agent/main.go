@@ -146,6 +146,7 @@ func startOldStyleControllers(
 	targetIngressInformers := make(map[string]v1beta1.IngressInformer, nt)
 
 	selfTargetKeys := make(map[string]bool, n-nt)
+	excludedLabelsRegexp := make(map[string]*string, n)
 
 	for _, target := range agentCfg.Targets {
 		if target.Self {
@@ -176,6 +177,7 @@ func startOldStyleControllers(
 			targetSecretInformers[target.GetKey()] = kf.Core().V1().Secrets()
 			targetIngressInformers[target.GetKey()] = kf.Networking().V1beta1().Ingresses()
 		}
+		excludedLabelsRegexp[target.GetKey()] = target.ExcludedLabelsRegexp
 	}
 
 	chapCtrl := chaperon.NewController(k, customClient, podInformer, podChaperonInformer)
@@ -184,7 +186,8 @@ func startOldStyleControllers(
 	var upstreamResCtrl *controller.Controller
 	if n > 0 {
 		feedbackCtrl = feedback.NewController(k, targetCustomClients, podInformer, targetPodChaperonInformers)
-		upstreamResCtrl = resources.NewUpstreamController(k, nodeInformer, targetClusterSummaryInformers, nodeStatusUpdaters)
+		upstreamResCtrl, err = resources.NewUpstreamController(k, nodeInformer, targetClusterSummaryInformers, nodeStatusUpdaters, excludedLabelsRegexp)
+		utilruntime.Must(err)
 	}
 	var cmFollowCtrl *controller.Controller
 	var svcFollowCtrl *controller.Controller
