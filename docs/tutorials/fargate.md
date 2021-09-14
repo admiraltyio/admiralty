@@ -3,6 +3,7 @@ title: "Multi-Region AWS Fargate on EKS"
 custom_edit_url: https://github.com/admiraltyio/admiralty/edit/master/docs/tutorials/fargate.md
 ---
 
+
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
@@ -513,9 +514,9 @@ KUBECONFIG=kubeconfig-management kubectl drain admiralty-default-eu-west-3-1-898
 
 ```sh
 eksctl delete cluster --name management --region us-west-2
+eksctl delete cluster --name us-west-2-0 --region us-west-2
 eksctl delete cluster --name us-west-2-1 --region us-west-2
-eksctl delete cluster --name us-west-2-2 --region us-west-2
-eksctl delete cluster --name eu-west-3-1 --region eu-west-3
+eksctl delete cluster --name eu-west-3-0 --region eu-west-3
 eksctl delete cluster --name eu-west-3-1 --region eu-west-3
 
 for cluster_name in "${cluster_names[@]}"
