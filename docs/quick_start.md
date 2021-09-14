@@ -3,20 +3,25 @@ title: Quick Start
 custom_edit_url: https://github.com/admiraltyio/admiralty/edit/master/docs/quick_start.md
 ---
 
-import Tabs from '@theme/Tabs';
-import TabItem from '@theme/TabItem';
 
-This guide provides copy-and-paste instructions to try out the Admiralty open source cluster agent with or without Admiralty Cloud. We use [kind](https://kind.sigs.k8s.io/) (Kubernetes in Docker) to create Kubernetes clusters, but feel free to use something else—though don't just copy and paste instructions then.
+
+import Tabs from '@theme/Tabs'; import TabItem from '@theme/TabItem';
+
+This guide provides copy-and-paste instructions to try out Admiralty Open Source. We
+use [kind](https://kind.sigs.k8s.io/) (Kubernetes in Docker) to create Kubernetes clusters, but feel free to use
+something else—though don't just copy and paste instructions then.
 
 ## Example Use Case
 
-We're going to model a centralized cluster topology made of a management cluster (named `cd`) where applications are deployed, and two workload clusters (named `us` and `eu`) where containers actually run. We'll deploy a batch job utilizing both workload clusters, and another targeting a specific region. If you're interested in other [topologies](./concepts/topologies.md) or other kinds of applications (e.g., micro-services), this guide is still helpful to get familiar with Admiralty in general. When you're done, you may want to continue with the ["Multi-Region AWS Fargate on EKS" tutorial](tutorials/fargate.md).
+We're going to model a centralized cluster topology made of a management cluster (named `cd`) where applications are
+deployed, and two workload clusters (named `us` and `eu`) where containers actually run. We'll deploy a batch job
+utilizing both workload clusters, and another targeting a specific region. If you're interested in
+other [topologies](./concepts/topologies.md) or other kinds of applications (e.g., micro-services), this guide is still
+helpful to get familiar with Admiralty in general.
 
-<Tabs
-defaultValue="global"
+<Tabs defaultValue="global"
 values={[
-{label: 'Global batch', value: 'global'},
-{label: 'Regional batch', value: 'regional'},
+    {label: 'Global batch', value: 'global'}, {label: 'Regional batch', value: 'regional'},
 ]}>
 <TabItem value="global">
 
@@ -62,7 +67,7 @@ values={[
     Most cloud distributions of Kubernetes pre-label nodes with the names of their cloud regions.
     :::
 
-1. (optional speed-up) Pull images on your machine and load them into the kind clusters. Otherwise, each kind cluster would pull images, which could take three times as long.
+1.  (optional speed-up) Pull images on your machine and load them into the kind clusters. Otherwise, each kind cluster would pull images, which could take three times as long.
 
     ```shell script
     images=(
@@ -75,10 +80,6 @@ values={[
       quay.io/admiralty/multicluster-scheduler-scheduler:0.13.2
       quay.io/admiralty/multicluster-scheduler-remove-finalizers:0.13.2
       quay.io/admiralty/multicluster-scheduler-restarter:0.13.2
-      # admiralty cloud/enterprise
-      quay.io/admiralty/admiralty-cloud-controller-manager:0.13.2
-      quay.io/admiralty/kube-mtls-proxy:0.10.0
-      quay.io/admiralty/kube-oidc-proxy:v0.3.0 # jetstack's image rebuilt for multiple architectures
     )
     for image in "${images[@]}"
     do
@@ -112,142 +113,10 @@ values={[
     ```
 
     :::note
-    Admiralty Open Source uses cert-manager to generate a server certificate for its [mutating pod admission webhook](concepts/scheduling.md#proxy-pods). In addition, Admiralty Cloud and Admiralty Enterprise use cert-manager to generate server certificates for Kubernetes API authenticating proxies (mTLS for clusters, OIDC for users), and client certificates for cluster [identities](operator_guide/authentication.md#identities) (talking to the mTLS proxies of other clusters).
+    Admiralty Open Source uses cert-manager to generate a server certificate for its [mutating pod admission webhook](concepts/scheduling.md#proxy-pods).
     :::
 
 ## Installation
-
-Admiralty Cloud, its command line interface (CLI), and additional cluster-agent components complement the open-source cluster agent in useful ways. The CLI makes it easy to register clusters; Kubernetes custom resource definitions (CRDs) make it easy to connect them (with automatic certificate rotations), so you don't have to craft (and re-craft) cross-cluster kubeconfigs and think about routing and certificates.
-
-Admiralty Cloud works with private clusters too. In this context, a private cluster is a cluster whose Kubernetes API isn't routable from another cluster. Cluster-to-cluster communications to private clusters transit through HTTPS/WebSocket/HTTPS tunnels exposed on the Admiralty Cloud API.
-
-:::note Privacy Notice
-We don't want to see your data. Admiralty Cloud cannot decrypt cluster-to-cluster communications, because private keys never leave the clusters. All clusters ever share with Admiralty Cloud are their CA certificates (public keys) to give to other clusters. Admiralty Cloud acts as a public key directory—"[Keybase](https://keybase.io/) for Kubernetes clusters" if you'd like.
-:::
-
-If you decide to use the open-source cluster agent only, no problem. There's no CLI nor cluster registration, but configuring cross-cluster authentication takes more care, and doesn't support private clusters. In production, you would have to rotate tokens manually.
-
-<Tabs
-groupId="oss-or-cloud"
-defaultValue="cloud"
-values={[
-{label: 'Cloud/Enterprise', value: 'cloud'},
-{label: 'Open Source', value: 'oss'},
-]
-}>
-<TabItem value="cloud">
-
-1.  Download the Admiralty CLI:
-
-    <Tabs
-    groupId="os"
-    defaultValue="linux-amd64"
-    values={[
-    {label: 'Linux/amd64', value: 'linux-amd64'},
-    {label: 'Mac', value: 'mac'},
-    {label: 'Windows', value: 'windows'},
-    {label: 'Linux/arm64', value: 'linux-arm64'},
-    {label: 'Linux/ppc64le', value: 'linux-ppc64le'},
-    {label: 'Linux/s390x', value: 'linux-s390x'},
-    ]
-    }>
-    <TabItem value="linux-amd64">
-
-    ```shell script
-    curl -Lo admiralty "https://artifacts.admiralty.io/admiralty-v0.13.2-linux-amd64"
-    chmod +x admiralty
-    sudo mv admiralty /usr/local/bin
-    ```
-
-    </TabItem>
-    <TabItem value="mac">
-
-    ```shell script
-    curl -Lo admiralty "https://artifacts.admiralty.io/admiralty-v0.13.2-darwin-amd64"
-    chmod +x admiralty
-    sudo mv admiralty /usr/local/bin
-    ```
-
-    </TabItem>
-    <TabItem value="windows">
-
-    ```shell script
-    curl -Lo admiralty "https://artifacts.admiralty.io/admiralty-v0.13.2-windows-amd64"
-    ```
-
-    </TabItem>
-    <TabItem value="linux-arm64">
-
-    ```shell script
-    curl -Lo admiralty "https://artifacts.admiralty.io/admiralty-v0.13.2-linux-arm64"
-    chmod +x admiralty
-    sudo mv admiralty /usr/local/bin
-    ```
-
-    </TabItem>
-    <TabItem value="linux-ppc64le">
-
-    ```shell script
-    curl -Lo admiralty "https://artifacts.admiralty.io/admiralty-v0.13.2-linux-ppc64le"
-    chmod +x admiralty
-    sudo mv admiralty /usr/local/bin
-    ```
-
-    </TabItem>
-    <TabItem value="linux-s390x">
-
-    ```shell script
-    curl -Lo admiralty "https://artifacts.admiralty.io/admiralty-v0.13.2-linux-s390x"
-    chmod +x admiralty
-    sudo mv admiralty /usr/local/bin
-    ```
-
-    </TabItem>
-    </Tabs>
-
-1.  Log in (sign up) to Admiralty Cloud:
-
-    ```shell script
-    admiralty configure
-    ```
-
-    :::note
-    The `admiralty configure` command takes you through an OIDC log-in/sign-up flow, and eventually saves an Admiralty Cloud API kubeconfig—used to register clusters—and user tokens under `~/.admiralty`. Don't forget to run `admiralty logout` to delete the tokens if needed when you're done.
-    :::
-
-1.  Install Admiralty in each cluster:
-
-    ```shell script
-    helm repo add admiralty https://charts.admiralty.io
-    helm repo update
-
-    for CLUSTER_NAME in cd us eu
-    do
-      kubectl --context kind-$CLUSTER_NAME create namespace admiralty
-      helm install admiralty admiralty/admiralty \
-        --kube-context kind-$CLUSTER_NAME \
-        --namespace admiralty \
-        --version 0.13.2 \
-        --set accountName=$(admiralty get-account-name) \
-        --set clusterName=$CLUSTER_NAME \
-        --wait --debug
-      # --wait to ensure release is ready before next steps
-      # --debug to show progress, for lack of a better way,
-      # as this may take a few minutes
-    done
-    ```
-
-1.  Register each cluster:
-
-    ```shell script
-    for CLUSTER_NAME in cd us eu
-    do
-      admiralty register-cluster --context kind-$CLUSTER_NAME
-    done
-    ```
-
-</TabItem>
-<TabItem value="oss">
 
 Install Admiralty in each cluster:
 
@@ -269,62 +138,9 @@ do
 done
 ```
 
-</TabItem>
-</Tabs>
-
 ## Configuration
 
 ### Cross-Cluster Authentication
-
-<Tabs
-groupId="oss-or-cloud"
-defaultValue="cloud"
-values={[
-{label: 'Cloud/Enterprise', value: 'cloud'},
-{label: 'Open Source', value: 'oss'},
-]
-}>
-<TabItem value="cloud">
-
-1.  In the management cluster, create a [Kubeconfig](operator_guide/authentication.md#kubeconfigs) for each workload cluster:
-
-    ```shell script
-    for CLUSTER_NAME in us eu
-    do
-      cat <<EOF | kubectl --context kind-cd apply -f -
-    apiVersion: multicluster.admiralty.io/v1alpha1
-    kind: Kubeconfig
-    metadata:
-      name: $CLUSTER_NAME
-    spec:
-      secretName: $CLUSTER_NAME
-      cluster:
-        admiraltyReference:
-          clusterName: $CLUSTER_NAME
-    EOF
-    done
-    ```
-
-1.  In each workload cluster, create a [TrustedIdentityProvider](operator_guide/authentication.md#trusted-identity-providers) for the management cluster:
-
-    ```shell script
-    for CLUSTER_NAME in us eu
-    do
-      cat <<EOF | kubectl --context kind-$CLUSTER_NAME apply -f -
-    apiVersion: multicluster.admiralty.io/v1alpha1
-    kind: TrustedIdentityProvider
-    metadata:
-      name: cd
-    spec:
-      prefix: "spiffe://cd/"
-      admiraltyReference:
-        clusterName: cd
-    EOF
-    done
-    ```
-
-</TabItem>
-<TabItem value="oss">
 
 1.  Install [jq](https://stedolan.github.io/jq/download/), the command-line JSON processor, if not already installed.
 
@@ -374,9 +190,6 @@ values={[
     If you're not using kind, your mileage may vary. The Kubernetes API address in your kubeconfig may or may not be routable from other clusters. If not, the server certificate in your kubeconfig may or may not be valid for the routable address that you'll find instead.
     :::
 
-</TabItem>
-</Tabs>
-
 ### Multi-Cluster Scheduling
 
 1.  In the management cluster, create a [Target](operator_guide/scheduling.md#targets-and-cluster-targets) for each workload cluster:
@@ -398,33 +211,6 @@ values={[
 
 1.  In the workload clusters, create a [Source](operator_guide/scheduling.md#sources-and-cluster-sources) for the management cluster:
 
-    <Tabs
-    groupId="oss-or-cloud"
-    defaultValue="cloud"
-    values={[
-    {label: 'Cloud/Enterprise', value: 'cloud'},
-    {label: 'Open Source', value: 'oss'},
-    ]
-    }>
-    <TabItem value="cloud">
-
-    ```shell script
-    for CLUSTER_NAME in us eu
-    do
-      cat <<EOF | kubectl --context kind-$CLUSTER_NAME apply -f -
-    apiVersion: multicluster.admiralty.io/v1alpha1
-    kind: Source
-    metadata:
-      name: cd
-    spec:
-      userName: spiffe://cd/ns/default/id/default
-    EOF
-    done
-    ```
-
-    </TabItem>
-    <TabItem value="oss">
-
     ```shell script
     for CLUSTER_NAME in us eu
     do
@@ -438,9 +224,6 @@ values={[
     EOF
     done
     ```
-
-    </TabItem>
-    </Tabs>
 
 ## Demo
 
