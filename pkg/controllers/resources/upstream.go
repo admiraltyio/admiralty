@@ -28,6 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/json"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/strategicpatch"
 	coreinformers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes"
@@ -64,7 +65,7 @@ func NewUpstreamController(
 	clusterSummaryInformer informers.ClusterSummaryInformer,
 	nodeStatusUpdater NodeStatusUpdater,
 	excludedLabelsRegexp *string,
-) (*controller.Controller, error) {
+) *controller.Controller {
 
 	r := &upstream{
 		targetName:           targetName,
@@ -93,11 +94,13 @@ func NewUpstreamController(
 		var err error
 		r.excludedLabelsRegexp, err = regexp.Compile(*excludedLabelsRegexp)
 		if err != nil {
-			return nil, fmt.Errorf("cannot compile excluded aggregated labels regexp for target %s: %v", targetName, err)
+			// don't crash if regexp cannot be compiled
+			// TODO reject Target at admission
+			utilruntime.HandleError(fmt.Errorf("cannot compile excluded aggregated labels regexp for target %s: %v", targetName, err))
 		}
 	}
 
-	return c, nil
+	return c
 }
 
 func (r upstream) Handle(key interface{}) (requeueAfter *time.Duration, err error) {
