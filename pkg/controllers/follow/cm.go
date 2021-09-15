@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 The Multicluster-Scheduler Authors.
+ * Copyright 2021 The Multicluster-Scheduler Authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,65 +39,58 @@ import (
 const proxyPodByConfigMaps = "proxyPodByConfigMaps"
 
 type configMapReconciler struct {
+	targetName string
+
 	kubeclientset kubernetes.Interface
-	remoteClients map[string]kubernetes.Interface
+	remoteClient  kubernetes.Interface
 
 	podLister       corelisters.PodLister
 	configMapLister corelisters.ConfigMapLister
 
-	remoteConfigMapLister map[string]corelisters.ConfigMapLister
+	remoteConfigMapLister corelisters.ConfigMapLister
 
 	podIndex cache.Indexer
-
-	selfTargetKeys map[string]bool
 }
 
 func NewConfigMapController(
+	targetName string,
+
 	kubeclientset kubernetes.Interface,
-	remoteClients map[string]kubernetes.Interface,
+	remoteClient kubernetes.Interface,
 
 	podInformer coreinformers.PodInformer,
 	configMapInformer coreinformers.ConfigMapInformer,
 
-	remoteConfigMapInformers map[string]coreinformers.ConfigMapInformer,
-
-	selfTargetKeys map[string]bool) *controller.Controller {
+	remoteConfigMapInformer coreinformers.ConfigMapInformer) *controller.Controller {
 
 	r := &configMapReconciler{
+		targetName: targetName,
+
 		kubeclientset: kubeclientset,
-		remoteClients: remoteClients,
+		remoteClient:  remoteClient,
 
 		podLister:       podInformer.Lister(),
 		configMapLister: configMapInformer.Lister(),
 
-		remoteConfigMapLister: make(map[string]corelisters.ConfigMapLister, len(remoteConfigMapInformers)),
+		remoteConfigMapLister: remoteConfigMapInformer.Lister(),
 
 		podIndex: podInformer.Informer().GetIndexer(),
-
-		selfTargetKeys: selfTargetKeys,
 	}
 
-	informersSynced := make([]cache.InformerSynced, 2+len(remoteConfigMapInformers))
-	informersSynced[0] = podInformer.Informer().HasSynced
-	informersSynced[1] = configMapInformer.Informer().HasSynced
-
-	i := 2
-	for targetName, informer := range remoteConfigMapInformers {
-		r.remoteConfigMapLister[targetName] = informer.Lister()
-		informersSynced[i] = informer.Informer().HasSynced
-		i++
-	}
-
-	c := controller.New("config-maps-follow", r, informersSynced...)
+	c := controller.New(
+		"config-maps-follow",
+		r,
+		podInformer.Informer().HasSynced,
+		configMapInformer.Informer().HasSynced,
+		remoteConfigMapInformer.Informer().HasSynced,
+	)
 
 	configMapInformer.Informer().AddEventHandler(controller.HandleAddUpdateWith(c.EnqueueObject))
 
 	getConfigMap := func(namespace, name string) (metav1.Object, error) {
 		return r.configMapLister.ConfigMaps(namespace).Get(name)
 	}
-	for _, informer := range remoteConfigMapInformers {
-		informer.Informer().AddEventHandler(controller.HandleAllWith(c.EnqueueRemoteController("ConfigMap", getConfigMap)))
-	}
+	remoteConfigMapInformer.Informer().AddEventHandler(controller.HandleAllWith(c.EnqueueRemoteController("ConfigMap", getConfigMap)))
 
 	podInformer.Informer().AddEventHandler(controller.HandleAllWith(enqueueProxyPodsConfigMaps(c)))
 	utilruntime.Must(podInformer.Informer().AddIndexers(map[string]cache.IndexFunc{
@@ -176,104 +169,69 @@ func (r configMapReconciler) Handle(obj interface{}) (requeueAfter *time.Duratio
 
 	terminating := configMap.DeletionTimestamp != nil
 
-	j := -1
-	for i, f := range configMap.Finalizers {
-		if f == common.CrossClusterGarbageCollectionFinalizer {
-			j = i
-			break
-		}
+	// versions prior to v0.14.0 used to have a single finalizer per parent for all remote children
+	// that worked well for fan-out controllers, but there's now one controller per target
+	// in order to delete, we need to ensure no other target has children, using separate finalizers
+	// the old single finalizer should be deleted
+	if hasOldFinalizer, j := controller.HasFinalizer(configMap.Finalizers, common.CrossClusterGarbageCollectionFinalizer); hasOldFinalizer {
+		configMap, err = r.removeFinalizer(ctx, configMap, j)
 	}
-	hasFinalizer := j > -1
 
-	objs, err := r.podIndex.ByIndex(proxyPodByConfigMaps, fmt.Sprintf("%s/%s", namespace, name))
-	utilruntime.Must(err)
-	targetNames := map[string]bool{}
-	for _, obj := range objs {
-		proxyPod := obj.(*corev1.Pod)
-		if proxypod.IsScheduled(proxyPod) {
-			if targetName := proxypod.GetScheduledClusterName(proxyPod); !r.selfTargetKeys[targetName] {
-				targetNames[targetName] = true
-			}
-		}
-	}
+	hasFinalizer, j := controller.HasFinalizer(configMap.Finalizers, common.KeyPrefix+r.targetName)
+
+	shouldFollow := r.shouldFollow(namespace, name)
 
 	// get remote owned configMaps
 	// eponymous configMaps that aren't owned are not included (because we don't want to delete them, see below)
 	// include owned configMaps in targets that no longer need them (because we shouldn't forget them when deleting)
-	remoteConfigMaps := make(map[string]*corev1.ConfigMap)
-	for targetName, lister := range r.remoteConfigMapLister {
-		remoteConfigMap, err := lister.ConfigMaps(namespace).Get(name)
-		if err != nil {
-			if !errors.IsNotFound(err) {
-				// error with a target shouldn't block reconciliation with other targets
-				d := time.Second
-				requeueAfter = &d // named returned
-				utilruntime.HandleError(err)
-			}
-			continue
-		}
-		if controller.ParentControlsChild(remoteConfigMap, configMap) {
-			remoteConfigMaps[targetName] = remoteConfigMap
-		}
+	remoteConfigMap, err := r.remoteConfigMapLister.ConfigMaps(namespace).Get(name)
+	if err != nil && !errors.IsNotFound(err) {
+		return nil, err
+	}
+	if remoteConfigMap != nil && !controller.ParentControlsChild(remoteConfigMap, configMap) {
+		return nil, nil
 	}
 
 	if terminating {
-		for targetName := range remoteConfigMaps {
-			if err := r.remoteClients[targetName].CoreV1().ConfigMaps(namespace).Delete(ctx, name, metav1.DeleteOptions{}); err != nil && !errors.IsNotFound(err) {
+		if remoteConfigMap != nil {
+			if err := r.remoteClient.CoreV1().ConfigMaps(namespace).Delete(ctx, name, metav1.DeleteOptions{}); err != nil && !errors.IsNotFound(err) {
 				return nil, err
 			}
 		}
-		if hasFinalizer && len(remoteConfigMaps) == 0 {
-			requeueAfter, err = r.removeFinalizer(ctx, configMap, j)
-			if requeueAfter != nil || err != nil {
-				return requeueAfter, err
+		if hasFinalizer && remoteConfigMap != nil {
+			_, err = r.removeFinalizer(ctx, configMap, j)
+			if err != nil {
+				return nil, err
 			}
 		}
-	} else if len(targetNames) == 0 {
-		// remove extraneous finalizers added pre-0.9.3 (to all config maps and secrets)
-		if hasFinalizer && len(remoteConfigMaps) == 0 {
-			requeueAfter, err = r.removeFinalizer(ctx, configMap, j)
-			if requeueAfter != nil || err != nil {
-				return requeueAfter, err
-			}
-		}
-	} else {
+	} else if shouldFollow {
 		if !hasFinalizer {
-			requeueAfter, err = r.addFinalizer(ctx, configMap)
-			if requeueAfter != nil || err != nil {
-				return requeueAfter, err
+			configMap, err = r.addFinalizer(ctx, configMap)
+			if err != nil {
+				return nil, err
 			}
 		}
 
-		for targetName := range targetNames {
-			remoteConfigMap := remoteConfigMaps[targetName]
-			if remoteConfigMap == nil {
-				gold := makeRemoteConfigMap(configMap)
-				_, err := r.remoteClients[targetName].CoreV1().ConfigMaps(namespace).Create(ctx, gold, metav1.CreateOptions{})
-				if err != nil && !errors.IsAlreadyExists(err) {
-					// error with a target shouldn't block reconciliation with other targets
-					d := time.Second
-					requeueAfter = &d // named returned
-					utilruntime.HandleError(err)
-				}
-			} else if !reflect.DeepEqual(remoteConfigMap.Data, configMap.Data) || !reflect.DeepEqual(remoteConfigMap.BinaryData, configMap.BinaryData) {
-				remoteConfigMapCopy := remoteConfigMap.DeepCopy()
-				remoteConfigMapCopy.Data = make(map[string]string, len(configMap.Data))
-				for k, v := range configMap.Data {
-					remoteConfigMapCopy.Data[k] = v
-				}
-				remoteConfigMapCopy.BinaryData = make(map[string][]byte, len(configMap.BinaryData))
-				for k, v := range configMap.BinaryData {
-					remoteConfigMapCopy.BinaryData[k] = make([]byte, len(v))
-					copy(remoteConfigMapCopy.BinaryData[k], v)
-				}
-				_, err := r.remoteClients[targetName].CoreV1().ConfigMaps(namespace).Update(ctx, remoteConfigMapCopy, metav1.UpdateOptions{})
-				if err != nil {
-					// error with a target shouldn't block reconciliation with other targets
-					d := time.Second
-					requeueAfter = &d // named returned
-					utilruntime.HandleError(err)
-				}
+		if remoteConfigMap == nil {
+			gold := makeRemoteConfigMap(configMap)
+			_, err := r.remoteClient.CoreV1().ConfigMaps(namespace).Create(ctx, gold, metav1.CreateOptions{})
+			if err != nil && !errors.IsAlreadyExists(err) {
+				return nil, err
+			}
+		} else if !reflect.DeepEqual(remoteConfigMap.Data, configMap.Data) || !reflect.DeepEqual(remoteConfigMap.BinaryData, configMap.BinaryData) {
+			remoteConfigMapCopy := remoteConfigMap.DeepCopy()
+			remoteConfigMapCopy.Data = make(map[string]string, len(configMap.Data))
+			for k, v := range configMap.Data {
+				remoteConfigMapCopy.Data[k] = v
+			}
+			remoteConfigMapCopy.BinaryData = make(map[string][]byte, len(configMap.BinaryData))
+			for k, v := range configMap.BinaryData {
+				remoteConfigMapCopy.BinaryData[k] = make([]byte, len(v))
+				copy(remoteConfigMapCopy.BinaryData[k], v)
+			}
+			_, err := r.remoteClient.CoreV1().ConfigMaps(namespace).Update(ctx, remoteConfigMapCopy, metav1.UpdateOptions{})
+			if err != nil {
+				return nil, err
 			}
 		}
 	}
@@ -283,39 +241,32 @@ func (r configMapReconciler) Handle(obj interface{}) (requeueAfter *time.Duratio
 	return requeueAfter, nil
 }
 
-func (r configMapReconciler) addFinalizer(ctx context.Context, configMap *corev1.ConfigMap) (*time.Duration, error) {
+func (r configMapReconciler) shouldFollow(namespace string, name string) bool {
+	objs, err := r.podIndex.ByIndex(proxyPodByConfigMaps, fmt.Sprintf("%s/%s", namespace, name))
+	utilruntime.Must(err)
+	for _, obj := range objs {
+		proxyPod := obj.(*corev1.Pod)
+		if proxypod.IsScheduled(proxyPod) && proxypod.GetScheduledClusterName(proxyPod) == r.targetName {
+			return true
+		}
+	}
+	return false
+}
+
+func (r configMapReconciler) addFinalizer(ctx context.Context, configMap *corev1.ConfigMap) (*corev1.ConfigMap, error) {
 	configMapCopy := configMap.DeepCopy()
-	configMapCopy.Finalizers = append(configMapCopy.Finalizers, common.CrossClusterGarbageCollectionFinalizer)
+	configMapCopy.Finalizers = append(configMapCopy.Finalizers, common.KeyPrefix+r.targetName)
 	if configMapCopy.Labels == nil {
 		configMapCopy.Labels = map[string]string{}
 	}
 	configMapCopy.Labels[common.LabelKeyHasFinalizer] = "true"
-	var err error
-	if _, err = r.kubeclientset.CoreV1().ConfigMaps(configMap.Namespace).Update(ctx, configMapCopy, metav1.UpdateOptions{}); err != nil {
-		if controller.IsOptimisticLockError(err) {
-			d := time.Second
-			return &d, nil
-		} else {
-			return nil, err
-		}
-	}
-	return nil, nil
+	return r.kubeclientset.CoreV1().ConfigMaps(configMap.Namespace).Update(ctx, configMapCopy, metav1.UpdateOptions{})
 }
 
-func (r configMapReconciler) removeFinalizer(ctx context.Context, configMap *corev1.ConfigMap, j int) (*time.Duration, error) {
+func (r configMapReconciler) removeFinalizer(ctx context.Context, configMap *corev1.ConfigMap, j int) (*corev1.ConfigMap, error) {
 	configMapCopy := configMap.DeepCopy()
 	configMapCopy.Finalizers = append(configMapCopy.Finalizers[:j], configMapCopy.Finalizers[j+1:]...)
-	delete(configMapCopy.Labels, common.LabelKeyHasFinalizer)
-	var err error
-	if _, err = r.kubeclientset.CoreV1().ConfigMaps(configMap.Namespace).Update(ctx, configMapCopy, metav1.UpdateOptions{}); err != nil {
-		if controller.IsOptimisticLockError(err) {
-			d := time.Second
-			return &d, nil
-		} else {
-			return nil, err
-		}
-	}
-	return nil, nil
+	return r.kubeclientset.CoreV1().ConfigMaps(configMap.Namespace).Update(ctx, configMapCopy, metav1.UpdateOptions{})
 }
 
 func makeRemoteConfigMap(configMap *corev1.ConfigMap) *corev1.ConfigMap {

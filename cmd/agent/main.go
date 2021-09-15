@@ -31,8 +31,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	kubeinformers "k8s.io/client-go/informers"
-	v1 "k8s.io/client-go/informers/core/v1"
-	"k8s.io/client-go/informers/networking/v1beta1"
 	"k8s.io/client-go/kubernetes"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	"k8s.io/client-go/rest"
@@ -42,7 +40,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	agentconfig "admiralty.io/multicluster-scheduler/pkg/config/agent"
-	"admiralty.io/multicluster-scheduler/pkg/controller"
 	"admiralty.io/multicluster-scheduler/pkg/controllers/chaperon"
 	"admiralty.io/multicluster-scheduler/pkg/controllers/feedback"
 	"admiralty.io/multicluster-scheduler/pkg/controllers/follow"
@@ -102,8 +99,16 @@ func runControllers(ctx context.Context, stopCh <-chan struct{}, agentCfg agentc
 	<-stopCh
 }
 
-// TODO: this is very messy, we need to refactor using a pattern similar to the one of multicluster-controller,
-// but for "old-style" controllers, i.e., using typed informers
+type startable interface {
+	// Start doesn't block
+	Start(stopCh <-chan struct{})
+}
+
+type runnable interface {
+	// Run blocks
+	Run(threadiness int, stopCh <-chan struct{}) error
+}
+
 func startOldStyleControllers(
 	ctx context.Context,
 	stopCh <-chan struct{},
@@ -115,103 +120,126 @@ func startOldStyleControllers(
 	customClient, err := versioned.NewForConfig(cfg)
 	utilruntime.Must(err)
 
-	kubeInformerFactory := kubeinformers.NewSharedInformerFactory(k, time.Second*30)
-	customInformerFactory := informers.NewSharedInformerFactory(customClient, time.Second*30)
-
-	podInformer := kubeInformerFactory.Core().V1().Pods()
-	nodeInformer := kubeInformerFactory.Core().V1().Nodes()
-	podChaperonInformer := customInformerFactory.Multicluster().V1alpha1().PodChaperons()
-
-	// TODO? local namespaced informers, as an added security layer
-
-	n := len(agentCfg.Targets)
-	nt := 0
-	for _, target := range agentCfg.Targets {
-		if !target.Self {
-			nt++
-		}
-	}
-
-	targetKubeClients := make(map[string]kubernetes.Interface, nt)
-	targetCustomClients := make(map[string]clientset.Interface, n)
-
-	targetKubeInformerFactories := make(map[string]kubeinformers.SharedInformerFactory, nt)
-	targetCustomInformerFactories := make(map[string]informers.SharedInformerFactory, n)
-
-	targetPodChaperonInformers := make(map[string]v1alpha1.PodChaperonInformer, n)
-	targetClusterSummaryInformers := make(map[string]v1alpha1.ClusterSummaryInformer, n)
-	targetConfigMapInformers := make(map[string]v1.ConfigMapInformer, nt)
-	targetServiceInformers := make(map[string]v1.ServiceInformer, nt)
-	targetSecretInformers := make(map[string]v1.SecretInformer, nt)
-	targetIngressInformers := make(map[string]v1beta1.IngressInformer, nt)
-
-	selfTargetKeys := make(map[string]bool, n-nt)
-	excludedLabelsRegexp := make(map[string]*string, n)
+	var factories []startable
+	var controllers []runnable
 
 	for _, target := range agentCfg.Targets {
+		kubeInformerFactory := kubeinformers.NewSharedInformerFactoryWithOptions(k, time.Second*30, kubeinformers.WithNamespace(target.Namespace))
+		factories = append(factories, kubeInformerFactory)
+		customInformerFactory := informers.NewSharedInformerFactoryWithOptions(customClient, time.Second*30, informers.WithNamespace(target.Namespace))
+		factories = append(factories, customInformerFactory)
+
+		targetName := target.GetKey()
+		var targetCustomClient versioned.Interface
+		var targetPodChaperonInformer v1alpha1.PodChaperonInformer
+		var targetClusterSummaryInformer v1alpha1.ClusterSummaryInformer
 		if target.Self {
-			selfTargetKeys[target.GetKey()] = true
-
 			// re-use
-			targetCustomClients[target.GetKey()] = customClient
-
-			targetPodChaperonInformers[target.GetKey()] = customInformerFactory.Multicluster().V1alpha1().PodChaperons()
-			targetClusterSummaryInformers[target.GetKey()] = customInformerFactory.Multicluster().V1alpha1().ClusterSummaries()
+			targetCustomClient = customClient
+			targetPodChaperonInformer = customInformerFactory.Multicluster().V1alpha1().PodChaperons()
+			targetClusterSummaryInformer = customInformerFactory.Multicluster().V1alpha1().ClusterSummaries()
 		} else {
-			k, err := kubernetes.NewForConfig(target.ClientConfig)
+			targetKubeClient, err := kubernetes.NewForConfig(target.ClientConfig)
 			utilruntime.Must(err)
-			targetKubeClients[target.GetKey()] = k
-			c, err := versioned.NewForConfig(target.ClientConfig)
+			targetCustomClient, err = versioned.NewForConfig(target.ClientConfig)
 			utilruntime.Must(err)
-			targetCustomClients[target.GetKey()] = c
 
-			kf := kubeinformers.NewSharedInformerFactoryWithOptions(k, time.Second*30, kubeinformers.WithNamespace(target.Namespace))
-			targetKubeInformerFactories[target.GetKey()] = kf
-			f := informers.NewSharedInformerFactoryWithOptions(c, time.Second*30, informers.WithNamespace(target.Namespace))
-			targetCustomInformerFactories[target.GetKey()] = f
+			targetKubeInformerFactory := kubeinformers.NewSharedInformerFactoryWithOptions(targetKubeClient, time.Second*30, kubeinformers.WithNamespace(target.Namespace))
+			factories = append(factories, targetKubeInformerFactory)
+			targetCustomInformerFactory := informers.NewSharedInformerFactoryWithOptions(targetCustomClient, time.Second*30, informers.WithNamespace(target.Namespace))
+			factories = append(factories, targetCustomInformerFactory)
 
-			targetPodChaperonInformers[target.GetKey()] = f.Multicluster().V1alpha1().PodChaperons()
-			targetClusterSummaryInformers[target.GetKey()] = f.Multicluster().V1alpha1().ClusterSummaries()
-			targetConfigMapInformers[target.GetKey()] = kf.Core().V1().ConfigMaps()
-			targetServiceInformers[target.GetKey()] = kf.Core().V1().Services()
-			targetSecretInformers[target.GetKey()] = kf.Core().V1().Secrets()
-			targetIngressInformers[target.GetKey()] = kf.Networking().V1beta1().Ingresses()
+			targetPodChaperonInformer = targetCustomInformerFactory.Multicluster().V1alpha1().PodChaperons()
+			targetClusterSummaryInformer = targetCustomInformerFactory.Multicluster().V1alpha1().ClusterSummaries()
+
+			controllers = append(
+				controllers,
+				follow.NewConfigMapController(
+					targetName,
+					k,
+					targetKubeClient,
+					kubeInformerFactory.Core().V1().Pods(),
+					kubeInformerFactory.Core().V1().ConfigMaps(),
+					targetKubeInformerFactory.Core().V1().ConfigMaps(),
+				),
+				service.NewController(
+					targetName,
+					k,
+					targetKubeClient,
+					kubeInformerFactory.Core().V1().Endpoints(),
+					kubeInformerFactory.Core().V1().Services(),
+					kubeInformerFactory.Core().V1().Pods(),
+					targetKubeInformerFactory.Core().V1().Services(),
+				),
+				follow.NewSecretController(
+					targetName,
+					k,
+					targetKubeClient,
+					kubeInformerFactory.Core().V1().Pods(),
+					kubeInformerFactory.Core().V1().Secrets(),
+					targetKubeInformerFactory.Core().V1().Secrets(),
+				),
+				ingress.NewIngressController(
+					targetName,
+					k,
+					targetKubeClient,
+					kubeInformerFactory.Core().V1().Services(),
+					kubeInformerFactory.Networking().V1beta1().Ingresses(),
+					targetKubeInformerFactory.Networking().V1beta1().Ingresses(),
+				),
+			)
 		}
-		excludedLabelsRegexp[target.GetKey()] = target.ExcludedLabelsRegexp
-	}
-
-	chapCtrl := chaperon.NewController(k, customClient, podInformer, podChaperonInformer)
-	downstreamResCtrl := resources.NewDownstreamController(customClient, nodeInformer)
-	var feedbackCtrl *controller.Controller
-	var upstreamResCtrl *controller.Controller
-	if n > 0 {
-		feedbackCtrl = feedback.NewController(k, targetCustomClients, podInformer, targetPodChaperonInformers)
-		upstreamResCtrl, err = resources.NewUpstreamController(k, nodeInformer, targetClusterSummaryInformers, nodeStatusUpdaters, excludedLabelsRegexp)
-		utilruntime.Must(err)
-	}
-	var cmFollowCtrl *controller.Controller
-	var svcFollowCtrl *controller.Controller
-	var secretFollowCtrl *controller.Controller
-	var ingressFollowCtrl *controller.Controller
-	if nt > 0 {
-		cmFollowCtrl = follow.NewConfigMapController(k, targetKubeClients, podInformer,
-			kubeInformerFactory.Core().V1().ConfigMaps(), targetConfigMapInformers, selfTargetKeys)
-		svcFollowCtrl = service.NewController(
+		controllers = append(controllers, feedback.NewController(
+			targetName,
 			k,
-			targetKubeClients,
-			kubeInformerFactory.Core().V1().Endpoints(),
-			kubeInformerFactory.Core().V1().Services(),
+			targetCustomClient,
 			kubeInformerFactory.Core().V1().Pods(),
-			targetServiceInformers,
-			selfTargetKeys,
+			targetPodChaperonInformer,
+		))
+		upstreamResCtrl, err := resources.NewUpstreamController(
+			targetName,
+			k,
+			kubeInformerFactory.Core().V1().Nodes(),
+			targetClusterSummaryInformer,
+			nodeStatusUpdaters[targetName],
+			target.ExcludedLabelsRegexp,
 		)
-		secretFollowCtrl = follow.NewSecretController(k, targetKubeClients, podInformer,
-			kubeInformerFactory.Core().V1().Secrets(), targetSecretInformers, selfTargetKeys)
-		ingressFollowCtrl = ingress.NewIngressController(k, targetKubeClients, kubeInformerFactory.Core().V1().Services(),
-			kubeInformerFactory.Networking().V1beta1().Ingresses(), targetIngressInformers, selfTargetKeys)
+		utilruntime.Must(err)
+		controllers = append(controllers, upstreamResCtrl)
 	}
 
-	var srcCtrl *controller.Controller
+	factories, controllers = addClusterScopedFactoriesAndControllers(ctx, k, customClient, factories, controllers, err)
+
+	for _, f := range factories {
+		f.Start(stopCh)
+	}
+
+	for _, c := range controllers {
+		c := c
+		go func() { utilruntime.Must(c.Run(1, stopCh)) }()
+	}
+}
+
+func addClusterScopedFactoriesAndControllers(ctx context.Context, k *kubernetes.Clientset, customClient *clientset.Clientset, factories []startable, controllers []runnable, err error) ([]startable, []runnable) {
+	kubeInformerFactory := kubeinformers.NewSharedInformerFactory(k, time.Second*30)
+	factories = append(factories, kubeInformerFactory)
+	customInformerFactory := informers.NewSharedInformerFactory(customClient, time.Second*30)
+	factories = append(factories, customInformerFactory)
+
+	controllers = append(
+		controllers,
+		chaperon.NewController(
+			k,
+			customClient,
+			kubeInformerFactory.Core().V1().Pods(),
+			customInformerFactory.Multicluster().V1alpha1().PodChaperons(),
+		),
+		resources.NewDownstreamController(
+			customClient,
+			kubeInformerFactory.Core().V1().Nodes(),
+		),
+	)
+
 	// HACK: indirect feature gate, disable source controller if clustersources cannot be listed (e.g., not allowed)
 	srcCtrlEnabled := true
 	_, err = customClient.MulticlusterV1alpha1().ClusterSources().List(ctx, metav1.ListOptions{})
@@ -220,38 +248,16 @@ func startOldStyleControllers(
 		srcCtrlEnabled = false
 	}
 	if srcCtrlEnabled {
-		sourceInformer := customInformerFactory.Multicluster().V1alpha1().Sources()
-		clusterSourceInformer := customInformerFactory.Multicluster().V1alpha1().ClusterSources()
-		saInformer := kubeInformerFactory.Core().V1().ServiceAccounts()
-		rbInformer := kubeInformerFactory.Rbac().V1().RoleBindings()
-		crbInformer := kubeInformerFactory.Rbac().V1().ClusterRoleBindings()
-		srcCtrl = source.NewController(k, sourceInformer, clusterSourceInformer, saInformer, rbInformer, crbInformer)
+		controllers = append(controllers, source.NewController(
+			k,
+			customInformerFactory.Multicluster().V1alpha1().Sources(),
+			customInformerFactory.Multicluster().V1alpha1().ClusterSources(),
+			kubeInformerFactory.Core().V1().ServiceAccounts(),
+			kubeInformerFactory.Rbac().V1().RoleBindings(),
+			kubeInformerFactory.Rbac().V1().ClusterRoleBindings(),
+		))
 	}
-
-	kubeInformerFactory.Start(stopCh)
-	customInformerFactory.Start(stopCh)
-	for _, f := range targetKubeInformerFactories {
-		f.Start(stopCh)
-	}
-	for _, f := range targetCustomInformerFactories {
-		f.Start(stopCh)
-	}
-
-	go func() { utilruntime.Must(chapCtrl.Run(2, stopCh)) }()
-	go func() { utilruntime.Must(downstreamResCtrl.Run(1, stopCh)) }()
-	if n > 0 {
-		go func() { utilruntime.Must(upstreamResCtrl.Run(1, stopCh)) }()
-		go func() { utilruntime.Must(feedbackCtrl.Run(2, stopCh)) }()
-	}
-	if nt > 0 {
-		go func() { utilruntime.Must(cmFollowCtrl.Run(2, stopCh)) }()
-		go func() { utilruntime.Must(svcFollowCtrl.Run(2, stopCh)) }()
-		go func() { utilruntime.Must(secretFollowCtrl.Run(2, stopCh)) }()
-		go func() { utilruntime.Must(ingressFollowCtrl.Run(2, stopCh)) }()
-	}
-	if srcCtrlEnabled {
-		go func() { utilruntime.Must(srcCtrl.Run(2, stopCh)) }()
-	}
+	return factories, controllers
 }
 
 func startWebhook(stopCh <-chan struct{}, cfg *rest.Config) {

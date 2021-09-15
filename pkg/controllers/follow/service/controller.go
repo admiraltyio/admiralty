@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 The Multicluster-Scheduler Authors.
+ * Copyright 2021 The Multicluster-Scheduler Authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -40,69 +40,62 @@ import (
 )
 
 type reconciler struct {
+	targetName string
+
 	kubeclientset kubernetes.Interface
-	remoteClients map[string]kubernetes.Interface
+	remoteClient  kubernetes.Interface
 
 	svcLister corelisters.ServiceLister
 	podLister corelisters.PodLister
 
-	remoteSvcLister map[string]corelisters.ServiceLister
-
-	selfTargetKeys map[string]bool
+	remoteSvcLister corelisters.ServiceLister
 
 	serviceRerouteEnabled bool
 }
 
 func NewController(
+	targetName string,
+
 	kubeclientset kubernetes.Interface,
-	remoteClients map[string]kubernetes.Interface,
+	remoteClient kubernetes.Interface,
 
 	epInformer coreinformers.EndpointsInformer,
 	svcInformer coreinformers.ServiceInformer,
 	podInformer coreinformers.PodInformer,
 
-	remoteSvcInformers map[string]coreinformers.ServiceInformer,
-
-	selfTargetKeys map[string]bool) *controller.Controller {
+	remoteSvcInformer coreinformers.ServiceInformer) *controller.Controller {
 
 	r := &reconciler{
+		targetName: targetName,
+
 		kubeclientset: kubeclientset,
-		remoteClients: remoteClients,
+		remoteClient:  remoteClient,
 
 		svcLister: svcInformer.Lister(),
 		podLister: podInformer.Lister(),
 
-		remoteSvcLister: make(map[string]corelisters.ServiceLister, len(remoteSvcInformers)),
-
-		selfTargetKeys: selfTargetKeys,
+		remoteSvcLister: remoteSvcInformer.Lister(),
 
 		serviceRerouteEnabled: true, // TODO configurable
 	}
 
-	informersSynced := make([]cache.InformerSynced, 3+len(remoteSvcInformers))
-	informersSynced[0] = epInformer.Informer().HasSynced
-	informersSynced[1] = svcInformer.Informer().HasSynced
-	informersSynced[2] = podInformer.Informer().HasSynced
-
-	i := 3
-	for targetName, informer := range remoteSvcInformers {
-		r.remoteSvcLister[targetName] = informer.Lister()
-		informersSynced[i] = informer.Informer().HasSynced
-		i++
-	}
-
-	c := controller.New("services-follow", r, informersSynced...)
+	c := controller.New(
+		"services-follow",
+		r,
+		epInformer.Informer().HasSynced,
+		svcInformer.Informer().HasSynced,
+		podInformer.Informer().HasSynced,
+		remoteSvcInformer.Informer().HasSynced,
+	)
 
 	svcInformer.Informer().AddEventHandler(controller.HandleAddUpdateWith(c.EnqueueObject))
 
-	for _, informer := range remoteSvcInformers {
-		informer.Informer().AddEventHandler(controller.HandleAllWith(c.EnqueueRemoteController(
-			"Ingress",
-			func(namespace, name string) (metav1.Object, error) {
-				return r.svcLister.Services(namespace).Get(name)
-			},
-		)))
-	}
+	remoteSvcInformer.Informer().AddEventHandler(controller.HandleAllWith(c.EnqueueRemoteController(
+		"Service",
+		func(namespace, name string) (metav1.Object, error) {
+			return r.svcLister.Services(namespace).Get(name)
+		},
+	)))
 
 	epInformer.Informer().AddEventHandler(controller.HandleAddUpdateWith(c.EnqueueObject))
 
@@ -133,14 +126,15 @@ func (r reconciler) Handle(obj interface{}) (requeueAfter *time.Duration, err er
 
 	terminating := svc.DeletionTimestamp != nil
 
-	j := -1
-	for i, f := range svc.Finalizers {
-		if f == common.CrossClusterGarbageCollectionFinalizer {
-			j = i
-			break
-		}
+	hasFinalizer, j := controller.HasFinalizer(svc.Finalizers, common.KeyPrefix+r.targetName)
+
+	// versions prior to v0.14.0 used to have a single finalizer per parent for all remote children
+	// that worked well for fan-out controllers, but there's now one controller per target
+	// in order to delete, we need to ensure no other target has children, using separate finalizers
+	// the old single finalizer should be deleted
+	if hasOldFinalizer, j := controller.HasFinalizer(svc.Finalizers, common.CrossClusterGarbageCollectionFinalizer); hasOldFinalizer {
+		svc, err = r.removeFinalizer(ctx, svc, j)
 	}
-	hasFinalizer := j > -1
 
 	shouldFollow, originalSelector, err := r.shouldFollow(svc)
 	if err != nil {
@@ -149,33 +143,23 @@ func (r reconciler) Handle(obj interface{}) (requeueAfter *time.Duration, err er
 
 	// get remote owned services
 	// eponymous services that aren't owned are not included (because we don't want to delete them, see below)
-	remoteServices := make(map[string]*corev1.Service)
-	for targetName, lister := range r.remoteSvcLister {
-		remoteSvc, err := lister.Services(namespace).Get(name)
-		if err != nil {
-			if !errors.IsNotFound(err) {
-				// error with a target shouldn't block reconciliation with other targets
-				d := time.Second
-				requeueAfter = &d // named returned
-				utilruntime.HandleError(err)
-			}
-			continue
-		}
-		if controller.ParentControlsChild(remoteSvc, svc) {
-			remoteServices[targetName] = remoteSvc
-		}
+	remoteSvc, err := r.remoteSvcLister.Services(namespace).Get(name)
+	if err != nil && !errors.IsNotFound(err) {
+		return nil, err
+	}
+	if remoteSvc != nil && !controller.ParentControlsChild(remoteSvc, svc) {
+		return nil, nil
 	}
 
 	if terminating {
-		for targetName := range remoteServices {
-			if err := r.remoteClients[targetName].CoreV1().Services(namespace).Delete(ctx, name, metav1.DeleteOptions{}); err != nil && !errors.IsNotFound(err) {
+		if remoteSvc != nil {
+			if err := r.remoteClient.CoreV1().Services(namespace).Delete(ctx, name, metav1.DeleteOptions{}); err != nil && !errors.IsNotFound(err) {
 				return nil, err
 			}
 		}
-		if hasFinalizer && len(remoteServices) == 0 {
-			requeueAfter, err = r.removeFinalizer(ctx, svc, j)
-			if requeueAfter != nil || err != nil {
-				return requeueAfter, err
+		if hasFinalizer && remoteSvc != nil {
+			if _, err = r.removeFinalizer(ctx, svc, j); err != nil {
+				return nil, err
 			}
 		}
 	} else if shouldFollow {
@@ -183,7 +167,7 @@ func (r reconciler) Handle(obj interface{}) (requeueAfter *time.Duration, err er
 		needUpdateLocal := false
 		if !hasFinalizer {
 			needUpdateLocal = true
-			addFinalizer(svcCopy)
+			r.addFinalizer(svcCopy)
 		}
 		if svcCopy.Annotations == nil {
 			svcCopy.Annotations = map[string]string{}
@@ -208,40 +192,26 @@ func (r reconciler) Handle(obj interface{}) (requeueAfter *time.Duration, err er
 			}
 		}
 		if needUpdateLocal {
-			svc, requeueAfter, err = r.updateLocal(ctx, svcCopy)
-			if requeueAfter != nil || err != nil {
-				return requeueAfter, err
+			if svc, err = r.kubeclientset.CoreV1().Services(svcCopy.Namespace).Update(ctx, svcCopy, metav1.UpdateOptions{}); err != nil {
+				return nil, err
 			}
 		}
 
-		for targetName, remoteClient := range r.remoteClients {
-			if r.selfTargetKeys[targetName] {
-				continue
+		if remoteSvc == nil {
+			gold := makeRemoteService(svc) // at this point, svc includes updates from above (including reroute and cilium)
+			_, err := r.remoteClient.CoreV1().Services(namespace).Create(ctx, gold, metav1.CreateOptions{})
+			if err != nil && !errors.IsAlreadyExists(err) {
+				return nil, err
 			}
-
-			remoteSvc := remoteServices[targetName]
-			if remoteSvc == nil {
-				gold := makeRemoteService(svc) // at this point, svc includes updates from above (including reroute and cilium)
-				_, err := remoteClient.CoreV1().Services(namespace).Create(ctx, gold, metav1.CreateOptions{})
-				if err != nil && !errors.IsAlreadyExists(err) {
-					// error with a target shouldn't block reconciliation with other targets
-					d := time.Second
-					requeueAfter = &d // named returned
-					utilruntime.HandleError(err)
-				}
-			} else {
-				spec := svc.Spec.DeepCopy()
-				spec.ClusterIP = remoteSvc.Spec.ClusterIP
-				if !reflect.DeepEqual(&remoteSvc.Spec, spec) {
-					remoteCopy := remoteSvc.DeepCopy()
-					remoteCopy.Spec = *spec.DeepCopy()
-					_, err := remoteClient.CoreV1().Services(namespace).Update(ctx, remoteCopy, metav1.UpdateOptions{})
-					if err != nil {
-						// error with a target shouldn't block reconciliation with other targets
-						d := time.Second
-						requeueAfter = &d // named returned
-						utilruntime.HandleError(err)
-					}
+		} else {
+			spec := svc.Spec.DeepCopy()
+			spec.ClusterIP = remoteSvc.Spec.ClusterIP
+			if !reflect.DeepEqual(&remoteSvc.Spec, spec) {
+				remoteCopy := remoteSvc.DeepCopy()
+				remoteCopy.Spec = *spec.DeepCopy()
+				_, err := r.remoteClient.CoreV1().Services(namespace).Update(ctx, remoteCopy, metav1.UpdateOptions{})
+				if err != nil {
+					return nil, err
 				}
 			}
 		}
@@ -249,7 +219,7 @@ func (r reconciler) Handle(obj interface{}) (requeueAfter *time.Duration, err er
 
 	// TODO? cleanup remote services that shouldn't follow anymore
 
-	return requeueAfter, nil
+	return nil, nil
 }
 
 func (r reconciler) shouldFollow(service *corev1.Service) (bool, string, error) {
@@ -295,41 +265,18 @@ func (r reconciler) shouldFollow(service *corev1.Service) (bool, string, error) 
 	return false, selector.String(), nil
 }
 
-func addFinalizer(actualCopy *corev1.Service) {
-	actualCopy.Finalizers = append(actualCopy.Finalizers, common.CrossClusterGarbageCollectionFinalizer)
+func (r reconciler) addFinalizer(actualCopy *corev1.Service) {
+	actualCopy.Finalizers = append(actualCopy.Finalizers, common.KeyPrefix+r.targetName)
 	if actualCopy.Labels == nil {
 		actualCopy.Labels = map[string]string{}
 	}
 	actualCopy.Labels[common.LabelKeyHasFinalizer] = "true"
 }
 
-func (r reconciler) updateLocal(ctx context.Context, actualCopy *corev1.Service) (*corev1.Service, *time.Duration, error) {
-	actual, err := r.kubeclientset.CoreV1().Services(actualCopy.Namespace).Update(ctx, actualCopy, metav1.UpdateOptions{})
-	if err != nil {
-		if controller.IsOptimisticLockError(err) {
-			d := time.Second
-			return nil, &d, nil
-		} else {
-			return nil, nil, err
-		}
-	}
-	return actual, nil, nil
-}
-
-func (r reconciler) removeFinalizer(ctx context.Context, actual *corev1.Service, j int) (*time.Duration, error) {
+func (r reconciler) removeFinalizer(ctx context.Context, actual *corev1.Service, j int) (*corev1.Service, error) {
 	actualCopy := actual.DeepCopy()
 	actualCopy.Finalizers = append(actualCopy.Finalizers[:j], actualCopy.Finalizers[j+1:]...)
-	delete(actualCopy.Labels, common.LabelKeyHasFinalizer)
-	var err error
-	if _, err = r.kubeclientset.CoreV1().Services(actual.Namespace).Update(ctx, actualCopy, metav1.UpdateOptions{}); err != nil {
-		if controller.IsOptimisticLockError(err) {
-			d := time.Second
-			return &d, nil
-		} else {
-			return nil, err
-		}
-	}
-	return nil, nil
+	return r.kubeclientset.CoreV1().Services(actual.Namespace).Update(ctx, actualCopy, metav1.UpdateOptions{})
 }
 
 func makeRemoteService(actual *corev1.Service) *corev1.Service {

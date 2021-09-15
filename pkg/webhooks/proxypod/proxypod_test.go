@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 The Multicluster-Scheduler Authors.
+ * Copyright 2021 The Multicluster-Scheduler Authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -54,7 +54,6 @@ var testCases = map[string]struct {
 				Labels: map[string]string{
 					common.LabelKeyHasFinalizer: "true",
 				},
-				Finalizers: []string{common.CrossClusterGarbageCollectionFinalizer},
 			},
 			Spec: corev1.PodSpec{
 				NodeSelector: map[string]string{
@@ -114,8 +113,7 @@ var testCases = map[string]struct {
 					common.AnnotationKeySourcePodManifest: "HACK", // yaml serialization computed in test code
 					"k1":                                  "v1",
 				},
-				Labels:     map[string]string{"k2": "v2", common.LabelKeyHasFinalizer: "true"},
-				Finalizers: []string{common.CrossClusterGarbageCollectionFinalizer},
+				Labels: map[string]string{"k2": "v2", common.LabelKeyHasFinalizer: "true"},
 			},
 			Spec: corev1.PodSpec{
 				NodeSelector: map[string]string{

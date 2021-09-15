@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 The Multicluster-Scheduler Authors.
+ * Copyright 2021 The Multicluster-Scheduler Authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -113,7 +113,9 @@ func (c *Controller) processNextWorkItem() bool {
 	if err != nil {
 		// Put the item back on the workqueue to handle any transient errors.
 		c.workqueue.AddRateLimited(key)
-		utilruntime.HandleError(fmt.Errorf("error syncing '%s': %s, requeuing", key, err.Error()))
+		if !IsOptimisticLockError(err) {
+			utilruntime.HandleError(fmt.Errorf("error syncing '%s': %s, requeuing", key, err.Error()))
+		}
 		return true
 	}
 	if requeueAfter != nil {
@@ -212,4 +214,13 @@ func AddRemoteControllerReference(child metav1.Object, parent metav1.Object) {
 func ParentControlsChild(child metav1.Object, parent metav1.Object) bool {
 	return child.GetAnnotations()[common.LabelKeyParentUID] == string(parent.GetUID()) ||
 		child.GetLabels()[common.LabelKeyParentUID] == string(parent.GetUID()) // for backward compatibility
+}
+
+func HasFinalizer(finalizers []string, finalizer string) (bool, int) {
+	for i, f := range finalizers {
+		if f == finalizer {
+			return true, i
+		}
+	}
+	return false, -1
 }
