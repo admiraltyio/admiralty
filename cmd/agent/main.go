@@ -189,23 +189,24 @@ func startOldStyleControllers(
 				),
 			)
 		}
-		controllers = append(controllers, feedback.NewController(
-			targetName,
-			k,
-			targetCustomClient,
-			kubeInformerFactory.Core().V1().Pods(),
-			targetPodChaperonInformer,
-		))
-		upstreamResCtrl, err := resources.NewUpstreamController(
-			targetName,
-			k,
-			kubeInformerFactory.Core().V1().Nodes(),
-			targetClusterSummaryInformer,
-			nodeStatusUpdaters[targetName],
-			target.ExcludedLabelsRegexp,
+		controllers = append(
+			controllers,
+			feedback.NewController(
+				targetName,
+				k,
+				targetCustomClient,
+				kubeInformerFactory.Core().V1().Pods(),
+				targetPodChaperonInformer,
+			),
+			resources.NewUpstreamController(
+				targetName,
+				k,
+				kubeInformerFactory.Core().V1().Nodes(),
+				targetClusterSummaryInformer,
+				nodeStatusUpdaters[targetName],
+				target.ExcludedLabelsRegexp,
+			),
 		)
-		utilruntime.Must(err)
-		controllers = append(controllers, upstreamResCtrl)
 	}
 
 	factories, controllers = addClusterScopedFactoriesAndControllers(ctx, k, customClient, factories, controllers, err)
