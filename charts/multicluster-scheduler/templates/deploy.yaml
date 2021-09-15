@@ -69,7 +69,6 @@ spec:
       tolerations: {{ toYaml . | nindent 8 }}
         {{- end }}
 ---
-{{- if gt .Values.controllerManager.replicas 1 }}
 apiVersion: policy/v1beta1
 kind: PodDisruptionBudget
 metadata:
@@ -80,7 +79,6 @@ spec:
     matchLabels: {{ include "selectorLabels" . | nindent 6 }}
       component: controller-manager
 ---
-{{- end }}
 {{- end }}
   {{- if not .Values.debug.proxyScheduler }}
 apiVersion: apps/v1
@@ -136,7 +134,6 @@ spec:
       tolerations: {{ toYaml . | nindent 8 }}
         {{- end }}
 ---
-{{- if gt .Values.scheduler.replicas 1 }}
 apiVersion: policy/v1beta1
 kind: PodDisruptionBudget
 metadata:
@@ -147,7 +144,6 @@ spec:
     matchLabels: {{ include "selectorLabels" . | nindent 6 }}
       component: proxy-scheduler
 ---
-{{- end }}
 {{- end }}
   {{- if not .Values.debug.candidateScheduler }}
 apiVersion: apps/v1
@@ -203,7 +199,6 @@ spec:
       tolerations: {{ toYaml . | nindent 8 }}
         {{- end }}
 ---
-{{- if gt .Values.scheduler.replicas 1 }}
 apiVersion: policy/v1beta1
 kind: PodDisruptionBudget
 metadata:
@@ -214,7 +209,6 @@ spec:
     matchLabels: {{ include "selectorLabels" . | nindent 6 }}
       component: candidate-scheduler
 ---
-{{- end }}
 {{- end }}
   {{- if not .Values.debug.restarter }}
 apiVersion: apps/v1
@@ -271,7 +265,6 @@ spec:
       tolerations: {{ toYaml . | nindent 8 }}
         {{- end }}
 ---
-{{- if gt .Values.restarter.replicas 1 }}
 apiVersion: policy/v1beta1
 kind: PodDisruptionBudget
 metadata:
@@ -282,5 +275,4 @@ spec:
     matchLabels: {{ include "selectorLabels" . | nindent 6 }}
       component: restarter
 ---
-{{- end }}
 {{- end }}

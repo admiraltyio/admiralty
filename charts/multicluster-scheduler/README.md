@@ -18,16 +18,18 @@ Multicluster-scheduler uses [finalizers](https://kubernetes.io/docs/tasks/access
 | nameOverride | string | `""` | Override chart name in object names and labels |
 | fullnameOverride | string | `""` | Override chart and release names in object names |
 | imagePullSecretName | string | `""` |  |
+| controllerManager.replicas | integer | `2` |  |
 | controllerManager.image.repository | string | `"quay.io/admiralty/multicluster-scheduler-agent"` |  |
-| controllerManager.image.tag | string | `"0.13.2"` |  |
+| controllerManager.image.tag | string | `"0.14.0"` |  |
 | controllerManager.image.pullPolicy | string | `"IfNotPresent"` |  |
 | controllerManager.resources | object | `{}` |  |
 | controllerManager.nodeSelector | object | `{}` |  |
 | controllerManager.securityContext | object | `{}` |  |
 | controllerManager.affinity | object | `{}` |  |
 | controllerManager.tolerations | array | `[]` |  |
+| scheduler.replicas | integer | `2` |  |
 | scheduler.image.repository | string | `"quay.io/admiralty/multicluster-scheduler-scheduler"` |  |
-| scheduler.image.tag | string | `"0.13.2"` |  |
+| scheduler.image.tag | string | `"0.14.0"` |  |
 | scheduler.image.pullPolicy | string | `"IfNotPresent"` |  |
 | scheduler.resources | object | `{}` |  |
 | scheduler.nodeSelector | object | `{}` |  |
@@ -35,15 +37,16 @@ Multicluster-scheduler uses [finalizers](https://kubernetes.io/docs/tasks/access
 | scheduler.affinity | object | `{}` |  |
 | scheduler.tolerations | array | `[]` |  |
 | postDeleteJob.image.repository | string | `"quay.io/admiralty/multicluster-scheduler-remove-finalizers"` |  |
-| postDeleteJob.image.tag | string | `"0.13.2"` |  |
+| postDeleteJob.image.tag | string | `"0.14.0"` |  |
 | postDeleteJob.image.pullPolicy | string | `"IfNotPresent"` |  |
 | postDeleteJob.resources | object | `{}` |  |
 | postDeleteJob.nodeSelector | object | `{}` |  |
 | postDeleteJob.securityContext | object | `{}` |  |
 | postDeleteJob.affinity | object | `{}` |  |
 | postDeleteJob.tolerations | array | `[]` |  |
+| restarter.replicas | integer | `2` |  |
 | restarter.image.repository | string | `"quay.io/admiralty/multicluster-scheduler-remove-finalizers"` |  |
-| restarter.image.tag | string | `"0.13.2"` |  |
+| restarter.image.tag | string | `"0.14.0"` |  |
 | restarter.image.pullPolicy | string | `"IfNotPresent"` |  |
 | restarter.resources | object | `{}` |  |
 | restarter.nodeSelector | object | `{}` |  |

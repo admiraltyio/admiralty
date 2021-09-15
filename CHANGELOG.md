@@ -20,6 +20,26 @@
 
 -->
 
+## v0.14.0
+
+### New Features
+
+- 8221b3a4 and 3f84b8d0 leader election, enabled by default with 2 replicas per component
+
+### Bugfixes
+
+- 28ba9d2c by refactoring cross-cluster controllers from fan-out to 1-on-1, if a target is unavailable at startup, it
+no longer breaks other targets while the corresponding controller is waiting for the target cache to sync (fixed #106)
+- 28c126fe and e99eceed allow excluding labels from aggregation on virtual nodes, especially useful on AKS to exclude
+`^kubernetes\.azure\.com/cluster=`, so kube-proxy and azure-ip-masq-agent DaemonSet don't create pods for Admiralty
+virtual nodes (the manifest of those DaemonSets is reconciled by the add-on manager so adding a node anti-affinity
+wasn't an option) (fixed #114)
+
+### Internals
+
+- 9fbada60 e2e tests for k8s versions 1.17 through 1.21 in CI; we don't support 1.22 yet, still working on its long
+list of dropped API versions: https://kubernetes.io/docs/reference/using-api/deprecation-guide/#v1-22
+
 ## v0.13.2
 
 ### Bugfixes
