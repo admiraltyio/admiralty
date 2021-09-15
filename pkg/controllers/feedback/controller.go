@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 The Multicluster-Scheduler Authors.
+ * Copyright 2021 The Multicluster-Scheduler Authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -60,21 +60,24 @@ const (
 )
 
 type reconciler struct {
-	kubeclientset    kubernetes.Interface
-	customclientsets map[string]clientset.Interface
+	targetName string
 
-	podsLister          corelisters.PodLister
-	podChaperonsListers map[string]listers.PodChaperonLister
+	kubeclientset   kubernetes.Interface
+	customclientset clientset.Interface
+
+	podsLister         corelisters.PodLister
+	podChaperonsLister listers.PodChaperonLister
 
 	recorder record.EventRecorder
 }
 
 // NewController returns a new chaperon controller
 func NewController(
+	targetName string,
 	kubeclientset kubernetes.Interface,
-	customclientsets map[string]clientset.Interface,
+	customclientset clientset.Interface,
 	podInformer coreinformers.PodInformer,
-	podChaperonInformers map[string]informers.PodChaperonInformer) *controller.Controller {
+	podChaperonInformer informers.PodChaperonInformer) *controller.Controller {
 
 	utilruntime.Must(customscheme.AddToScheme(scheme.Scheme))
 	klog.V(4).Info("Creating event broadcaster")
@@ -84,27 +87,19 @@ func NewController(
 	recorder := eventBroadcaster.NewRecorder(scheme.Scheme, corev1.EventSource{Component: controllerAgentName})
 
 	r := &reconciler{
-		kubeclientset:    kubeclientset,
-		customclientsets: customclientsets,
+		targetName: targetName,
 
-		podsLister:          podInformer.Lister(),
-		podChaperonsListers: make(map[string]listers.PodChaperonLister, len(podChaperonInformers)),
+		kubeclientset:   kubeclientset,
+		customclientset: customclientset,
+
+		podsLister:         podInformer.Lister(),
+		podChaperonsLister: podChaperonInformer.Lister(),
 
 		recorder: recorder,
 	}
 
-	informersSynced := make([]cache.InformerSynced, len(podChaperonInformers)+1)
-	informersSynced[0] = podInformer.Informer().HasSynced
-
-	i := 1
-	for targetName, informer := range podChaperonInformers {
-		r.podChaperonsListers[targetName] = informer.Lister()
-		informersSynced[i] = informer.Informer().HasSynced
-		i++
-	}
-
 	getPod := func(namespace, name string) (metav1.Object, error) { return r.podsLister.Pods(namespace).Get(name) }
-	c := controller.New("feedback", r, informersSynced...)
+	c := controller.New("feedback", r, podInformer.Informer().HasSynced, podChaperonInformer.Informer().HasSynced)
 
 	enqueueProxyPod := func(obj interface{}) {
 		pod := obj.(*corev1.Pod)
@@ -114,9 +109,7 @@ func NewController(
 	}
 
 	podInformer.Informer().AddEventHandler(controller.HandleAddUpdateWith(enqueueProxyPod))
-	for _, informer := range podChaperonInformers {
-		informer.Informer().AddEventHandler(controller.HandleAllWith(c.EnqueueRemoteController("Pod", getPod)))
-	}
+	podChaperonInformer.Informer().AddEventHandler(controller.HandleAllWith(c.EnqueueRemoteController("Pod", getPod)))
 
 	return c
 }
@@ -147,112 +140,92 @@ func (c *reconciler) Handle(obj interface{}) (requeueAfter *time.Duration, err e
 
 	proxyPodTerminating := proxyPod.DeletionTimestamp != nil
 
-	j := -1
-	for i, f := range proxyPod.Finalizers {
-		if f == common.CrossClusterGarbageCollectionFinalizer {
-			j = i
-			break
-		}
-	}
-	proxyPodHasFinalizer := j > -1
+	proxyPodHasFinalizer, j := controller.HasFinalizer(proxyPod.Finalizers, common.KeyPrefix+c.targetName)
 
-	candidates := make(map[string]*multiclusterv1alpha1.PodChaperon)
-	for targetName, lister := range c.podChaperonsListers {
-		l, err := lister.PodChaperons(namespace).List(labels.SelectorFromSet(map[string]string{common.LabelKeyParentUID: string(proxyPod.UID)}))
-		if err != nil {
-			return nil, err
-		}
-		if len(l) > 1 {
-			return nil, fmt.Errorf("more than one candidate in target cluster")
-		}
-		if len(l) == 1 {
-			candidates[targetName] = l[0]
-		}
+	var candidate *multiclusterv1alpha1.PodChaperon
+	l, err := c.podChaperonsLister.PodChaperons(namespace).List(labels.SelectorFromSet(map[string]string{common.LabelKeyParentUID: string(proxyPod.UID)}))
+	if err != nil {
+		return nil, err
+	}
+	if len(l) > 1 {
+		return nil, fmt.Errorf("more than one candidate in target cluster")
+	}
+	if len(l) == 1 {
+		candidate = l[0]
 	}
 
 	didSomething := false
 
+	// proxy pods have a global finalizer set at admission before any delegate is created
+	// because the proxy scheduler can't update pods without confusing its cache
+	// we add target specific
+	if hasOldFinalizer, j := controller.HasFinalizer(proxyPod.Finalizers, common.CrossClusterGarbageCollectionFinalizer); hasOldFinalizer {
+		proxyPod, err = c.removeFinalizer(ctx, proxyPod, j)
+	}
+
+	// TODO GC candidates of pods that were deleted before finalizers could be added
+	// proxy-scheduler cannot add finalizers for candidates before their creations
+	// because that would confuse its cache (requeueing pods for scheduling)
+	// in general, we need proper GC instead of finalizers for follow controllers too,
+	// to handle the loss of targets
+
 	if proxyPodTerminating {
-		for targetName, chap := range candidates {
-			if err := c.customclientsets[targetName].MulticlusterV1alpha1().PodChaperons(namespace).Delete(ctx, chap.Name, metav1.DeleteOptions{}); err != nil && !errors.IsNotFound(err) {
+		if candidate != nil {
+			if err := c.customclientset.MulticlusterV1alpha1().PodChaperons(namespace).Delete(ctx, candidate.Name, metav1.DeleteOptions{}); err != nil && !errors.IsNotFound(err) {
 				return nil, err
 			}
 			didSomething = true
 		}
-		if len(candidates) == 0 && proxyPodHasFinalizer {
-			podCopy := proxyPod.DeepCopy()
-			podCopy.Finalizers = append(podCopy.Finalizers[:j], podCopy.Finalizers[j+1:]...)
-			var err error
-			if proxyPod, err = c.kubeclientset.CoreV1().Pods(namespace).Update(ctx, podCopy, metav1.UpdateOptions{}); err != nil {
-				if controller.IsOptimisticLockError(err) {
-					d := time.Second
-					return &d, nil
-				} else {
-					return nil, err
-				}
+		if candidate == nil && proxyPodHasFinalizer {
+			if proxyPod, err = c.removeFinalizer(ctx, proxyPod, j); err != nil {
+				return nil, err
 			}
 			didSomething = true
 		}
 	} else if !proxyPodHasFinalizer {
 		podCopy := proxyPod.DeepCopy()
-		podCopy.Finalizers = append(podCopy.Finalizers, common.CrossClusterGarbageCollectionFinalizer)
+		podCopy.Finalizers = append(podCopy.Finalizers, common.KeyPrefix+c.targetName)
 		var err error
 		if proxyPod, err = c.kubeclientset.CoreV1().Pods(namespace).Update(ctx, podCopy, metav1.UpdateOptions{}); err != nil {
-			if controller.IsOptimisticLockError(err) {
-				d := time.Second
-				return &d, nil
-			} else {
-				return nil, err
-			}
+			return nil, err
 		}
 		didSomething = true
 	}
 
-	if proxypod.IsScheduled(proxyPod) {
-		delegate, ok := candidates[proxypod.GetScheduledClusterName(proxyPod)]
-		if ok {
-			mcProxyPodAnnotations, otherProxyPodAnnotations := common.SplitLabelsOrAnnotations(proxyPod.Annotations)
-			_, otherDelegatePodAnnotations := common.SplitLabelsOrAnnotations(delegate.Annotations)
+	if candidate != nil && proxypod.IsScheduled(proxyPod) && proxypod.GetScheduledClusterName(proxyPod) == c.targetName {
+		delegate := candidate
 
-			needUpdate := !reflect.DeepEqual(otherProxyPodAnnotations, otherDelegatePodAnnotations)
-			if needUpdate {
-				for k, v := range otherDelegatePodAnnotations {
-					mcProxyPodAnnotations[k] = v
-				}
-				podCopy := proxyPod.DeepCopy()
-				podCopy.Annotations = mcProxyPodAnnotations
+		mcProxyPodAnnotations, otherProxyPodAnnotations := common.SplitLabelsOrAnnotations(proxyPod.Annotations)
+		_, otherDelegatePodAnnotations := common.SplitLabelsOrAnnotations(delegate.Annotations)
 
-				var err error
-				if proxyPod, err = c.kubeclientset.CoreV1().Pods(namespace).Update(ctx, podCopy, metav1.UpdateOptions{}); err != nil {
-					if controller.IsOptimisticLockError(err) {
-						d := time.Second
-						return &d, nil
-					} else {
-						return nil, err
-					}
-				}
-				didSomething = true
+		needUpdate := !reflect.DeepEqual(otherProxyPodAnnotations, otherDelegatePodAnnotations)
+		if needUpdate {
+			for k, v := range otherDelegatePodAnnotations {
+				mcProxyPodAnnotations[k] = v
 			}
+			podCopy := proxyPod.DeepCopy()
+			podCopy.Annotations = mcProxyPodAnnotations
 
-			// we can't group annotation and status updates into an update,
-			// because general update ignores status
-
-			needStatusUpdate := deep.Equal(proxyPod.Status, delegate.Status) != nil
-			if needStatusUpdate {
-				podCopy := proxyPod.DeepCopy()
-				podCopy.Status = delegate.Status
-
-				var err error
-				if proxyPod, err = c.kubeclientset.CoreV1().Pods(namespace).UpdateStatus(ctx, podCopy, metav1.UpdateOptions{}); err != nil {
-					if controller.IsOptimisticLockError(err) {
-						d := time.Second
-						return &d, nil
-					} else {
-						return nil, err
-					}
-				}
-				didSomething = true
+			var err error
+			if proxyPod, err = c.kubeclientset.CoreV1().Pods(namespace).Update(ctx, podCopy, metav1.UpdateOptions{}); err != nil {
+				return nil, err
 			}
+			didSomething = true
+		}
+
+		// we can't group annotation and status updates into an update,
+		// because general update ignores status
+
+		needStatusUpdate := deep.Equal(proxyPod.Status, delegate.Status) != nil
+		if needStatusUpdate {
+			podCopy := proxyPod.DeepCopy()
+			podCopy.Status = delegate.Status
+
+			var err error
+			if proxyPod, err = c.kubeclientset.CoreV1().Pods(namespace).UpdateStatus(ctx, podCopy, metav1.UpdateOptions{}); err != nil {
+				return nil, err
+			}
+			didSomething = true
 		}
 	}
 
@@ -260,4 +233,10 @@ func (c *reconciler) Handle(obj interface{}) (requeueAfter *time.Duration, err e
 		c.recorder.Event(proxyPod, corev1.EventTypeNormal, SuccessSynced, MessageResourceSynced)
 	}
 	return nil, nil
+}
+
+func (c reconciler) removeFinalizer(ctx context.Context, pod *corev1.Pod, j int) (*corev1.Pod, error) {
+	podCopy := pod.DeepCopy()
+	podCopy.Finalizers = append(podCopy.Finalizers[:j], podCopy.Finalizers[j+1:]...)
+	return c.kubeclientset.CoreV1().Pods(pod.Namespace).Update(ctx, podCopy, metav1.UpdateOptions{})
 }

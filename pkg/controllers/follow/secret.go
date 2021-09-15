@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 The Multicluster-Scheduler Authors.
+ * Copyright 2021 The Multicluster-Scheduler Authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,65 +39,52 @@ import (
 const proxyPodBySecrets = "proxyPodBySecrets"
 
 type secretReconciler struct {
+	targetName string
+
 	kubeclientset kubernetes.Interface
-	remoteClients map[string]kubernetes.Interface
+	remoteClient  kubernetes.Interface
 
 	podLister    corelisters.PodLister
 	secretLister corelisters.SecretLister
 
-	remoteSecretLister map[string]corelisters.SecretLister
+	remoteSecretLister corelisters.SecretLister
 
 	podIndex cache.Indexer
-
-	selfTargetKeys map[string]bool
 }
 
 func NewSecretController(
+	targetName string,
+
 	kubeclientset kubernetes.Interface,
-	remoteClients map[string]kubernetes.Interface,
+	remoteClient kubernetes.Interface,
 
 	podInformer coreinformers.PodInformer,
 	secretInformer coreinformers.SecretInformer,
 
-	remoteSecretInformers map[string]coreinformers.SecretInformer,
-
-	selfTargetKeys map[string]bool) *controller.Controller {
+	remoteSecretInformer coreinformers.SecretInformer) *controller.Controller {
 
 	r := &secretReconciler{
+		targetName: targetName,
+
 		kubeclientset: kubeclientset,
-		remoteClients: remoteClients,
+		remoteClient:  remoteClient,
 
 		podLister:    podInformer.Lister(),
 		secretLister: secretInformer.Lister(),
 
-		remoteSecretLister: make(map[string]corelisters.SecretLister, len(remoteSecretInformers)),
+		remoteSecretLister: remoteSecretInformer.Lister(),
 
 		podIndex: podInformer.Informer().GetIndexer(),
-
-		selfTargetKeys: selfTargetKeys,
 	}
 
-	informersSynced := make([]cache.InformerSynced, 2+len(remoteSecretInformers))
-	informersSynced[0] = podInformer.Informer().HasSynced
-	informersSynced[1] = secretInformer.Informer().HasSynced
-
-	i := 2
-	for targetName, informer := range remoteSecretInformers {
-		r.remoteSecretLister[targetName] = informer.Lister()
-		informersSynced[i] = informer.Informer().HasSynced
-		i++
-	}
-
-	c := controller.New("secrets-follow", r, informersSynced...)
+	c := controller.New("secrets-follow", r, podInformer.Informer().HasSynced, secretInformer.Informer().HasSynced, remoteSecretInformer.Informer().HasSynced)
 
 	secretInformer.Informer().AddEventHandler(controller.HandleAddUpdateWith(c.EnqueueObject))
 
 	getSecret := func(namespace, name string) (metav1.Object, error) {
 		return r.secretLister.Secrets(namespace).Get(name)
 	}
-	for _, informer := range remoteSecretInformers {
-		informer.Informer().AddEventHandler(controller.HandleAllWith(c.EnqueueRemoteController("Secret", getSecret)))
-	}
+	remoteSecretInformer.Informer().AddEventHandler(controller.HandleAllWith(c.EnqueueRemoteController("Secret", getSecret)))
 
 	podInformer.Informer().AddEventHandler(controller.HandleAllWith(enqueueProxyPodsSecrets(c)))
 	utilruntime.Must(podInformer.Informer().AddIndexers(map[string]cache.IndexFunc{
@@ -181,100 +168,65 @@ func (r secretReconciler) Handle(obj interface{}) (requeueAfter *time.Duration, 
 
 	terminating := secret.DeletionTimestamp != nil
 
-	j := -1
-	for i, f := range secret.Finalizers {
-		if f == common.CrossClusterGarbageCollectionFinalizer {
-			j = i
-			break
-		}
+	// versions prior to v0.14.0 used to have a single finalizer per parent for all remote children
+	// that worked well for fan-out controllers, but there's now one controller per target
+	// in order to delete, we need to ensure no other target has children, using separate finalizers
+	// the old single finalizer should be deleted
+	if hasOldFinalizer, j := controller.HasFinalizer(secret.Finalizers, common.CrossClusterGarbageCollectionFinalizer); hasOldFinalizer {
+		secret, err = r.removeFinalizer(ctx, secret, j)
 	}
-	hasFinalizer := j > -1
 
-	objs, err := r.podIndex.ByIndex(proxyPodBySecrets, fmt.Sprintf("%s/%s", namespace, name))
-	utilruntime.Must(err)
-	targetNames := map[string]bool{}
-	for _, obj := range objs {
-		proxyPod := obj.(*corev1.Pod)
-		if proxypod.IsScheduled(proxyPod) {
-			if targetName := proxypod.GetScheduledClusterName(proxyPod); !r.selfTargetKeys[targetName] {
-				targetNames[targetName] = true
-			}
-		}
-	}
+	hasFinalizer, j := controller.HasFinalizer(secret.Finalizers, common.KeyPrefix+r.targetName)
+
+	shouldFollow := r.shouldFollow(namespace, name)
 
 	// get remote owned secrets
 	// eponymous secrets that aren't owned are not included (because we don't want to delete them, see below)
 	// include owned secrets in targets that no longer need them (because we shouldn't forget them when deleting)
-	remoteSecrets := make(map[string]*corev1.Secret, len(r.remoteSecretLister))
-	for targetName, lister := range r.remoteSecretLister {
-		remoteSecret, err := lister.Secrets(namespace).Get(name)
-		if err != nil {
-			if !errors.IsNotFound(err) {
-				// error with a target shouldn't block reconciliation with other targets
-				d := time.Second
-				requeueAfter = &d // named returned
-				utilruntime.HandleError(err)
-			}
-			continue
-		}
-		if controller.ParentControlsChild(remoteSecret, secret) {
-			remoteSecrets[targetName] = remoteSecret
-		}
+	remoteSecret, err := r.remoteSecretLister.Secrets(namespace).Get(name)
+	if err != nil && !errors.IsNotFound(err) {
+		return nil, err
+	}
+	if remoteSecret != nil && !controller.ParentControlsChild(remoteSecret, secret) {
+		return nil, nil
 	}
 
 	if terminating {
-		for targetName := range remoteSecrets {
-			if err := r.remoteClients[targetName].CoreV1().Secrets(namespace).Delete(ctx, name, metav1.DeleteOptions{}); err != nil && !errors.IsNotFound(err) {
+		if remoteSecret != nil {
+			if err := r.remoteClient.CoreV1().Secrets(namespace).Delete(ctx, name, metav1.DeleteOptions{}); err != nil && !errors.IsNotFound(err) {
 				return nil, err
 			}
 		}
-		if hasFinalizer && len(remoteSecrets) == 0 {
-			requeueAfter, err = r.removeFinalizer(ctx, secret, j)
-			if requeueAfter != nil || err != nil {
-				return requeueAfter, err
+		if hasFinalizer && remoteSecret != nil {
+			_, err = r.removeFinalizer(ctx, secret, j)
+			if err != nil {
+				return nil, err
 			}
 		}
-	} else if len(targetNames) == 0 {
-		// remove extraneous finalizers added pre-0.9.3 (to all config maps and secrets)
-		if hasFinalizer && len(remoteSecrets) == 0 {
-			requeueAfter, err = r.removeFinalizer(ctx, secret, j)
-			if requeueAfter != nil || err != nil {
-				return requeueAfter, err
-			}
-		}
-	} else {
+	} else if shouldFollow {
 		if !hasFinalizer {
-			requeueAfter, err = r.addFinalizer(ctx, secret)
-			if requeueAfter != nil || err != nil {
-				return requeueAfter, err
+			secret, err = r.addFinalizer(ctx, secret)
+			if err != nil {
+				return nil, err
 			}
 		}
 
-		for targetName := range targetNames {
-			remoteSecret := remoteSecrets[targetName]
-			if remoteSecret == nil {
-				gold := makeRemoteSecret(secret)
-				_, err := r.remoteClients[targetName].CoreV1().Secrets(namespace).Create(ctx, gold, metav1.CreateOptions{})
-				if err != nil && !errors.IsAlreadyExists(err) {
-					// error with a target shouldn't block reconciliation with other targets
-					d := time.Second
-					requeueAfter = &d // named returned
-					utilruntime.HandleError(err)
-				}
-			} else if !reflect.DeepEqual(remoteSecret.Data, secret.Data) {
-				remoteSecretCopy := remoteSecret.DeepCopy()
-				remoteSecretCopy.Data = make(map[string][]byte, len(secret.Data))
-				for k, v := range secret.Data {
-					remoteSecretCopy.Data[k] = make([]byte, len(v))
-					copy(remoteSecretCopy.Data[k], v)
-				}
-				_, err := r.remoteClients[targetName].CoreV1().Secrets(namespace).Update(ctx, remoteSecretCopy, metav1.UpdateOptions{})
-				if err != nil {
-					// error with a target shouldn't block reconciliation with other targets
-					d := time.Second
-					requeueAfter = &d // named returned
-					utilruntime.HandleError(err)
-				}
+		if remoteSecret == nil {
+			gold := makeRemoteSecret(secret)
+			_, err := r.remoteClient.CoreV1().Secrets(namespace).Create(ctx, gold, metav1.CreateOptions{})
+			if err != nil && !errors.IsAlreadyExists(err) {
+				return nil, err
+			}
+		} else if !reflect.DeepEqual(remoteSecret.Data, secret.Data) {
+			remoteSecretCopy := remoteSecret.DeepCopy()
+			remoteSecretCopy.Data = make(map[string][]byte, len(secret.Data))
+			for k, v := range secret.Data {
+				remoteSecretCopy.Data[k] = make([]byte, len(v))
+				copy(remoteSecretCopy.Data[k], v)
+			}
+			_, err := r.remoteClient.CoreV1().Secrets(namespace).Update(ctx, remoteSecretCopy, metav1.UpdateOptions{})
+			if err != nil {
+				return nil, err
 			}
 		}
 	}
@@ -284,39 +236,32 @@ func (r secretReconciler) Handle(obj interface{}) (requeueAfter *time.Duration, 
 	return requeueAfter, nil
 }
 
-func (r secretReconciler) addFinalizer(ctx context.Context, secret *corev1.Secret) (*time.Duration, error) {
+func (r secretReconciler) shouldFollow(namespace, name string) bool {
+	objs, err := r.podIndex.ByIndex(proxyPodBySecrets, fmt.Sprintf("%s/%s", namespace, name))
+	utilruntime.Must(err)
+	for _, obj := range objs {
+		proxyPod := obj.(*corev1.Pod)
+		if proxypod.IsScheduled(proxyPod) && proxypod.GetScheduledClusterName(proxyPod) == r.targetName {
+			return true
+		}
+	}
+	return false
+}
+
+func (r secretReconciler) addFinalizer(ctx context.Context, secret *corev1.Secret) (*corev1.Secret, error) {
 	secretCopy := secret.DeepCopy()
-	secretCopy.Finalizers = append(secretCopy.Finalizers, common.CrossClusterGarbageCollectionFinalizer)
+	secretCopy.Finalizers = append(secretCopy.Finalizers, common.KeyPrefix+r.targetName)
 	if secretCopy.Labels == nil {
 		secretCopy.Labels = map[string]string{}
 	}
 	secretCopy.Labels[common.LabelKeyHasFinalizer] = "true"
-	var err error
-	if _, err = r.kubeclientset.CoreV1().Secrets(secret.Namespace).Update(ctx, secretCopy, metav1.UpdateOptions{}); err != nil {
-		if controller.IsOptimisticLockError(err) {
-			d := time.Second
-			return &d, nil
-		} else {
-			return nil, err
-		}
-	}
-	return nil, nil
+	return r.kubeclientset.CoreV1().Secrets(secret.Namespace).Update(ctx, secretCopy, metav1.UpdateOptions{})
 }
 
-func (r secretReconciler) removeFinalizer(ctx context.Context, secret *corev1.Secret, j int) (*time.Duration, error) {
+func (r secretReconciler) removeFinalizer(ctx context.Context, secret *corev1.Secret, j int) (*corev1.Secret, error) {
 	secretCopy := secret.DeepCopy()
 	secretCopy.Finalizers = append(secretCopy.Finalizers[:j], secretCopy.Finalizers[j+1:]...)
-	delete(secretCopy.Labels, common.LabelKeyHasFinalizer)
-	var err error
-	if _, err = r.kubeclientset.CoreV1().Secrets(secret.Namespace).Update(ctx, secretCopy, metav1.UpdateOptions{}); err != nil {
-		if controller.IsOptimisticLockError(err) {
-			d := time.Second
-			return &d, nil
-		} else {
-			return nil, err
-		}
-	}
-	return nil, nil
+	return r.kubeclientset.CoreV1().Secrets(secret.Namespace).Update(ctx, secretCopy, metav1.UpdateOptions{})
 }
 
 func makeRemoteSecret(secret *corev1.Secret) *corev1.Secret {

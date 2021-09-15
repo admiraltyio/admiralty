@@ -32,7 +32,6 @@ import (
 	coreinformers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes"
 	corelisters "k8s.io/client-go/listers/core/v1"
-	"k8s.io/client-go/tools/cache"
 	"k8s.io/kubernetes/pkg/apis/core/v1/helper"
 
 	"admiralty.io/multicluster-scheduler/pkg/common"
@@ -47,59 +46,54 @@ type NodeStatusUpdater interface {
 }
 
 type upstream struct {
+	targetName string
+
 	kubeclientset kubernetes.Interface
 
-	nodeLister            corelisters.NodeLister
-	clusterSummaryListers map[string]listers.ClusterSummaryLister
-	nodeStatusUpdaters    map[string]NodeStatusUpdater
+	nodeLister           corelisters.NodeLister
+	clusterSummaryLister listers.ClusterSummaryLister
+	nodeStatusUpdater    NodeStatusUpdater
 
-	excludedLabelsRegexp map[string]*regexp.Regexp
+	excludedLabelsRegexp *regexp.Regexp
 }
 
-func NewUpstreamController(kubeclientset kubernetes.Interface,
+func NewUpstreamController(
+	targetName string,
+	kubeclientset kubernetes.Interface,
 	nodeInformer coreinformers.NodeInformer,
-	clusterSummaryInformers map[string]informers.ClusterSummaryInformer,
-	nodeStatusUpdaters map[string]NodeStatusUpdater,
-	excludedLabelsRegexp map[string]*string) (*controller.Controller, error) {
+	clusterSummaryInformer informers.ClusterSummaryInformer,
+	nodeStatusUpdater NodeStatusUpdater,
+	excludedLabelsRegexp *string,
+) (*controller.Controller, error) {
 
 	r := &upstream{
-		kubeclientset:         kubeclientset,
-		nodeLister:            nodeInformer.Lister(),
-		clusterSummaryListers: make(map[string]listers.ClusterSummaryLister, len(clusterSummaryInformers)),
-		nodeStatusUpdaters:    nodeStatusUpdaters,
-		excludedLabelsRegexp:  make(map[string]*regexp.Regexp, len(excludedLabelsRegexp)),
+		targetName:           targetName,
+		kubeclientset:        kubeclientset,
+		nodeLister:           nodeInformer.Lister(),
+		clusterSummaryLister: clusterSummaryInformer.Lister(),
+		nodeStatusUpdater:    nodeStatusUpdater,
 	}
 
-	informersSynced := make([]cache.InformerSynced, len(clusterSummaryInformers)+1)
-	informersSynced[0] = nodeInformer.Informer().HasSynced
-	i := 1
-	for targetName, informer := range clusterSummaryInformers {
-		r.clusterSummaryListers[targetName] = informer.Lister()
-		informersSynced[i] = informer.Informer().HasSynced
-		i++
-	}
+	c := controller.New("cluster-resources-upstream", r, nodeInformer.Informer().HasSynced, clusterSummaryInformer.Informer().HasSynced)
 
-	c := controller.New("cluster-resources-upstream", r, informersSynced...)
-
+	// node informer doesn't use field selector on metadata.name == targetName
+	// because we use its cache to list other nodes to infer multi-huge-page support
+	// so we need to filter here
 	nodeInformer.Informer().AddEventHandler(controller.HandleAddUpdateWith(func(obj interface{}) {
 		node := obj.(*corev1.Node)
-		if node.Labels[common.LabelAndTaintKeyVirtualKubeletProvider] == common.VirtualKubeletProviderName {
+		if node.Name == r.targetName {
 			c.EnqueueKey(node.Name)
 		}
 	}))
-	for targetName, informer := range clusterSummaryInformers {
-		informer.Informer().AddEventHandler(controller.HandleAllWith(func(_ interface{}) {
-			c.EnqueueKey(targetName)
-		}))
-	}
+	clusterSummaryInformer.Informer().AddEventHandler(controller.HandleAllWith(func(_ interface{}) {
+		c.EnqueueKey(targetName)
+	}))
 
-	for targetName, regExp := range excludedLabelsRegexp {
-		if regExp != nil {
-			var err error
-			r.excludedLabelsRegexp[targetName], err = regexp.Compile(*regExp)
-			if err != nil {
-				return nil, fmt.Errorf("cannot compile excluded aggregated labels regexp for target %s: %v", targetName, err)
-			}
+	if excludedLabelsRegexp != nil {
+		var err error
+		r.excludedLabelsRegexp, err = regexp.Compile(*excludedLabelsRegexp)
+		if err != nil {
+			return nil, fmt.Errorf("cannot compile excluded aggregated labels regexp for target %s: %v", targetName, err)
 		}
 	}
 
@@ -110,7 +104,7 @@ func (r upstream) Handle(key interface{}) (requeueAfter *time.Duration, err erro
 	ctx := context.Background()
 	targetName := key.(string)
 
-	clusterSummary, err := r.clusterSummaryListers[targetName].Get(singletonName)
+	clusterSummary, err := r.clusterSummaryLister.Get(singletonName)
 	if err != nil {
 		return nil, err
 	}
@@ -144,7 +138,7 @@ func (r upstream) Handle(key interface{}) (requeueAfter *time.Duration, err erro
 		return nil, err
 	}
 
-	l := r.reconcileLabels(targetName, clusterSummary.Labels)
+	l := r.reconcileLabels(clusterSummary.Labels)
 
 	// we can't group status update with label update because status update POSTs to the status subresource
 	// also, we use patch, not update, because for some reason EKS cloud controller deletes nodes if we use update
@@ -178,17 +172,19 @@ func (r upstream) Handle(key interface{}) (requeueAfter *time.Duration, err erro
 		actualCopy := virtualNode.DeepCopy()
 		actualCopy.Status.Allocatable = clusterSummary.Allocatable
 		actualCopy.Status.Capacity = clusterSummary.Capacity
-		r.nodeStatusUpdaters[targetName].UpdateNodeStatus(actualCopy)
+		// we use nodeStatusUpdater instead of kubeclientset because VK needs to update its internal representation
+		// otherwise it would override our changes
+		r.nodeStatusUpdater.UpdateNodeStatus(actualCopy)
 		// VK doesn't surface errors, so we have no way to requeue if transient error, TODO? fix upstream
 	}
 
 	return nil, nil
 }
 
-func (r upstream) reconcileLabels(targetName string, clusterSummaryLabels map[string]string) map[string]string {
+func (r upstream) reconcileLabels(clusterSummaryLabels map[string]string) map[string]string {
 	l := virtualnode.BaseLabels()
 	for k, v := range clusterSummaryLabels {
-		regExp := r.excludedLabelsRegexp[targetName]
+		regExp := r.excludedLabelsRegexp
 		if regExp == nil || !regExp.MatchString(fmt.Sprintf("%s=%s", k, v)) {
 			l[k] = v
 		}

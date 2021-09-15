@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 The Multicluster-Scheduler Authors.
+ * Copyright 2021 The Multicluster-Scheduler Authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -147,19 +147,6 @@ func (m mutator) mutate(pod *corev1.Pod) error {
 	// with a finalizer until its delegate is fully deleted
 	var grace int64 = 0
 	pod.Spec.TerminationGracePeriodSeconds = &grace
-
-	// add finalizer because we can't add it when we create delegates in proxy scheduler
-	// (pod updates confuse the scheduler)
-	hasFinalizer := false
-	for _, f := range pod.Finalizers {
-		if f == common.CrossClusterGarbageCollectionFinalizer {
-			hasFinalizer = true
-			break
-		}
-	}
-	if !hasFinalizer {
-		pod.Finalizers = append(pod.Finalizers, common.CrossClusterGarbageCollectionFinalizer)
-	}
 
 	// add label for post-delete hook to remove finalizers
 	if pod.Labels == nil {

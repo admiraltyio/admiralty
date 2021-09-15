@@ -25,7 +25,6 @@ import (
 )
 
 func Test_upstream_reconcileLabels(t *testing.T) {
-	targetName := "targetName"
 	clusterSummaryLabels := map[string]string{"k1": "v1", "k2": "v2", "prefix.io/k1": "v1"}
 	addBaseLabels := func(m map[string]string) map[string]string {
 		l := virtualnode.BaseLabels()
@@ -66,9 +65,9 @@ func Test_upstream_reconcileLabels(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			r := upstream{
-				excludedLabelsRegexp: map[string]*regexp.Regexp{targetName: tt.excludedLabelsRegexp},
+				excludedLabelsRegexp: tt.excludedLabelsRegexp,
 			}
-			got := r.reconcileLabels(targetName, clusterSummaryLabels)
+			got := r.reconcileLabels(clusterSummaryLabels)
 			require.Equal(t, tt.want, got)
 		})
 	}
