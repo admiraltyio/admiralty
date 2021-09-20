@@ -30,6 +30,7 @@ import (
 	logruslogger "github.com/virtual-kubelet/virtual-kubelet/log/logrus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/apimachinery/pkg/util/wait"
 	kubeinformers "k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
@@ -79,7 +80,7 @@ func main() {
 	utilruntime.Must(err)
 
 	startWebhook(stopCh, cfg)
-	startVirtualKubeletServers(ctx, agentCfg, k)
+	go startVirtualKubeletServers(ctx, agentCfg, k)
 
 	if o.leaderElect {
 		leaderelection.Run(ctx, ns, "admiralty-controller-manager", k, func(ctx context.Context) {
@@ -304,6 +305,10 @@ func startVirtualKubeletServers(ctx context.Context, agentCfg agentconfig.Config
 	}
 
 	certPEM, keyPEM, err := csr.GetCertificateFromKubernetesAPIServer(ctx, k)
+	if err == wait.ErrWaitTimeout {
+		utilruntime.HandleError(fmt.Errorf("timed out waiting for virtual kubelet serving certificate to be signed, pod logs/exec won't be supported (known issue on EKS 1.19+: https://github.com/admiraltyio/admiralty/issues/120)"))
+		return
+	}
 	utilruntime.Must(err) // likely RBAC issue
 
 	cancelHTTP, err := http.SetupHTTPServer(ctx, &http.LogsExecProvider{
@@ -314,12 +319,8 @@ func startVirtualKubeletServers(ctx context.Context, agentCfg agentconfig.Config
 	utilruntime.Must(err)
 
 	// this is a little convoluted, TODO: check the close/cancel/context mess with SetupHTTPServer
-	go func() {
-		select {
-		case <-ctx.Done():
-			cancelHTTP()
-		}
-	}()
+	<-ctx.Done()
+	cancelHTTP()
 }
 
 type options struct {
