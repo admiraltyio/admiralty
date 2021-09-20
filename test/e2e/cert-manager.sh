@@ -18,7 +18,8 @@
 set -euo pipefail
 
 source test/e2e/aliases.sh
-source test/e2e/webhook_ready.sh
+
+cert_manager_version=v0.16.1
 
 cert_manager_setup_once() {
   helm repo add jetstack https://charts.jetstack.io
@@ -28,12 +29,11 @@ cert_manager_setup_once() {
 cert_manager_setup() {
   i=$1
 
-  k $i apply --validate=false -f https://github.com/jetstack/cert-manager/releases/download/v0.16.1/cert-manager.crds.yaml
+  k $i apply --validate=false -f https://github.com/jetstack/cert-manager/releases/download/$cert_manager_version/cert-manager.crds.yaml
   if ! k $i get ns cert-manager; then
     k $i create ns cert-manager
   fi
-  h $i upgrade --install cert-manager jetstack/cert-manager -n cert-manager --version v0.16.1 --wait --debug --timeout=1m
-  #  webhook_ready $i cert-manager cert-manager-webhook cert-manager-webhook cert-manager-webhook-tls
+  h $i upgrade --install cert-manager jetstack/cert-manager -n cert-manager --version $cert_manager_version --wait --debug --timeout=1m
 }
 
 if [[ "${BASH_SOURCE[0]:-}" == "${0}" ]]; then

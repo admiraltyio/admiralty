@@ -33,7 +33,19 @@ kind_images[1.14]="kindest/node:v1.14.10@sha256:f8a66ef82822ab4f7569e91a5bccaf27
 # "known to work well" (k8s 1.22 wasn't released when kind 0.11.1 was released)
 kind_images[1.22]="kindest/node:v1.22.0@sha256:b8bda84bb3a190e6e028b1760d277454a72267a5454b57db34437c34a588d047"
 
-K8S_VERSION="${K8S_VERSION:-"1.21"}"
+VERSION="${VERSION:-dev}"
+
+kind_setup_once() {
+  # to speed up container creations (loaded by in kind_setup)
+  # may already be on host
+  docker pull "$argo_img"
+  docker pull quay.io/jetstack/cert-manager-controller:$cert_manager_version
+  docker pull quay.io/jetstack/cert-manager-webhook:$cert_manager_version
+  docker pull quay.io/jetstack/cert-manager-cainjector:$cert_manager_version
+  registry=""
+
+  K8S_VERSION="${K8S_VERSION:-"1.21"}"
+}
 
 kind_setup() {
   i=$1
@@ -47,8 +59,16 @@ kind_setup() {
   kind get kubeconfig --name $CLUSTER --internal | \
     sed "s/${CLUSTER}-control-plane/${NODE_IP}/g" >kubeconfig-$CLUSTER
   k $i apply -f test/e2e/must-run-as-non-root.yaml
+
+  # speed up container creations
+  kind load docker-image multicluster-scheduler-agent:$VERSION-amd64 --name cluster$i
+  kind load docker-image multicluster-scheduler-scheduler:$VERSION-amd64 --name cluster$i
+  kind load docker-image multicluster-scheduler-remove-finalizers:$VERSION-amd64 --name cluster$i
+  kind load docker-image multicluster-scheduler-restarter:$VERSION-amd64 --name cluster$i
+  kind load docker-image "$argo_img" --name "cluster$i"
 }
 
 if [[ "${BASH_SOURCE[0]:-}" == "${0}" ]]; then
+  kind_setup_once
   kind_setup $1
 fi

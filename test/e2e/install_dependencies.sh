@@ -33,3 +33,6 @@ sudo mv ./kind /usr/local/bin/kind
 curl -LO https://get.helm.sh/helm-v3.2.4-linux-amd64.tar.gz
 tar -zxvf helm-v3.2.4-linux-amd64.tar.gz
 sudo mv linux-amd64/helm /usr/local/bin/helm
+
+curl --silent --location https://github.com/weaveworks/eksctl/releases/download/v0.67.0/eksctl_Linux_amd64.tar.gz | tar xz -C /tmp
+sudo mv /tmp/eksctl /usr/local/bin

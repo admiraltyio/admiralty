@@ -21,7 +21,8 @@ source test/e2e/aliases.sh
 source test/e2e/admiralty.sh
 source test/e2e/argo.sh
 source test/e2e/cert-manager.sh
-source test/e2e/kind.sh
+source test/e2e/k8s/kind.sh
+source test/e2e/k8s/eks.sh
 source test/e2e/follow/test.sh
 source test/e2e/logs/test.sh
 source test/e2e/exec/test.sh
@@ -30,32 +31,60 @@ source test/e2e/virtual-node-labels/test.sh
 source test/e2e/webhook_ready.sh
 source test/e2e/no-rogue-finalizer/test.sh
 
+K8S_DISTRIB="${K8S_DISTRIB:-kind}"
+
 argo_setup_once
 cert_manager_setup_once
 
+case "$K8S_DISTRIB" in
+  kind)
+    kind_setup_once
+    create_cluster=kind_setup
+    async=false
+    ;;
+  eks)
+    eks_setup_once
+    create_cluster=eks_setup
+    async=true
+    ;;
+  *)
+    echo "unknown Kubernetes distribution $K8S_DISTRIB" >&2
+    exit 1
+    ;;
+esac
+
 cluster_dump() {
   if [ $? -ne 0 ]; then
-    k 1 cluster-info dump -A --output-directory cluster-dump/1
-    k 2 cluster-info dump -A --output-directory cluster-dump/2
+    for i in 1 2; do
+      k $i cluster-info dump -A --output-directory cluster-dump/$i
+    done
   fi
 }
 trap cluster_dump EXIT
 
+pids=()
+
 for i in 1 2; do
-  kind_setup $i
-  cert_manager_setup $i
-  admiralty_setup $i test/e2e/values.yaml
+  if [ $async = true ]; then
+    $create_cluster $i &
+    pids+=($!)
+  else
+    $create_cluster $i
+  fi
 done
 
-k 2 apply -f test/e2e/topologies/namespaced-burst/cluster2/source.yaml
-while ! k 2 get sa cluster1; do sleep 1; done
+for pid in "${pids[@]}"; do
+  wait $pid
+done
 
-SECRET_NAME=$(k 2 get serviceaccount cluster1 -o json | jq -r .secrets[0].name)
-TOKEN=$(k 2 get secret $SECRET_NAME -o json | jq -r .data.token | base64 --decode)
-KUBECONFIG=$(k 2 config view --minify --raw -o json | jq '.users[0].user={token:"'$TOKEN'"} | .contexts[0].context.namespace="default"')
-k 1 create secret generic c2 --from-literal=config="$KUBECONFIG" --dry-run -o yaml | k 1 apply -f -
+for i in 1 2; do
+  cert_manager_setup $i
+  REGISTRY=$registry admiralty_setup $i test/e2e/values.yaml
+done
 
-k 1 apply -f test/e2e/topologies/namespaced-burst/cluster1/targets.yaml
+for j in 1 2 3; do
+  admiralty_connect 1 $j
+done
 
 argo_setup_source 1
 argo_setup_target 2
@@ -68,8 +97,10 @@ webhook_ready 1 admiralty multicluster-scheduler-controller-manager multicluster
 
 argo_test 1 2
 follow_test 1 2
+#if [[ "$K8S_DISTRIB" != eks || "$K8S_VERSION" == "1.17" || "$K8S_VERSION" == "1.18" ]]; then
 logs_test 1 2
 exec_test 1 2
+#fi
 ingress_test 1 2
 virtual-node-labels_test 1 2
 no-rogue-finalizer_test
