@@ -76,10 +76,10 @@ values={[
       quay.io/jetstack/cert-manager-webhook:v0.16.1
       quay.io/jetstack/cert-manager-cainjector:v0.16.1
       # admiralty open source
-      quay.io/admiralty/multicluster-scheduler-agent:0.14.0
-      quay.io/admiralty/multicluster-scheduler-scheduler:0.14.0
-      quay.io/admiralty/multicluster-scheduler-remove-finalizers:0.14.0
-      quay.io/admiralty/multicluster-scheduler-restarter:0.14.0
+      quay.io/admiralty/multicluster-scheduler-agent:0.14.1
+      quay.io/admiralty/multicluster-scheduler-scheduler:0.14.1
+      quay.io/admiralty/multicluster-scheduler-remove-finalizers:0.14.1
+      quay.io/admiralty/multicluster-scheduler-restarter:0.14.1
     )
     for image in "${images[@]}"
     do
@@ -130,7 +130,7 @@ do
   helm install admiralty admiralty/multicluster-scheduler \
     --kube-context kind-$CLUSTER_NAME \
     --namespace admiralty \
-    --version 0.14.0 \
+    --version 0.14.1 \
     --wait --debug
   # --wait to ensure release is ready before next steps
   # --debug to show progress, for lack of a better way,

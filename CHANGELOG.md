@@ -20,6 +20,13 @@
 
 -->
 
+## v0.14.1
+
+### Bugfixes
+
+- 88f12af start VK server asynchronously and time out if CSR is not signed after 30s, instead of blocking before controllers could start: fixes Admiralty on EKS 1.19+, but with remote logs/exec disabled, until we upgrade dependencies to use certificates.k8s.io/v1, cf. #120
+- 9af2bab add resource quota in release namespace for system-cluster-critical priority class: 0.14.0 added `priorityClassName: system-cluster-critical` to Admiralty pod to control evictions, but GKE and possibly other distributions limit its consumption by default outside the kube-system namespace; a ResourceQuota fixes that (#124)
+
 ## v0.14.0
 
 ### New Features

@@ -29,6 +29,6 @@ custom_edit_url: https://github.com/admiraltyio/admiralty/edit/master/docs/opera
     kubectl create namespace admiralty
     helm install admiralty admiralty/multicluster-scheduler \
         --namespace admiralty \
-        --version 0.14.0 \
+        --version 0.14.1 \
         --wait
     ```
