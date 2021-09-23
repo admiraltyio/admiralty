@@ -37,9 +37,6 @@ argo_setup_once() {
     curl -Lo argo "https://github.com/argoproj/argo-workflows/releases/download/v$argo_version/argo-$os-$arch"
     chmod +x argo
   fi
-
-  # to speed up container creations (loaded by kind in argo_setup_source and argo_setup_target)
-  docker pull "$argo_img" # may already be on host
 }
 
 argo_setup_source() {
@@ -56,18 +53,12 @@ argo_setup_source() {
   k "$i" delete pod --all -n argo # reload config map
 
   k "$i" apply -f examples/argo-workflows/_service-account.yaml
-
-  # speed up container creations
-  kind load docker-image "$argo_img" --name "cluster$i"
 }
 
 argo_setup_target() {
   i=$1
 
   k "$i" apply -f examples/argo-workflows/_service-account.yaml
-
-  # speed up container creations
-  kind load docker-image "$argo_img" --name "cluster$i"
 }
 
 argo_test() {

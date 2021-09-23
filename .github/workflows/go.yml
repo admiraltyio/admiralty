@@ -49,9 +49,11 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     continue-on-error: ${{ matrix.experimental }}
+    environment: ${{ (matrix.k8s_distrib == 'eks' && 'EKS') || null }}
     strategy:
       fail-fast: false
       matrix:
+        k8s_distrib: ${{ fromJSON((github.event_name == 'push' || github.event.pull_request.head.repo.owner.login == 'admiraltyio') && '[ "kind", "eks" ]' || '[ "kind" ]') }}
         k8s_version: [ "1.17", "1.18", "1.19", "1.20", "1.21" ]
         experimental: [ false ]
         # workflow succeeds even if experimental job fails,
@@ -83,8 +85,21 @@ jobs:
       - name: Install kubectl, helm, kind
         run: ./test/e2e/install_dependencies.sh
 
+      - name: Configure AWS credentials
+        if: matrix.k8s_distrib == 'eks'
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-west-2
+
+      - name: Login to Amazon ECR
+        if: matrix.k8s_distrib == 'eks'
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+
       - name: End-to-end test
-        run: VERSION=$GITHUB_SHA K8S_VERSION=${{ matrix.k8s_version }} ./test/e2e/e2e.sh
+        run: VERSION=$GITHUB_SHA K8S_VERSION=${{ matrix.k8s_version }} K8S_DISTRIB=${{ matrix.k8s_distrib }} ./test/e2e/e2e.sh
 
       - name: Archive cluster dump
         if: ${{ failure() }}
