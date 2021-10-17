@@ -246,7 +246,7 @@ func (r configMapReconciler) shouldFollow(namespace string, name string) bool {
 	utilruntime.Must(err)
 	for _, obj := range objs {
 		proxyPod := obj.(*corev1.Pod)
-		if proxypod.IsScheduled(proxyPod) && proxypod.GetScheduledClusterName(proxyPod) == r.targetName {
+		if proxypod.GetScheduledClusterName(proxyPod) == r.targetName {
 			return true
 		}
 	}

@@ -192,7 +192,7 @@ func (c *reconciler) Handle(obj interface{}) (requeueAfter *time.Duration, err e
 		didSomething = true
 	}
 
-	if candidate != nil && proxypod.IsScheduled(proxyPod) && proxypod.GetScheduledClusterName(proxyPod) == c.targetName {
+	if candidate != nil && proxypod.GetScheduledClusterName(proxyPod) == c.targetName {
 		delegate := candidate
 
 		mcProxyPodAnnotations, otherProxyPodAnnotations := common.SplitLabelsOrAnnotations(proxyPod.Annotations)

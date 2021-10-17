@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 The Multicluster-Scheduler Authors.
+ * Copyright 2021 The Multicluster-Scheduler Authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -47,13 +47,6 @@ func GetSourcePod(proxyPod *corev1.Pod) (*corev1.Pod, error) {
 	return srcPod, nil
 }
 
-func IsScheduled(proxyPod *corev1.Pod) bool {
-	return proxyPod.Spec.NodeName != ""
-}
-
 func GetScheduledClusterName(proxyPod *corev1.Pod) string {
-	if !IsScheduled(proxyPod) {
-		return ""
-	}
 	return proxyPod.Spec.NodeName
 }
