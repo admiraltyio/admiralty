@@ -22,6 +22,7 @@ import (
 	"reflect"
 	"time"
 
+	agentconfig "admiralty.io/multicluster-scheduler/pkg/config/agent"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -39,7 +40,7 @@ import (
 const proxyPodByConfigMaps = "proxyPodByConfigMaps"
 
 type configMapReconciler struct {
-	targetName string
+	target agentconfig.Target
 
 	kubeclientset kubernetes.Interface
 	remoteClient  kubernetes.Interface
@@ -53,7 +54,7 @@ type configMapReconciler struct {
 }
 
 func NewConfigMapController(
-	targetName string,
+	target agentconfig.Target,
 
 	kubeclientset kubernetes.Interface,
 	remoteClient kubernetes.Interface,
@@ -64,7 +65,7 @@ func NewConfigMapController(
 	remoteConfigMapInformer coreinformers.ConfigMapInformer) *controller.Controller {
 
 	r := &configMapReconciler{
-		targetName: targetName,
+		target: target,
 
 		kubeclientset: kubeclientset,
 		remoteClient:  remoteClient,
@@ -169,15 +170,7 @@ func (r configMapReconciler) Handle(obj interface{}) (requeueAfter *time.Duratio
 
 	terminating := configMap.DeletionTimestamp != nil
 
-	// versions prior to v0.14.0 used to have a single finalizer per parent for all remote children
-	// that worked well for fan-out controllers, but there's now one controller per target
-	// in order to delete, we need to ensure no other target has children, using separate finalizers
-	// the old single finalizer should be deleted
-	if hasOldFinalizer, j := controller.HasFinalizer(configMap.Finalizers, common.CrossClusterGarbageCollectionFinalizer); hasOldFinalizer {
-		configMap, err = r.removeFinalizer(ctx, configMap, j)
-	}
-
-	hasFinalizer, j := controller.HasFinalizer(configMap.Finalizers, common.KeyPrefix+r.targetName)
+	hasFinalizer, j := controller.HasFinalizer(configMap.Finalizers, r.target.GetFinalizer())
 
 	shouldFollow := r.shouldFollow(namespace, name)
 
@@ -197,8 +190,7 @@ func (r configMapReconciler) Handle(obj interface{}) (requeueAfter *time.Duratio
 			if err := r.remoteClient.CoreV1().ConfigMaps(namespace).Delete(ctx, name, metav1.DeleteOptions{}); err != nil && !errors.IsNotFound(err) {
 				return nil, err
 			}
-		}
-		if hasFinalizer && remoteConfigMap != nil {
+		} else if hasFinalizer {
 			_, err = r.removeFinalizer(ctx, configMap, j)
 			if err != nil {
 				return nil, err
@@ -246,7 +238,7 @@ func (r configMapReconciler) shouldFollow(namespace string, name string) bool {
 	utilruntime.Must(err)
 	for _, obj := range objs {
 		proxyPod := obj.(*corev1.Pod)
-		if proxypod.GetScheduledClusterName(proxyPod) == r.targetName {
+		if proxypod.GetScheduledClusterName(proxyPod) == r.target.GetKey() {
 			return true
 		}
 	}
@@ -255,7 +247,7 @@ func (r configMapReconciler) shouldFollow(namespace string, name string) bool {
 
 func (r configMapReconciler) addFinalizer(ctx context.Context, configMap *corev1.ConfigMap) (*corev1.ConfigMap, error) {
 	configMapCopy := configMap.DeepCopy()
-	configMapCopy.Finalizers = append(configMapCopy.Finalizers, common.KeyPrefix+r.targetName)
+	configMapCopy.Finalizers = append(configMapCopy.Finalizers, r.target.GetFinalizer())
 	if configMapCopy.Labels == nil {
 		configMapCopy.Labels = map[string]string{}
 	}

@@ -20,6 +20,7 @@ import (
 	"context"
 	"log"
 
+	"admiralty.io/multicluster-scheduler/pkg/common"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -37,6 +38,14 @@ type Config struct {
 	Targets []Target
 }
 
+func (c Config) GetKnownFinalizers() []string {
+	var knownFinalizers []string
+	for _, target := range c.Targets {
+		knownFinalizers = append(knownFinalizers, target.GetFinalizer())
+	}
+	return knownFinalizers
+}
+
 type Target struct {
 	Name                 string
 	ClientConfig         *rest.Config
@@ -47,6 +56,10 @@ type Target struct {
 
 func (t Target) GetKey() string {
 	return name.FromParts(name.Long, []int{0}, []int{1}, "admiralty", t.Namespace, t.Name)
+}
+
+func (t Target) GetFinalizer() string {
+	return common.KeyPrefix + name.FromParts(name.Short, nil, []int{0}, t.Namespace, t.Name)
 }
 
 // until we watch targets at runtime, we can already load them from objects at startup

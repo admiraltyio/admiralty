@@ -23,6 +23,7 @@ import (
 	"strings"
 	"time"
 
+	agentconfig "admiralty.io/multicluster-scheduler/pkg/config/agent"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -40,7 +41,7 @@ import (
 )
 
 type reconciler struct {
-	targetName string
+	target agentconfig.Target
 
 	kubeclientset kubernetes.Interface
 	remoteClient  kubernetes.Interface
@@ -54,7 +55,7 @@ type reconciler struct {
 }
 
 func NewController(
-	targetName string,
+	target agentconfig.Target,
 
 	kubeclientset kubernetes.Interface,
 	remoteClient kubernetes.Interface,
@@ -66,7 +67,7 @@ func NewController(
 	remoteSvcInformer coreinformers.ServiceInformer) *controller.Controller {
 
 	r := &reconciler{
-		targetName: targetName,
+		target: target,
 
 		kubeclientset: kubeclientset,
 		remoteClient:  remoteClient,
@@ -126,15 +127,7 @@ func (r reconciler) Handle(obj interface{}) (requeueAfter *time.Duration, err er
 
 	terminating := svc.DeletionTimestamp != nil
 
-	hasFinalizer, j := controller.HasFinalizer(svc.Finalizers, common.KeyPrefix+r.targetName)
-
-	// versions prior to v0.14.0 used to have a single finalizer per parent for all remote children
-	// that worked well for fan-out controllers, but there's now one controller per target
-	// in order to delete, we need to ensure no other target has children, using separate finalizers
-	// the old single finalizer should be deleted
-	if hasOldFinalizer, j := controller.HasFinalizer(svc.Finalizers, common.CrossClusterGarbageCollectionFinalizer); hasOldFinalizer {
-		svc, err = r.removeFinalizer(ctx, svc, j)
-	}
+	hasFinalizer, j := controller.HasFinalizer(svc.Finalizers, r.target.GetFinalizer())
 
 	shouldFollow, originalSelector, err := r.shouldFollow(svc)
 	if err != nil {
@@ -156,8 +149,7 @@ func (r reconciler) Handle(obj interface{}) (requeueAfter *time.Duration, err er
 			if err := r.remoteClient.CoreV1().Services(namespace).Delete(ctx, name, metav1.DeleteOptions{}); err != nil && !errors.IsNotFound(err) {
 				return nil, err
 			}
-		}
-		if hasFinalizer && remoteSvc != nil {
+		} else if hasFinalizer {
 			if _, err = r.removeFinalizer(ctx, svc, j); err != nil {
 				return nil, err
 			}
@@ -266,7 +258,7 @@ func (r reconciler) shouldFollow(service *corev1.Service) (bool, string, error) 
 }
 
 func (r reconciler) addFinalizer(actualCopy *corev1.Service) {
-	actualCopy.Finalizers = append(actualCopy.Finalizers, common.KeyPrefix+r.targetName)
+	actualCopy.Finalizers = append(actualCopy.Finalizers, r.target.GetFinalizer())
 	if actualCopy.Labels == nil {
 		actualCopy.Labels = map[string]string{}
 	}
