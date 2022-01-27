@@ -6,8 +6,8 @@ thing you need to pay special attention to is how to create a kubeconfig secret 
 guide you how to create the kubeconfig secret when you use the Red Hat OpenShift on IBM Cloud service.
 
 ## Prerequisites
-- the [The Red Hat OpenShift on IBM Cloud service](https://www.ibm.com/cloud/openshift) 
-- the required [CLI tools](https://cloud.ibm.com/docs/openshift?topic=openshift-openshift-cli)( e.g., IBMCLOUD CLI and OpenShift CLI (oc) )
+- the [Red Hat OpenShift on IBM Cloud service](https://www.ibm.com/cloud/openshift) 
+- the required [CLI tools](https://cloud.ibm.com/docs/openshift?topic=openshift-openshift-cli) ( e.g., IBMCLOUD CLI and OpenShift CLI (oc) )
 
 ## Kubeconfig for Authentication
 You can follow this [link](https://cloud.ibm.com/docs/openshift?topic=openshift-access_cluster) to access your OpenShift cluster.
@@ -70,11 +70,13 @@ To get the certificate-authority-data, you can use the command below to get the 
 ```bash
 oc get cm trusted-ca-bundle -n openshift-authentication-operator -o yaml | grep -A 22 "DigiCert Global Root CA" | sed 's/^ *//g' | base64 -w0
 ```
-You may need to adjust the number, 22, in the above command. Make sure the last line you capture is the end of this certificate. You can use the output
+You may need to adjust the number, 22, in the above command. Make sure the last line you capture is the end of this certificate. You then use the output
 above for the certificate-authority-data field.
 
-You are now ready to create a kubeconfig secret for the target cluster.
+You are now ready to create a kubeconfig secret for the target cluster using the modified kubeconfig file.
 ```bash
 CONFIG=$(oc config view --minify  --raw --output json --kubeconfig ~/.kube/config)
 oc create secret generic <secret name> --from-literal=config="$CONFIG"
 ```
+## Summary
+In this tutorial, we learned how to create a kubeconfig secret for the Red Hat OpenShift cluster on IBM Cloud. You can follow the rest of the steps in the [quick start guide](https://admiralty.io/docs/quick_start). Admiralty is integrated and fuctioned in OpenShift clusters. Start exploring Admiralty on IBM Cloud today!
