@@ -79,4 +79,4 @@ CONFIG=$(oc config view --minify  --raw --output json --kubeconfig ~/.kube/confi
 oc create secret generic <secret name> --from-literal=config="$CONFIG"
 ```
 ## Summary
-In this tutorial, you've learned how to create a kubeconfig secret for the Red Hat OpenShift cluster on IBM Cloud. You can follow the rest of the steps in the [quick start guide](https://admiralty.io/docs/quick_start). So start exploring Admiralty on IBM Cloud today!
+In this tutorial, you've learned how to create a kubeconfig secret for the Red Hat OpenShift cluster on IBM Cloud. You can follow the rest of the steps in the [quick start guide](https://admiralty.io/docs/quick_start) to use Admiralty on OpenShift.
