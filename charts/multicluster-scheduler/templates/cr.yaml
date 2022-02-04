@@ -200,7 +200,6 @@ rules:
     resources:
       - podchaperons
       - podchaperons/finalizers
-      - sources
       - sources/finalizers
     verbs:
       - get
@@ -242,14 +241,7 @@ rules:
   - apiGroups: [""]
     resources: ["pods/finalizers"]
     verbs:
-      - get
-      - list
-      - watch
-      - create
       - update
-      - delete
-      - deletecollection
-      - patch
   - apiGroups: [""]
     resources: ["pods/log"]
     verbs: ["get"]
