@@ -23,6 +23,7 @@ import (
 	"strings"
 	"time"
 
+	agentconfig "admiralty.io/multicluster-scheduler/pkg/config/agent"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/api/networking/v1beta1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -43,7 +44,7 @@ import (
 const ingressByService = "ingressByService"
 
 type ingressReconciler struct {
-	targetName string
+	target agentconfig.Target
 
 	kubeclientset kubernetes.Interface
 	remoteClient  kubernetes.Interface
@@ -57,7 +58,7 @@ type ingressReconciler struct {
 }
 
 func NewIngressController(
-	targetName string,
+	target agentconfig.Target,
 
 	kubeclientset kubernetes.Interface,
 	remoteClient kubernetes.Interface,
@@ -68,7 +69,7 @@ func NewIngressController(
 	remoteIngressInformer networkinginformers.IngressInformer) *controller.Controller {
 
 	r := &ingressReconciler{
-		targetName: targetName,
+		target: target,
 
 		kubeclientset: kubeclientset,
 		remoteClient:  remoteClient,
@@ -150,15 +151,7 @@ func (r ingressReconciler) Handle(obj interface{}) (requeueAfter *time.Duration,
 
 	terminating := ingress.DeletionTimestamp != nil
 
-	hasFinalizer, j := controller.HasFinalizer(ingress.Finalizers, common.KeyPrefix+r.targetName)
-
-	// versions prior to v0.14.0 used to have a single finalizer per parent for all remote children
-	// that worked well for fan-out controllers, but there's now one controller per target
-	// in order to delete, we need to ensure no other target has children, using separate finalizers
-	// the old single finalizer should be deleted
-	if hasOldFinalizer, j := controller.HasFinalizer(ingress.Finalizers, common.CrossClusterGarbageCollectionFinalizer); hasOldFinalizer {
-		ingress, err = r.removeFinalizer(ctx, ingress, j)
-	}
+	hasFinalizer, j := controller.HasFinalizer(ingress.Finalizers, r.target.GetFinalizer())
 
 	shouldFollow := r.shouldFollow(ingress)
 
@@ -178,8 +171,7 @@ func (r ingressReconciler) Handle(obj interface{}) (requeueAfter *time.Duration,
 			if err := r.remoteClient.NetworkingV1beta1().Ingresses(namespace).Delete(ctx, name, metav1.DeleteOptions{}); err != nil && !errors.IsNotFound(err) {
 				return nil, err
 			}
-		}
-		if hasFinalizer && remoteIngress == nil {
+		} else if hasFinalizer {
 			if _, err = r.removeFinalizer(ctx, ingress, j); err != nil {
 				return nil, err
 			}
@@ -260,7 +252,7 @@ func (r ingressReconciler) shouldFollow(ingress *v1beta1.Ingress) bool {
 
 func (r ingressReconciler) addFinalizer(ctx context.Context, ingress *v1beta1.Ingress) (*v1beta1.Ingress, error) {
 	ingressCopy := ingress.DeepCopy()
-	ingressCopy.Finalizers = append(ingressCopy.Finalizers, common.KeyPrefix+r.targetName)
+	ingressCopy.Finalizers = append(ingressCopy.Finalizers, r.target.GetFinalizer())
 	if ingressCopy.Labels == nil {
 		ingressCopy.Labels = map[string]string{}
 	}

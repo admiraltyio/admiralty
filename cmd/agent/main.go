@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"time"
 
+	"admiralty.io/multicluster-scheduler/pkg/controllers/cleanup"
 	"admiralty.io/multicluster-scheduler/pkg/leaderelection"
 	"admiralty.io/multicluster-service-account/pkg/config"
 	"github.com/pkg/errors"
@@ -79,7 +80,7 @@ func main() {
 	k, err := kubernetes.NewForConfig(cfg)
 	utilruntime.Must(err)
 
-	startWebhook(stopCh, cfg)
+	startWebhook(stopCh, cfg, agentCfg)
 	go startVirtualKubeletServers(ctx, agentCfg, k)
 
 	if o.leaderElect {
@@ -130,7 +131,6 @@ func startOldStyleControllers(
 		customInformerFactory := informers.NewSharedInformerFactoryWithOptions(customClient, time.Second*30, informers.WithNamespace(target.Namespace))
 		factories = append(factories, customInformerFactory)
 
-		targetName := target.GetKey()
 		var targetCustomClient versioned.Interface
 		var targetPodChaperonInformer v1alpha1.PodChaperonInformer
 		var targetClusterSummaryInformer v1alpha1.ClusterSummaryInformer
@@ -156,7 +156,7 @@ func startOldStyleControllers(
 			controllers = append(
 				controllers,
 				follow.NewConfigMapController(
-					targetName,
+					target,
 					k,
 					targetKubeClient,
 					kubeInformerFactory.Core().V1().Pods(),
@@ -164,7 +164,7 @@ func startOldStyleControllers(
 					targetKubeInformerFactory.Core().V1().ConfigMaps(),
 				),
 				service.NewController(
-					targetName,
+					target,
 					k,
 					targetKubeClient,
 					kubeInformerFactory.Core().V1().Endpoints(),
@@ -173,7 +173,7 @@ func startOldStyleControllers(
 					targetKubeInformerFactory.Core().V1().Services(),
 				),
 				follow.NewSecretController(
-					targetName,
+					target,
 					k,
 					targetKubeClient,
 					kubeInformerFactory.Core().V1().Pods(),
@@ -181,7 +181,7 @@ func startOldStyleControllers(
 					targetKubeInformerFactory.Core().V1().Secrets(),
 				),
 				ingress.NewIngressController(
-					targetName,
+					target,
 					k,
 					targetKubeClient,
 					kubeInformerFactory.Core().V1().Services(),
@@ -193,24 +193,23 @@ func startOldStyleControllers(
 		controllers = append(
 			controllers,
 			feedback.NewController(
-				targetName,
+				target,
 				k,
 				targetCustomClient,
 				kubeInformerFactory.Core().V1().Pods(),
 				targetPodChaperonInformer,
 			),
 			resources.NewUpstreamController(
-				targetName,
+				target.GetKey(),
 				k,
 				kubeInformerFactory.Core().V1().Nodes(),
 				targetClusterSummaryInformer,
-				nodeStatusUpdaters[targetName],
+				nodeStatusUpdaters[target.GetKey()],
 				target.ExcludedLabelsRegexp,
 			),
 		)
 	}
-
-	factories, controllers = addClusterScopedFactoriesAndControllers(ctx, k, customClient, factories, controllers, err)
+	factories, controllers = addClusterScopedFactoriesAndControllers(ctx, agentCfg, k, customClient, factories, controllers)
 
 	for _, f := range factories {
 		f.Start(stopCh)
@@ -222,7 +221,14 @@ func startOldStyleControllers(
 	}
 }
 
-func addClusterScopedFactoriesAndControllers(ctx context.Context, k *kubernetes.Clientset, customClient *clientset.Clientset, factories []startable, controllers []runnable, err error) ([]startable, []runnable) {
+func addClusterScopedFactoriesAndControllers(
+	ctx context.Context,
+	agentCfg agentconfig.Config,
+	k *kubernetes.Clientset,
+	customClient *clientset.Clientset,
+	factories []startable,
+	controllers []runnable,
+) ([]startable, []runnable) {
 	kubeInformerFactory := kubeinformers.NewSharedInformerFactory(k, time.Second*30)
 	factories = append(factories, kubeInformerFactory)
 	customInformerFactory := informers.NewSharedInformerFactory(customClient, time.Second*30)
@@ -240,11 +246,20 @@ func addClusterScopedFactoriesAndControllers(ctx context.Context, k *kubernetes.
 			customClient,
 			kubeInformerFactory.Core().V1().Nodes(),
 		),
+		cleanup.NewController(
+			k,
+			kubeInformerFactory.Core().V1().Pods(),
+			kubeInformerFactory.Core().V1().Services(),
+			kubeInformerFactory.Networking().V1beta1().Ingresses(),
+			kubeInformerFactory.Core().V1().ConfigMaps(),
+			kubeInformerFactory.Core().V1().Secrets(),
+			agentCfg.GetKnownFinalizers(),
+		),
 	)
 
 	// HACK: indirect feature gate, disable source controller if clustersources cannot be listed (e.g., not allowed)
 	srcCtrlEnabled := true
-	_, err = customClient.MulticlusterV1alpha1().ClusterSources().List(ctx, metav1.ListOptions{})
+	_, err := customClient.MulticlusterV1alpha1().ClusterSources().List(ctx, metav1.ListOptions{})
 	if err != nil {
 		utilruntime.HandleError(fmt.Errorf("cannot list clustersources, disabling source controller: %s", err))
 		srcCtrlEnabled = false
@@ -262,7 +277,7 @@ func addClusterScopedFactoriesAndControllers(ctx context.Context, k *kubernetes.
 	return factories, controllers
 }
 
-func startWebhook(stopCh <-chan struct{}, cfg *rest.Config) {
+func startWebhook(stopCh <-chan struct{}, cfg *rest.Config, agentCfg agentconfig.Config) {
 	webhookMgr, err := manager.New(cfg, manager.Options{
 		Port:               9443,
 		CertDir:            "/tmp/k8s-webhook-server/serving-certs",
@@ -271,7 +286,7 @@ func startWebhook(stopCh <-chan struct{}, cfg *rest.Config) {
 	utilruntime.Must(err)
 
 	hookServer := webhookMgr.GetWebhookServer()
-	hookServer.Register("/mutate-v1-pod", &webhook.Admission{Handler: &proxypod.Handler{}})
+	hookServer.Register("/mutate-v1-pod", &webhook.Admission{Handler: proxypod.NewHandler(agentCfg.GetKnownFinalizers())})
 
 	go func() {
 		utilruntime.Must(webhookMgr.Start(stopCh))

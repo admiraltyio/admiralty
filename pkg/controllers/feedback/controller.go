@@ -22,6 +22,7 @@ import (
 	"reflect"
 	"time"
 
+	"admiralty.io/multicluster-scheduler/pkg/config/agent"
 	"github.com/go-test/deep"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -60,7 +61,7 @@ const (
 )
 
 type reconciler struct {
-	targetName string
+	target agent.Target
 
 	kubeclientset   kubernetes.Interface
 	customclientset clientset.Interface
@@ -71,9 +72,9 @@ type reconciler struct {
 	recorder record.EventRecorder
 }
 
-// NewController returns a new chaperon controller
+// NewController returns a new feedback controller
 func NewController(
-	targetName string,
+	target agent.Target,
 	kubeclientset kubernetes.Interface,
 	customclientset clientset.Interface,
 	podInformer coreinformers.PodInformer,
@@ -87,7 +88,7 @@ func NewController(
 	recorder := eventBroadcaster.NewRecorder(scheme.Scheme, corev1.EventSource{Component: controllerAgentName})
 
 	r := &reconciler{
-		targetName: targetName,
+		target: target,
 
 		kubeclientset:   kubeclientset,
 		customclientset: customclientset,
@@ -114,22 +115,15 @@ func NewController(
 	return c
 }
 
-// syncHandler compares the actual state with the desired, and attempts to
-// converge the two. It then updates the Status block of the proxy pod resource
-// with the current status of the resource.
 func (c *reconciler) Handle(obj interface{}) (requeueAfter *time.Duration, err error) {
 	ctx := context.Background()
 
-	// Convert the namespace/name string into a distinct namespace and name
 	key := obj.(string)
 	namespace, name, err := cache.SplitMetaNamespaceKey(key)
 	utilruntime.Must(err)
 
-	// Get the proxy pod resource with this namespace/name
 	proxyPod, err := c.podsLister.Pods(namespace).Get(name)
 	if err != nil {
-		// The proxy pod resource may no longer exist, in which case we stop
-		// processing.
 		if errors.IsNotFound(err) {
 			utilruntime.HandleError(fmt.Errorf("proxy pod '%s' in work queue no longer exists", key))
 			return nil, nil
@@ -140,7 +134,7 @@ func (c *reconciler) Handle(obj interface{}) (requeueAfter *time.Duration, err e
 
 	proxyPodTerminating := proxyPod.DeletionTimestamp != nil
 
-	proxyPodHasFinalizer, j := controller.HasFinalizer(proxyPod.Finalizers, common.KeyPrefix+c.targetName)
+	proxyPodHasFinalizer, j := controller.HasFinalizer(proxyPod.Finalizers, c.target.GetFinalizer())
 
 	var candidate *multiclusterv1alpha1.PodChaperon
 	l, err := c.podChaperonsLister.PodChaperons(namespace).List(labels.SelectorFromSet(map[string]string{common.LabelKeyParentUID: string(proxyPod.UID)}))
@@ -156,43 +150,22 @@ func (c *reconciler) Handle(obj interface{}) (requeueAfter *time.Duration, err e
 
 	didSomething := false
 
-	// proxy pods have a global finalizer set at admission before any delegate is created
-	// because the proxy scheduler can't update pods without confusing its cache
-	// we add target specific
-	if hasOldFinalizer, j := controller.HasFinalizer(proxyPod.Finalizers, common.CrossClusterGarbageCollectionFinalizer); hasOldFinalizer {
-		proxyPod, err = c.removeFinalizer(ctx, proxyPod, j)
-	}
-
-	// TODO GC candidates of pods that were deleted before finalizers could be added
-	// proxy-scheduler cannot add finalizers for candidates before their creations
-	// because that would confuse its cache (requeueing pods for scheduling)
-	// in general, we need proper GC instead of finalizers for follow controllers too,
-	// to handle the loss of targets
-
-	if proxyPodTerminating {
+	virtualNodeName := proxypod.GetScheduledClusterName(proxyPod)
+	if proxyPodTerminating || virtualNodeName != "" && virtualNodeName != c.target.GetKey() {
 		if candidate != nil {
 			if err := c.customclientset.MulticlusterV1alpha1().PodChaperons(namespace).Delete(ctx, candidate.Name, metav1.DeleteOptions{}); err != nil && !errors.IsNotFound(err) {
 				return nil, err
 			}
 			didSomething = true
-		}
-		if candidate == nil && proxyPodHasFinalizer {
+		} else if proxyPodHasFinalizer {
 			if proxyPod, err = c.removeFinalizer(ctx, proxyPod, j); err != nil {
 				return nil, err
 			}
 			didSomething = true
 		}
-	} else if !proxyPodHasFinalizer {
-		podCopy := proxyPod.DeepCopy()
-		podCopy.Finalizers = append(podCopy.Finalizers, common.KeyPrefix+c.targetName)
-		var err error
-		if proxyPod, err = c.kubeclientset.CoreV1().Pods(namespace).Update(ctx, podCopy, metav1.UpdateOptions{}); err != nil {
-			return nil, err
-		}
-		didSomething = true
 	}
 
-	if candidate != nil && proxypod.IsScheduled(proxyPod) && proxypod.GetScheduledClusterName(proxyPod) == c.targetName {
+	if candidate != nil && virtualNodeName == c.target.GetKey() {
 		delegate := candidate
 
 		mcProxyPodAnnotations, otherProxyPodAnnotations := common.SplitLabelsOrAnnotations(proxyPod.Annotations)

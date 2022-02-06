@@ -54,6 +54,7 @@ var testCases = map[string]struct {
 				Labels: map[string]string{
 					common.LabelKeyHasFinalizer: "true",
 				},
+				Finalizers: knownFinalizers,
 			},
 			Spec: corev1.PodSpec{
 				NodeSelector: map[string]string{
@@ -113,7 +114,8 @@ var testCases = map[string]struct {
 					common.AnnotationKeySourcePodManifest: "HACK", // yaml serialization computed in test code
 					"k1":                                  "v1",
 				},
-				Labels: map[string]string{"k2": "v2", common.LabelKeyHasFinalizer: "true"},
+				Labels:     map[string]string{"k2": "v2", common.LabelKeyHasFinalizer: "true"},
+				Finalizers: knownFinalizers,
 			},
 			Spec: corev1.PodSpec{
 				NodeSelector: map[string]string{
@@ -137,6 +139,8 @@ var testCases = map[string]struct {
 	},
 }
 
+var knownFinalizers = []string{common.KeyPrefix + "a", common.KeyPrefix + "b"}
+
 func TestMutate(t *testing.T) {
 	for k, v := range testCases {
 		podManifest, err := yaml.Marshal(v.pod)
@@ -146,7 +150,7 @@ func TestMutate(t *testing.T) {
 		if k != "other pod" {
 			v.mutatedPod.Annotations[common.AnnotationKeySourcePodManifest] = string(podManifest)
 		}
-		m := mutator{}
+		m := mutator{knownFinalizers: knownFinalizers}
 		mutatedPod := v.pod.DeepCopy()
 		if err := m.mutate(mutatedPod); err != nil {
 			t.Errorf("%s failed: %v", k, err)

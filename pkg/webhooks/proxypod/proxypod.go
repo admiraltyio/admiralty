@@ -19,6 +19,7 @@ package proxypod // import "admiralty.io/multicluster-scheduler/pkg/webhooks/pro
 import (
 	"context"
 	"net/http"
+	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/json"
@@ -34,6 +35,10 @@ type Handler struct {
 	decoder *admission.Decoder
 	client  client.Client
 	mutator mutator
+}
+
+func NewHandler(knownFinalizers []string) *Handler {
+	return &Handler{mutator: mutator{knownFinalizers: knownFinalizers}}
 }
 
 func (h *Handler) Handle(_ context.Context, req admission.Request) admission.Response {
@@ -60,6 +65,7 @@ func (h *Handler) Handle(_ context.Context, req admission.Request) admission.Res
 }
 
 type mutator struct {
+	knownFinalizers []string
 }
 
 func (m mutator) mutate(pod *corev1.Pod) error {
@@ -147,6 +153,17 @@ func (m mutator) mutate(pod *corev1.Pod) error {
 	// with a finalizer until its delegate is fully deleted
 	var grace int64 = 0
 	pod.Spec.TerminationGracePeriodSeconds = &grace
+
+	var finalizers []string
+	for _, f := range pod.Finalizers {
+		if !strings.HasPrefix(f, common.KeyPrefix) {
+			finalizers = append(finalizers, f)
+		}
+	}
+	for _, f := range m.knownFinalizers {
+		finalizers = append(finalizers, f)
+	}
+	pod.Finalizers = finalizers
 
 	// add label for post-delete hook to remove finalizers
 	if pod.Labels == nil {
