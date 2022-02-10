@@ -199,8 +199,6 @@ rules:
       - multicluster.admiralty.io
     resources:
       - podchaperons
-      - podchaperons/finalizers
-      - sources/finalizers
     verbs:
       - get
       - list
@@ -210,6 +208,13 @@ rules:
       - delete
       - deletecollection
       - patch
+  - apiGroups:
+      - multicluster.admiralty.io
+    resources:
+      - podchaperons/finalizers
+      - sources/finalizers
+    verbs:
+      - update
   - apiGroups:
       - ""
     resources:
