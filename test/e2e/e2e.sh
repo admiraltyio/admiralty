@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Copyright 2021 The Multicluster-Scheduler Authors.
+# Copyright 2022 The Multicluster-Scheduler Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -27,6 +27,7 @@ source test/e2e/logs/test.sh
 source test/e2e/exec/test.sh
 source test/e2e/ingress/test.sh
 source test/e2e/virtual-node-labels/test.sh
+source test/e2e/cleanup/test.sh
 source test/e2e/webhook_ready.sh
 source test/e2e/no-rogue-finalizer/test.sh
 
@@ -72,6 +73,8 @@ logs_test 1 2
 exec_test 1 2
 ingress_test 1 2
 virtual-node-labels_test 1 2
+cleanup_test 1
+
 no-rogue-finalizer_test
 
 echo "ALL SUCCEEDED"

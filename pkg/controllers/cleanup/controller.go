@@ -25,7 +25,6 @@ import (
 	"admiralty.io/multicluster-scheduler/pkg/common"
 	"admiralty.io/multicluster-scheduler/pkg/controller"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	coreinformers "k8s.io/client-go/informers/core/v1"
 	networkinginformers "k8s.io/client-go/informers/networking/v1beta1"
@@ -79,21 +78,22 @@ func NewController(
 		secretInformer.Informer().HasSynced,
 	)
 
-	enqueue := func(o interface{}) {
-		m := o.(metav1.Object)
-		r := o.(runtime.Object)
-		c.EnqueueKey(key{
-			kind:      r.GetObjectKind().GroupVersionKind().Kind,
-			namespace: m.GetNamespace(),
-			name:      m.GetName(),
-		})
+	enqueue := func(kind string) func(o interface{}) {
+		return func(o interface{}) {
+			m := o.(metav1.Object)
+			c.EnqueueKey(key{
+				kind:      kind,
+				namespace: m.GetNamespace(),
+				name:      m.GetName(),
+			})
+		}
 	}
 
-	podInformer.Informer().AddEventHandler(controller.HandleAddUpdateWith(enqueue))
-	serviceInformer.Informer().AddEventHandler(controller.HandleAddUpdateWith(enqueue))
-	ingressInformer.Informer().AddEventHandler(controller.HandleAddUpdateWith(enqueue))
-	configMapInformer.Informer().AddEventHandler(controller.HandleAddUpdateWith(enqueue))
-	secretInformer.Informer().AddEventHandler(controller.HandleAddUpdateWith(enqueue))
+	podInformer.Informer().AddEventHandler(controller.HandleAddUpdateWith(enqueue("Pod")))
+	serviceInformer.Informer().AddEventHandler(controller.HandleAddUpdateWith(enqueue("Service")))
+	ingressInformer.Informer().AddEventHandler(controller.HandleAddUpdateWith(enqueue("Ingress")))
+	configMapInformer.Informer().AddEventHandler(controller.HandleAddUpdateWith(enqueue("ConfigMap")))
+	secretInformer.Informer().AddEventHandler(controller.HandleAddUpdateWith(enqueue("Secret")))
 
 	return c
 }
@@ -134,22 +134,24 @@ func (r reconciler) Handle(k interface{}) (requeueAfter *time.Duration, err erro
 		}
 	}
 
-	switch t.kind {
-	case "Pod":
-		o, err = r.kubeClient.CoreV1().Pods(t.namespace).Patch(ctx, t.name, types.StrategicMergePatchType, []byte(patch(unknownFinalizers)), metav1.PatchOptions{})
-	case "Service":
-		o, err = r.kubeClient.CoreV1().Services(t.namespace).Patch(ctx, t.name, types.StrategicMergePatchType, []byte(patch(unknownFinalizers)), metav1.PatchOptions{})
-	case "Ingress":
-		o, err = r.kubeClient.NetworkingV1beta1().Ingresses(t.namespace).Patch(ctx, t.name, types.StrategicMergePatchType, []byte(patch(unknownFinalizers)), metav1.PatchOptions{})
-	case "ConfigMap":
-		o, err = r.kubeClient.CoreV1().ConfigMaps(t.namespace).Patch(ctx, t.name, types.StrategicMergePatchType, []byte(patch(unknownFinalizers)), metav1.PatchOptions{})
-	case "Secret":
-		o, err = r.kubeClient.CoreV1().Secrets(t.namespace).Patch(ctx, t.name, types.StrategicMergePatchType, []byte(patch(unknownFinalizers)), metav1.PatchOptions{})
-	default:
-		err = fmt.Errorf("unknown key kind %s", t.kind)
-	}
-	if err != nil {
-		return nil, err
+	if len(unknownFinalizers) > 0 {
+		switch t.kind {
+		case "Pod":
+			o, err = r.kubeClient.CoreV1().Pods(t.namespace).Patch(ctx, t.name, types.StrategicMergePatchType, []byte(patch(unknownFinalizers)), metav1.PatchOptions{})
+		case "Service":
+			o, err = r.kubeClient.CoreV1().Services(t.namespace).Patch(ctx, t.name, types.StrategicMergePatchType, []byte(patch(unknownFinalizers)), metav1.PatchOptions{})
+		case "Ingress":
+			o, err = r.kubeClient.NetworkingV1beta1().Ingresses(t.namespace).Patch(ctx, t.name, types.StrategicMergePatchType, []byte(patch(unknownFinalizers)), metav1.PatchOptions{})
+		case "ConfigMap":
+			o, err = r.kubeClient.CoreV1().ConfigMaps(t.namespace).Patch(ctx, t.name, types.StrategicMergePatchType, []byte(patch(unknownFinalizers)), metav1.PatchOptions{})
+		case "Secret":
+			o, err = r.kubeClient.CoreV1().Secrets(t.namespace).Patch(ctx, t.name, types.StrategicMergePatchType, []byte(patch(unknownFinalizers)), metav1.PatchOptions{})
+		default:
+			err = fmt.Errorf("unknown key kind %s", t.kind)
+		}
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return nil, nil

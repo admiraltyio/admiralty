@@ -42,6 +42,7 @@ rules:
       - create
       - update
       - delete
+      - patch
   - apiGroups:
       - ""
     resources:
@@ -57,6 +58,7 @@ rules:
       - list
       - watch
       - update
+      - patch
   - apiGroups:
       - ""
     resources:
@@ -67,6 +69,7 @@ rules:
       - get
       - list
       - watch
+      - patch
   - apiGroups:
       - multicluster.admiralty.io
     resources:
@@ -99,6 +102,7 @@ rules:
       - list
       - watch
       - update
+      - patch
 {{- if .Values.sourceController.enabled }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
