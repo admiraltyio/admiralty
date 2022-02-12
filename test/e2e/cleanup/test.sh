@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 #
 # Copyright 2022 The Multicluster-Scheduler Authors.
 #
@@ -14,28 +15,36 @@
 # limitations under the License.
 #
 
-set -euo pipefail
+set -exuo pipefail
 
 source test/e2e/aliases.sh
 
-no-rogue-finalizer_test() {
-  # give the controllers 30s to clean up after other test objects have been deleted
-  export -f no-rogue-finalizer_test_iteration
-  timeout --foreground 5s bash -c "until no-rogue-finalizer_test_iteration; do sleep 1; done"
+cleanup_test() {
+  i=$1
+
+  k $i apply -f test/e2e/cleanup/test.yaml
+  k $i rollout status deploy pause
+  target="$(k $i get pod -l app=pause -o json | jq -er '.items[0].metadata.finalizers[0] | split("-") | .[1]')"
+  k $i delete target $target
+
+  export -f cleanup_test_iteration
+  timeout --foreground 60s bash -c "until cleanup_test_iteration $i; do sleep 1; done"
   # use --foreground to catch ctrl-c
   # https://unix.stackexchange.com/a/233685
+
+  k $i apply -f test/e2e/topologies/namespaced-burst/cluster$i/targets.yaml
+  k $i delete -f test/e2e/cleanup/test.yaml
 }
 
-no-rogue-finalizer_test_iteration() {
+cleanup_test_iteration() {
+  i=$1
+
+  set -exuo pipefail
   source test/e2e/aliases.sh
 
-  # check that we didn't add finalizers to uncontrolled resources
-  finalizer="multicluster.admiralty.io/"
-  for resource in pods configmaps secrets services ingresses; do
-    [ $(k 1 get $resource -A -o custom-columns=FINALIZERS:.metadata.finalizers | grep -c $finalizer) -eq 0 ]
-  done
+  [ $(k $i get pod -l app=pause -o json | jq -e '.items[0].metadata.finalizers | length') -eq 0 ]
 }
 
 if [[ "${BASH_SOURCE[0]:-}" == "${0}" ]]; then
-  no-rogue-finalizer_test "${@}"
+  cleanup_test "${@}"
 fi
