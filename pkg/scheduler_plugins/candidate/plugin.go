@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 The Multicluster-Scheduler Authors.
+ * Copyright 2022 The Multicluster-Scheduler Authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,7 +27,7 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog"
-	framework "k8s.io/kubernetes/pkg/scheduler/framework/v1alpha1"
+	"k8s.io/kubernetes/pkg/scheduler/framework"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 
 	"admiralty.io/multicluster-scheduler/pkg/common"
@@ -35,7 +35,7 @@ import (
 )
 
 type Plugin struct {
-	handle framework.FrameworkHandle
+	handle framework.Handle
 	client versioned.Interface
 }
 
@@ -74,6 +74,9 @@ func (pl *Plugin) Reserve(ctx context.Context, state *framework.CycleState, p *v
 	return nil
 }
 
+func (pl *Plugin) Unreserve(ctx context.Context, state *framework.CycleState, p *v1.Pod, nodeName string) {
+}
+
 const waitDuration = 30 * time.Second
 
 func (pl *Plugin) PreBind(ctx context.Context, state *framework.CycleState, p *v1.Pod, nodeName string) *framework.Status {
@@ -110,7 +113,7 @@ func (pl *Plugin) isAllowed(ctx context.Context, p *v1.Pod) (bool, error) {
 }
 
 // New initializes a new plugin and returns it.
-func New(_ *runtime.Unknown, h framework.FrameworkHandle) (framework.Plugin, error) {
+func New(_ runtime.Object, h framework.Handle) (framework.Plugin, error) {
 	cfg := config.GetConfigOrDie()
 	client, err := versioned.NewForConfig(cfg)
 	utilruntime.Must(err)

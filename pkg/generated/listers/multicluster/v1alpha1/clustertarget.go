@@ -26,10 +26,13 @@ import (
 )
 
 // ClusterTargetLister helps list ClusterTargets.
+// All objects returned here must be treated as read-only.
 type ClusterTargetLister interface {
 	// List lists all ClusterTargets in the indexer.
+	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1alpha1.ClusterTarget, err error)
 	// Get retrieves the ClusterTarget from the index for a given name.
+	// Objects returned here must be treated as read-only.
 	Get(name string) (*v1alpha1.ClusterTarget, error)
 	ClusterTargetListerExpansion
 }

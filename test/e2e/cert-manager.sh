@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Copyright 2021 The Multicluster-Scheduler Authors.
+# Copyright 2022 The Multicluster-Scheduler Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,7 +18,6 @@
 set -euo pipefail
 
 source test/e2e/aliases.sh
-source test/e2e/webhook_ready.sh
 
 cert_manager_setup_once() {
   helm repo add jetstack https://charts.jetstack.io
@@ -28,12 +27,10 @@ cert_manager_setup_once() {
 cert_manager_setup() {
   i=$1
 
-  k $i apply --validate=false -f https://github.com/jetstack/cert-manager/releases/download/v0.16.1/cert-manager.crds.yaml
-  if ! k $i get ns cert-manager; then
-    k $i create ns cert-manager
-  fi
-  h $i upgrade --install cert-manager jetstack/cert-manager -n cert-manager --version v0.16.1 --wait --debug --timeout=1m
-  #  webhook_ready $i cert-manager cert-manager-webhook cert-manager-webhook cert-manager-webhook-tls
+  h $i upgrade --install cert-manager jetstack/cert-manager \
+    --namespace cert-manager --create-namespace \
+    --version v1.7.1 --set installCRDs=true \
+    --wait --debug --timeout=1m
 }
 
 if [[ "${BASH_SOURCE[0]:-}" == "${0}" ]]; then

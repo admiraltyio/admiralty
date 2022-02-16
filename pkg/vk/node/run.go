@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 The Multicluster-Scheduler Authors.
+ * Copyright 2022 The Multicluster-Scheduler Authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,15 +25,15 @@ import (
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/kubernetes/typed/coordination/v1beta1"
+	v1 "k8s.io/client-go/kubernetes/typed/coordination/v1"
 )
 
 func Run(ctx context.Context, c Opts, client kubernetes.Interface, p node.NodeProvider) error {
 	ctx = log.WithLogger(ctx, log.G(ctx).WithFields(log.Fields{"node": c.NodeName}))
 
-	var leaseClient v1beta1.LeaseInterface
+	var leaseClient v1.LeaseInterface
 	if c.EnableNodeLease {
-		leaseClient = client.CoordinationV1beta1().Leases(corev1.NamespaceNodeLease)
+		leaseClient = client.CoordinationV1().Leases(corev1.NamespaceNodeLease)
 	}
 
 	n := NodeFromOpts(c)
@@ -41,7 +41,7 @@ func Run(ctx context.Context, c Opts, client kubernetes.Interface, p node.NodePr
 		p,
 		n,
 		client.CoreV1().Nodes(),
-		node.WithNodeEnableLeaseV1Beta1(leaseClient, nil),
+		node.WithNodeEnableLeaseV1(leaseClient, 0),
 		node.WithNodeStatusUpdateErrorHandler(func(ctx context.Context, err error) error {
 			if !k8serrors.IsNotFound(err) {
 				return err

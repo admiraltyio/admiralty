@@ -110,7 +110,7 @@ func (c *FakeClusterSources) UpdateStatus(ctx context.Context, clusterSource *v1
 // Delete takes name of the clusterSource and deletes it. Returns an error if one occurs.
 func (c *FakeClusterSources) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
-		Invokes(testing.NewRootDeleteAction(clustersourcesResource, name), &v1alpha1.ClusterSource{})
+		Invokes(testing.NewRootDeleteActionWithOptions(clustersourcesResource, name, opts), &v1alpha1.ClusterSource{})
 	return err
 }
 

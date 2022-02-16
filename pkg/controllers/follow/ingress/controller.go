@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 The Multicluster-Scheduler Authors.
+ * Copyright 2022 The Multicluster-Scheduler Authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,15 +25,15 @@ import (
 
 	agentconfig "admiralty.io/multicluster-scheduler/pkg/config/agent"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/api/networking/v1beta1"
+	"k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	coreinformers "k8s.io/client-go/informers/core/v1"
-	networkinginformers "k8s.io/client-go/informers/networking/v1beta1"
+	networkinginformers "k8s.io/client-go/informers/networking/v1"
 	"k8s.io/client-go/kubernetes"
 	corelisters "k8s.io/client-go/listers/core/v1"
-	networkinglisters "k8s.io/client-go/listers/networking/v1beta1"
+	networkinglisters "k8s.io/client-go/listers/networking/v1"
 	"k8s.io/client-go/tools/cache"
 
 	"admiralty.io/multicluster-scheduler/pkg/common"
@@ -117,14 +117,16 @@ func (r ingressReconciler) enqueueIngressForService(c *controller.Controller) fu
 }
 
 func indexIngressByService(obj interface{}) ([]string, error) {
-	ingress, ok := obj.(*v1beta1.Ingress)
+	ingress, ok := obj.(*v1.Ingress)
 	if !ok {
 		return nil, nil
 	}
 	var keys []string
 	for _, rule := range ingress.Spec.Rules {
 		for _, path := range rule.HTTP.Paths {
-			keys = append(keys, fmt.Sprintf("%s/%s", ingress.Namespace, path.Backend.ServiceName))
+			if path.Backend.Service != nil {
+				keys = append(keys, fmt.Sprintf("%s/%s", ingress.Namespace, path.Backend.Service.Name))
+			}
 		}
 	}
 	return keys, nil
@@ -168,7 +170,7 @@ func (r ingressReconciler) Handle(obj interface{}) (requeueAfter *time.Duration,
 
 	if terminating {
 		if remoteIngress != nil {
-			if err := r.remoteClient.NetworkingV1beta1().Ingresses(namespace).Delete(ctx, name, metav1.DeleteOptions{}); err != nil && !errors.IsNotFound(err) {
+			if err := r.remoteClient.NetworkingV1().Ingresses(namespace).Delete(ctx, name, metav1.DeleteOptions{}); err != nil && !errors.IsNotFound(err) {
 				return nil, err
 			}
 		} else if hasFinalizer {
@@ -185,12 +187,12 @@ func (r ingressReconciler) Handle(obj interface{}) (requeueAfter *time.Duration,
 
 		if remoteIngress == nil {
 			gold := makeRemoteIngress(ingress)
-			_, err := r.remoteClient.NetworkingV1beta1().Ingresses(namespace).Create(ctx, gold, metav1.CreateOptions{})
+			_, err := r.remoteClient.NetworkingV1().Ingresses(namespace).Create(ctx, gold, metav1.CreateOptions{})
 			if err != nil && !errors.IsAlreadyExists(err) {
 				return nil, err
 			}
 		} else if remoteIngressCopy, shouldUpdate := r.shouldUpdate(remoteIngress, ingress); shouldUpdate {
-			_, err := r.remoteClient.NetworkingV1beta1().Ingresses(namespace).Update(ctx, remoteIngressCopy, metav1.UpdateOptions{})
+			_, err := r.remoteClient.NetworkingV1().Ingresses(namespace).Update(ctx, remoteIngressCopy, metav1.UpdateOptions{})
 			if err != nil {
 				return nil, err
 			}
@@ -202,7 +204,7 @@ func (r ingressReconciler) Handle(obj interface{}) (requeueAfter *time.Duration,
 	return nil, nil
 }
 
-func (r ingressReconciler) shouldUpdate(remoteIngress *v1beta1.Ingress, ingress *v1beta1.Ingress) (*v1beta1.Ingress, bool) {
+func (r ingressReconciler) shouldUpdate(remoteIngress *v1.Ingress, ingress *v1.Ingress) (*v1.Ingress, bool) {
 	remoteIngressCopy := remoteIngress.DeepCopy()
 	shouldUpdate := false
 	if !reflect.DeepEqual(remoteIngress.Spec, ingress.Spec) {
@@ -232,25 +234,27 @@ func (r ingressReconciler) shouldUpdate(remoteIngress *v1beta1.Ingress, ingress 
 	return remoteIngressCopy, shouldUpdate
 }
 
-func (r ingressReconciler) shouldFollow(ingress *v1beta1.Ingress) bool {
+func (r ingressReconciler) shouldFollow(ingress *v1.Ingress) bool {
 	for _, rule := range ingress.Spec.Rules {
 		for _, path := range rule.HTTP.Paths {
-			svc, err := r.svcLister.Services(ingress.Namespace).Get(path.Backend.ServiceName)
-			if err != nil {
-				if !errors.IsNotFound(err) {
-					// TODO log
+			if path.Backend.Service != nil {
+				svc, err := r.svcLister.Services(ingress.Namespace).Get(path.Backend.Service.Name)
+				if err != nil {
+					if !errors.IsNotFound(err) {
+						// TODO log
+					}
+					continue
 				}
-				continue
-			}
-			if svc.Annotations[common.AnnotationKeyGlobal] == "true" {
-				return true
+				if svc.Annotations[common.AnnotationKeyGlobal] == "true" {
+					return true
+				}
 			}
 		}
 	}
 	return false
 }
 
-func (r ingressReconciler) addFinalizer(ctx context.Context, ingress *v1beta1.Ingress) (*v1beta1.Ingress, error) {
+func (r ingressReconciler) addFinalizer(ctx context.Context, ingress *v1.Ingress) (*v1.Ingress, error) {
 	ingressCopy := ingress.DeepCopy()
 	ingressCopy.Finalizers = append(ingressCopy.Finalizers, r.target.GetFinalizer())
 	if ingressCopy.Labels == nil {
@@ -261,17 +265,17 @@ func (r ingressReconciler) addFinalizer(ctx context.Context, ingress *v1beta1.In
 		ingressCopy.Annotations = map[string]string{}
 	}
 	ingressCopy.Annotations[common.AnnotationKeyGlobal] = "true"
-	return r.kubeclientset.NetworkingV1beta1().Ingresses(ingress.Namespace).Update(ctx, ingressCopy, metav1.UpdateOptions{})
+	return r.kubeclientset.NetworkingV1().Ingresses(ingress.Namespace).Update(ctx, ingressCopy, metav1.UpdateOptions{})
 }
 
-func (r ingressReconciler) removeFinalizer(ctx context.Context, ingress *v1beta1.Ingress, j int) (*v1beta1.Ingress, error) {
+func (r ingressReconciler) removeFinalizer(ctx context.Context, ingress *v1.Ingress, j int) (*v1.Ingress, error) {
 	ingressCopy := ingress.DeepCopy()
 	ingressCopy.Finalizers = append(ingressCopy.Finalizers[:j], ingressCopy.Finalizers[j+1:]...)
-	return r.kubeclientset.NetworkingV1beta1().Ingresses(ingress.Namespace).Update(ctx, ingressCopy, metav1.UpdateOptions{})
+	return r.kubeclientset.NetworkingV1().Ingresses(ingress.Namespace).Update(ctx, ingressCopy, metav1.UpdateOptions{})
 }
 
-func makeRemoteIngress(ingress *v1beta1.Ingress) *v1beta1.Ingress {
-	gold := &v1beta1.Ingress{}
+func makeRemoteIngress(ingress *v1.Ingress) *v1.Ingress {
+	gold := &v1.Ingress{}
 	gold.Name = ingress.Name
 	gold.Labels = make(map[string]string, len(ingress.Labels))
 	for k, v := range ingress.Labels {

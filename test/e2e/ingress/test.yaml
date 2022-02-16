@@ -74,7 +74,7 @@ spec:
   selector:
     app: follow-not
 ---
-apiVersion: networking.k8s.io/v1beta1
+apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: follow
@@ -84,11 +84,14 @@ spec:
       http:
         paths:
           - path: /*
+            pathType: Prefix
             backend:
-              serviceName: follow
-              servicePort: 80
+              service:
+                name: follow
+                port:
+                  number: 80
 ---
-apiVersion: networking.k8s.io/v1beta1
+apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: follow-not
@@ -98,6 +101,9 @@ spec:
       http:
         paths:
           - path: /*
+            pathType: Prefix
             backend:
-              serviceName: follow-not
-              servicePort: 80
+              service:
+                name: follow-not
+                port:
+                  number: 80

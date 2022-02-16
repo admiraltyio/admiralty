@@ -5,7 +5,7 @@ metadata:
   labels: {{ include "labels" . | nindent 4 }}
 data:
   proxy-scheduler-config: |
-    apiVersion: kubescheduler.config.k8s.io/v1alpha2
+    apiVersion: kubescheduler.config.k8s.io/v1beta3
     kind: KubeSchedulerConfiguration
     leaderElection:
       leaderElect: true
@@ -15,20 +15,11 @@ data:
     profiles:
       - schedulerName: admiralty-proxy
         plugins:
-          filter:
-            enabled:
-              - name: proxy
-          reserve:
-            enabled:
-              - name: proxy
-          preBind:
-            enabled:
-              - name: proxy
-          postBind:
+          multiPoint:
             enabled:
               - name: proxy
   candidate-scheduler-config: |
-    apiVersion: kubescheduler.config.k8s.io/v1alpha2
+    apiVersion: kubescheduler.config.k8s.io/v1beta3
     kind: KubeSchedulerConfiguration
     leaderElection:
       leaderElect: true
@@ -38,12 +29,6 @@ data:
     profiles:
       - schedulerName: admiralty-candidate
         plugins:
-          preFilter:
-            enabled:
-              - name: candidate
-          reserve:
-            enabled:
-              - name: candidate
-          preBind:
+          multiPoint:
             enabled:
               - name: candidate

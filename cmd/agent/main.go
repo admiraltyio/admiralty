@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 The Multicluster-Scheduler Authors.
+ * Copyright 2022 The Multicluster-Scheduler Authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -80,7 +80,7 @@ func main() {
 	k, err := kubernetes.NewForConfig(cfg)
 	utilruntime.Must(err)
 
-	startWebhook(stopCh, cfg, agentCfg)
+	startWebhook(ctx, cfg, agentCfg)
 	go startVirtualKubeletServers(ctx, agentCfg, k)
 
 	if o.leaderElect {
@@ -185,8 +185,8 @@ func startOldStyleControllers(
 					k,
 					targetKubeClient,
 					kubeInformerFactory.Core().V1().Services(),
-					kubeInformerFactory.Networking().V1beta1().Ingresses(),
-					targetKubeInformerFactory.Networking().V1beta1().Ingresses(),
+					kubeInformerFactory.Networking().V1().Ingresses(),
+					targetKubeInformerFactory.Networking().V1().Ingresses(),
 				),
 			)
 		}
@@ -250,7 +250,7 @@ func addClusterScopedFactoriesAndControllers(
 			k,
 			kubeInformerFactory.Core().V1().Pods(),
 			kubeInformerFactory.Core().V1().Services(),
-			kubeInformerFactory.Networking().V1beta1().Ingresses(),
+			kubeInformerFactory.Networking().V1().Ingresses(),
 			kubeInformerFactory.Core().V1().ConfigMaps(),
 			kubeInformerFactory.Core().V1().Secrets(),
 			agentCfg.GetKnownFinalizers(),
@@ -277,7 +277,7 @@ func addClusterScopedFactoriesAndControllers(
 	return factories, controllers
 }
 
-func startWebhook(stopCh <-chan struct{}, cfg *rest.Config, agentCfg agentconfig.Config) {
+func startWebhook(ctx context.Context, cfg *rest.Config, agentCfg agentconfig.Config) {
 	webhookMgr, err := manager.New(cfg, manager.Options{
 		Port:               9443,
 		CertDir:            "/tmp/k8s-webhook-server/serving-certs",
@@ -289,7 +289,7 @@ func startWebhook(stopCh <-chan struct{}, cfg *rest.Config, agentCfg agentconfig
 	hookServer.Register("/mutate-v1-pod", &webhook.Admission{Handler: proxypod.NewHandler(agentCfg.GetKnownFinalizers())})
 
 	go func() {
-		utilruntime.Must(webhookMgr.Start(stopCh))
+		utilruntime.Must(webhookMgr.Start(ctx))
 	}()
 }
 
@@ -321,7 +321,7 @@ func startVirtualKubeletServers(ctx context.Context, agentCfg agentconfig.Config
 
 	certPEM, keyPEM, err := csr.GetCertificateFromKubernetesAPIServer(ctx, k)
 	if err == wait.ErrWaitTimeout {
-		utilruntime.HandleError(fmt.Errorf("timed out waiting for virtual kubelet serving certificate to be signed, pod logs/exec won't be supported (known issue on EKS 1.19+: https://github.com/admiraltyio/admiralty/issues/120)"))
+		utilruntime.HandleError(fmt.Errorf("timed out waiting for virtual kubelet serving certificate to be signed, pod logs/exec won't be supported"))
 		return
 	}
 	utilruntime.Must(err) // likely RBAC issue

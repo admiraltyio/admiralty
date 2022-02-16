@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Copyright 2021 The Multicluster-Scheduler Authors.
+# Copyright 2022 The Multicluster-Scheduler Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -32,8 +32,9 @@ kind_images[1.15]="kindest/node:v1.15.12@sha256:b920920e1eda689d9936dfcf7332701e
 kind_images[1.14]="kindest/node:v1.14.10@sha256:f8a66ef82822ab4f7569e91a5bccaf27bceee135c1457c512e54de8c6f7219f8"
 # "known to work well" (k8s 1.22 wasn't released when kind 0.11.1 was released)
 kind_images[1.22]="kindest/node:v1.22.0@sha256:b8bda84bb3a190e6e028b1760d277454a72267a5454b57db34437c34a588d047"
+kind_images[1.23]="kindest/node:v1.23.0@sha256:49824ab1727c04e56a21a5d8372a402fcd32ea51ac96a2706a12af38934f81ac"
 
-K8S_VERSION="${K8S_VERSION:-"1.21"}"
+K8S_VERSION="${K8S_VERSION:-"1.23"}"
 
 kind_setup() {
   i=$1

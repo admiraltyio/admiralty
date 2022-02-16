@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 The Multicluster-Scheduler Authors.
+ * Copyright 2022 The Multicluster-Scheduler Authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,7 +29,8 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	"k8s.io/api/certificates/v1beta1"
+	v1 "k8s.io/api/certificates/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -81,23 +82,23 @@ func GetCertificateFromKubernetesAPIServer(ctx context.Context, k kubernetes.Int
 
 	csrPEM := pem.EncodeToMemory(&pem.Block{Bytes: csrDER, Type: "CERTIFICATE REQUEST"})
 
-	csrK8s := &v1beta1.CertificateSigningRequest{}
+	csrK8s := &v1.CertificateSigningRequest{}
 	csrK8s.GenerateName = "admiralty-"
-	csrK8s.Spec.Usages = []v1beta1.KeyUsage{v1beta1.UsageKeyEncipherment, v1beta1.UsageDigitalSignature, v1beta1.UsageServerAuth}
-	signerName := v1beta1.KubeletServingSignerName
-	csrK8s.Spec.SignerName = &signerName
+	csrK8s.Spec.Usages = []v1.KeyUsage{v1.UsageKeyEncipherment, v1.UsageDigitalSignature, v1.UsageServerAuth}
+	csrK8s.Spec.SignerName = v1.KubeletServingSignerName
 	csrK8s.Spec.Request = csrPEM
-	csrK8s, err = k.CertificatesV1beta1().CertificateSigningRequests().Create(ctx, csrK8s, metav1.CreateOptions{})
+	csrK8s, err = k.CertificatesV1().CertificateSigningRequests().Create(ctx, csrK8s, metav1.CreateOptions{})
 	if err != nil {
 		return nil, nil, err
 	}
 
-	csrK8s.Status.Conditions = append(csrK8s.Status.Conditions, v1beta1.CertificateSigningRequestCondition{
-		Type:    v1beta1.CertificateApproved,
+	csrK8s.Status.Conditions = append(csrK8s.Status.Conditions, v1.CertificateSigningRequestCondition{
+		Type:    v1.CertificateApproved,
 		Reason:  "self-approved",
 		Message: "self-approved",
+		Status:  corev1.ConditionTrue,
 	})
-	csrK8s, err = k.CertificatesV1beta1().CertificateSigningRequests().UpdateApproval(ctx, csrK8s, metav1.UpdateOptions{})
+	csrK8s, err = k.CertificatesV1().CertificateSigningRequests().UpdateApproval(ctx, csrK8s.Name, csrK8s, metav1.UpdateOptions{})
 	if err != nil {
 		return nil, nil, err
 	}
@@ -107,7 +108,7 @@ func GetCertificateFromKubernetesAPIServer(ctx context.Context, k kubernetes.Int
 	pollCtx, cancelPoll := context.WithTimeout(ctx, 30*time.Second)
 	defer cancelPoll()
 	err = wait.PollImmediateUntil(time.Second, func() (done bool, err error) {
-		csrK8s, err = k.CertificatesV1beta1().CertificateSigningRequests().Get(ctx, csrName, metav1.GetOptions{})
+		csrK8s, err = k.CertificatesV1().CertificateSigningRequests().Get(ctx, csrName, metav1.GetOptions{})
 		if err != nil {
 			// TODO log if retriable; fail otherwise
 			return false, nil

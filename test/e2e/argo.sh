@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Copyright 2021 The Multicluster-Scheduler Authors.
+# Copyright 2022 The Multicluster-Scheduler Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,8 +19,8 @@ set -euo pipefail
 
 source test/e2e/aliases.sh
 
-argo_version=2.8.2
-argo_manifest="https://raw.githubusercontent.com/argoproj/argo-workflows/v$argo_version/manifests/install.yaml"
+argo_version=3.1.9
+argo_manifest="https://github.com/argoproj/argo-workflows/releases/download/v$argo_version/install.yaml"
 argo_img="argoproj/argoexec:v$argo_version"
 
 argo_setup_once() {
@@ -34,7 +34,8 @@ argo_setup_once() {
     echo "argo already downloaded"
   else
     echo "downloading argo"
-    curl -Lo argo "https://github.com/argoproj/argo-workflows/releases/download/v$argo_version/argo-$os-$arch"
+    curl -Lo argo.gz "https://github.com/argoproj/argo-workflows/releases/download/v$argo_version/argo-$os-$arch.gz"
+    gunzip -f argo.gz
     chmod +x argo
   fi
 
