@@ -24,13 +24,14 @@ import (
 
 	"admiralty.io/multicluster-scheduler/pkg/common"
 	"admiralty.io/multicluster-scheduler/pkg/controller"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	coreinformers "k8s.io/client-go/informers/core/v1"
-	networkinginformers "k8s.io/client-go/informers/networking/v1beta1"
+	networkinginformers "k8s.io/client-go/informers/networking/v1"
 	"k8s.io/client-go/kubernetes"
 	corelisters "k8s.io/client-go/listers/core/v1"
-	networkinglisters "k8s.io/client-go/listers/networking/v1beta1"
+	networkinglisters "k8s.io/client-go/listers/networking/v1"
 )
 
 type reconciler struct {
@@ -124,7 +125,10 @@ func (r reconciler) Handle(k interface{}) (requeueAfter *time.Duration, err erro
 		err = fmt.Errorf("unknown key kind %s", t.kind)
 	}
 	if err != nil {
-		return nil, err
+		if errors.IsNotFound(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("cannot get %s: %v", t.kind, err)
 	}
 
 	var unknownFinalizers []string
@@ -141,7 +145,7 @@ func (r reconciler) Handle(k interface{}) (requeueAfter *time.Duration, err erro
 		case "Service":
 			o, err = r.kubeClient.CoreV1().Services(t.namespace).Patch(ctx, t.name, types.StrategicMergePatchType, []byte(patch(unknownFinalizers)), metav1.PatchOptions{})
 		case "Ingress":
-			o, err = r.kubeClient.NetworkingV1beta1().Ingresses(t.namespace).Patch(ctx, t.name, types.StrategicMergePatchType, []byte(patch(unknownFinalizers)), metav1.PatchOptions{})
+			o, err = r.kubeClient.NetworkingV1().Ingresses(t.namespace).Patch(ctx, t.name, types.StrategicMergePatchType, []byte(patch(unknownFinalizers)), metav1.PatchOptions{})
 		case "ConfigMap":
 			o, err = r.kubeClient.CoreV1().ConfigMaps(t.namespace).Patch(ctx, t.name, types.StrategicMergePatchType, []byte(patch(unknownFinalizers)), metav1.PatchOptions{})
 		case "Secret":
@@ -150,7 +154,7 @@ func (r reconciler) Handle(k interface{}) (requeueAfter *time.Duration, err erro
 			err = fmt.Errorf("unknown key kind %s", t.kind)
 		}
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("cannot patch %s: %v", t.kind, err)
 		}
 	}
 

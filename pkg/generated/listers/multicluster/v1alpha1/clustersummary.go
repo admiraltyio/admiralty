@@ -26,10 +26,13 @@ import (
 )
 
 // ClusterSummaryLister helps list ClusterSummaries.
+// All objects returned here must be treated as read-only.
 type ClusterSummaryLister interface {
 	// List lists all ClusterSummaries in the indexer.
+	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1alpha1.ClusterSummary, err error)
 	// Get retrieves the ClusterSummary from the index for a given name.
+	// Objects returned here must be treated as read-only.
 	Get(name string) (*v1alpha1.ClusterSummary, error)
 	ClusterSummaryListerExpansion
 }

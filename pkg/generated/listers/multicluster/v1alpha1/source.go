@@ -26,8 +26,10 @@ import (
 )
 
 // SourceLister helps list Sources.
+// All objects returned here must be treated as read-only.
 type SourceLister interface {
 	// List lists all Sources in the indexer.
+	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1alpha1.Source, err error)
 	// Sources returns an object that can list and get Sources.
 	Sources(namespace string) SourceNamespaceLister
@@ -58,10 +60,13 @@ func (s *sourceLister) Sources(namespace string) SourceNamespaceLister {
 }
 
 // SourceNamespaceLister helps list and get Sources.
+// All objects returned here must be treated as read-only.
 type SourceNamespaceLister interface {
 	// List lists all Sources in the indexer for a given namespace.
+	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1alpha1.Source, err error)
 	// Get retrieves the Source from the indexer for a given namespace and name.
+	// Objects returned here must be treated as read-only.
 	Get(name string) (*v1alpha1.Source, error)
 	SourceNamespaceListerExpansion
 }

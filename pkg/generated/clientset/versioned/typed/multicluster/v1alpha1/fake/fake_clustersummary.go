@@ -99,7 +99,7 @@ func (c *FakeClusterSummaries) Update(ctx context.Context, clusterSummary *v1alp
 // Delete takes name of the clusterSummary and deletes it. Returns an error if one occurs.
 func (c *FakeClusterSummaries) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
-		Invokes(testing.NewRootDeleteAction(clustersummariesResource, name), &v1alpha1.ClusterSummary{})
+		Invokes(testing.NewRootDeleteActionWithOptions(clustersummariesResource, name, opts), &v1alpha1.ClusterSummary{})
 	return err
 }
 

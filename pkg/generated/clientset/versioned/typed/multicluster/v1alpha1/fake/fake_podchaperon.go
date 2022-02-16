@@ -117,7 +117,7 @@ func (c *FakePodChaperons) UpdateStatus(ctx context.Context, podChaperon *v1alph
 // Delete takes name of the podChaperon and deletes it. Returns an error if one occurs.
 func (c *FakePodChaperons) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
 	_, err := c.Fake.
-		Invokes(testing.NewDeleteAction(podchaperonsResource, c.ns, name), &v1alpha1.PodChaperon{})
+		Invokes(testing.NewDeleteActionWithOptions(podchaperonsResource, c.ns, name, opts), &v1alpha1.PodChaperon{})
 
 	return err
 }

@@ -26,8 +26,10 @@ import (
 )
 
 // PodChaperonLister helps list PodChaperons.
+// All objects returned here must be treated as read-only.
 type PodChaperonLister interface {
 	// List lists all PodChaperons in the indexer.
+	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1alpha1.PodChaperon, err error)
 	// PodChaperons returns an object that can list and get PodChaperons.
 	PodChaperons(namespace string) PodChaperonNamespaceLister
@@ -58,10 +60,13 @@ func (s *podChaperonLister) PodChaperons(namespace string) PodChaperonNamespaceL
 }
 
 // PodChaperonNamespaceLister helps list and get PodChaperons.
+// All objects returned here must be treated as read-only.
 type PodChaperonNamespaceLister interface {
 	// List lists all PodChaperons in the indexer for a given namespace.
+	// Objects returned here must be treated as read-only.
 	List(selector labels.Selector) (ret []*v1alpha1.PodChaperon, err error)
 	// Get retrieves the PodChaperon from the indexer for a given namespace and name.
+	// Objects returned here must be treated as read-only.
 	Get(name string) (*v1alpha1.PodChaperon, error)
 	PodChaperonNamespaceListerExpansion
 }

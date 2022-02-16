@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 The Multicluster-Scheduler Authors.
+ * Copyright 2022 The Multicluster-Scheduler Authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,8 +29,7 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog"
-	framework "k8s.io/kubernetes/pkg/scheduler/framework/v1alpha1"
-	"k8s.io/kubernetes/pkg/scheduler/nodeinfo"
+	"k8s.io/kubernetes/pkg/scheduler/framework"
 
 	"admiralty.io/multicluster-scheduler/pkg/apis/multicluster/v1alpha1"
 	"admiralty.io/multicluster-scheduler/pkg/common"
@@ -40,7 +39,7 @@ import (
 )
 
 type Plugin struct {
-	handle  framework.FrameworkHandle
+	handle  framework.Handle
 	targets map[string]*versioned.Clientset
 
 	failedNodeNamesByPodUID map[types.UID]map[string]bool
@@ -49,7 +48,6 @@ type Plugin struct {
 
 var _ framework.FilterPlugin = &Plugin{}
 var _ framework.ReservePlugin = &Plugin{}
-var _ framework.UnreservePlugin = &Plugin{}
 var _ framework.PreBindPlugin = &Plugin{}
 var _ framework.PostBindPlugin = &Plugin{}
 
@@ -95,7 +93,7 @@ func (pl *Plugin) allowCandidate(ctx context.Context, c *v1alpha1.PodChaperon, c
 
 const filterWaitDuration = 30 * time.Second // TODO configure
 
-func (pl *Plugin) Filter(ctx context.Context, state *framework.CycleState, pod *v1.Pod, nodeInfo *nodeinfo.NodeInfo) *framework.Status {
+func (pl *Plugin) Filter(ctx context.Context, state *framework.CycleState, pod *v1.Pod, nodeInfo *framework.NodeInfo) *framework.Status {
 	if nodeInfo.Node().Labels[common.LabelAndTaintKeyVirtualKubeletProvider] != common.VirtualKubeletProviderName {
 		return framework.NewStatus(framework.UnschedulableAndUnresolvable, "")
 	}
@@ -276,7 +274,7 @@ func (pl *Plugin) PostBind(ctx context.Context, state *framework.CycleState, p *
 }
 
 // New initializes a new plugin and returns it.
-func New(args *runtime.Unknown, h framework.FrameworkHandle) (framework.Plugin, error) {
+func New(_ runtime.Object, h framework.Handle) (framework.Plugin, error) {
 	agentCfg := agentconfig.NewFromCRD(context.Background())
 	n := len(agentCfg.Targets)
 	clients := make(map[string]*versioned.Clientset, n)

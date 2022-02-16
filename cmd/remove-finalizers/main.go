@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 The Multicluster-Scheduler Authors.
+ * Copyright 2022 The Multicluster-Scheduler Authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -115,7 +115,7 @@ func (p patchAll) patchSecrets(ctx context.Context) {
 }
 
 func (p patchAll) patchIngresses(ctx context.Context) {
-	l, err := p.k.NetworkingV1beta1().Ingresses("").List(ctx, metav1.ListOptions{LabelSelector: common.LabelKeyHasFinalizer})
+	l, err := p.k.NetworkingV1().Ingresses("").List(ctx, metav1.ListOptions{LabelSelector: common.LabelKeyHasFinalizer})
 	utilruntime.Must(err)
 	for _, o := range l.Items {
 		var finalizers []string
@@ -124,7 +124,7 @@ func (p patchAll) patchIngresses(ctx context.Context) {
 				finalizers = append(finalizers, f)
 			}
 		}
-		_, err := p.k.NetworkingV1beta1().Ingresses(o.Namespace).Patch(ctx, o.Name, types.StrategicMergePatchType, []byte(patch(finalizers)), metav1.PatchOptions{})
+		_, err := p.k.NetworkingV1().Ingresses(o.Namespace).Patch(ctx, o.Name, types.StrategicMergePatchType, []byte(patch(finalizers)), metav1.PatchOptions{})
 		utilruntime.Must(err)
 	}
 }

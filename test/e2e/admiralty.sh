@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Copyright 2021 The Multicluster-Scheduler Authors.
+# Copyright 2022 The Multicluster-Scheduler Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -32,10 +32,7 @@ admiralty_setup() {
   kind load docker-image multicluster-scheduler-remove-finalizers:$VERSION-amd64 --name cluster$i
   kind load docker-image multicluster-scheduler-restarter:$VERSION-amd64 --name cluster$i
 
-  if ! k $i get ns admiralty; then
-    k $i create namespace admiralty
-  fi
-  h $i upgrade --install multicluster-scheduler charts/multicluster-scheduler -n admiralty -f $VALUES \
+  h $i upgrade --install multicluster-scheduler charts/multicluster-scheduler -n admiralty --create-namespace -f $VALUES \
     --set controllerManager.image.repository=multicluster-scheduler-agent \
     --set scheduler.image.repository=multicluster-scheduler-scheduler \
     --set postDeleteJob.image.repository=multicluster-scheduler-remove-finalizers \

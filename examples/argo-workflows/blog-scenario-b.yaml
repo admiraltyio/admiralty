@@ -22,14 +22,14 @@ spec:
   - name: sleep
     container:
       image: busybox
-      command: [sleep, 10]
+      command: [ sleep, "10" ]
   - name: sleep-remote
     inputs:
       parameters:
       - name: clustername
     container:
       image: busybox
-      command: [sleep, 10]
+      command: [ sleep, "10" ]
     metadata:
       annotations:
         multicluster.admiralty.io/elect: ""

@@ -13,7 +13,7 @@ spec:
   - name: sleep
     container:
       image: busybox
-      command: [sleep, 10]
+      command: [ sleep, "10" ]
       resources:
         requests:
           cpu: 100m # Note: Argo sidecar adds another 100m
