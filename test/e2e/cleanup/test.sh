@@ -28,7 +28,7 @@ cleanup_test() {
   k $i delete target $target
 
   export -f cleanup_test_iteration
-  timeout --foreground 60s bash -c "until cleanup_test_iteration $i; do sleep 1; done"
+  timeout --foreground 90s bash -c "until cleanup_test_iteration $i; do sleep 1; done"
   # use --foreground to catch ctrl-c
   # https://unix.stackexchange.com/a/233685
 
