@@ -20,6 +20,23 @@
 
 -->
 
+## v0.15.0-alpha.0
+
+This release mainly adds support for newer Kubernetes versions, while dropping support for older versions.
+It supports Kubernetes 1.21 through 1.23. Previous releases supported Kubernetes 1.17 through 1.21.
+
+### New Features
+
+- bbbf347 add support for Kubernetes 1.22 and 1.23 (and likely future versions, until something breaks)
+
+### Bugfixes
+
+- d7d5aca fix finalizer length limit overflow for long namespace/target names
+
+### Breaking Changes
+
+- bbbf347 drop support for Kubernetes 1.20 and older
+
 ## v0.14.1
 
 ### Bugfixes
