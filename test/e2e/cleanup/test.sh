@@ -18,6 +18,7 @@
 set -exuo pipefail
 
 source test/e2e/aliases.sh
+source test/e2e/admiralty.sh
 
 cleanup_test() {
   i=$1
@@ -32,7 +33,7 @@ cleanup_test() {
   # use --foreground to catch ctrl-c
   # https://unix.stackexchange.com/a/233685
 
-  k $i apply -f test/e2e/topologies/namespaced-burst/cluster$i/targets.yaml
+  admiralty_connect 1 "${target: -1}"
   k $i delete -f test/e2e/cleanup/test.yaml
 }
 
