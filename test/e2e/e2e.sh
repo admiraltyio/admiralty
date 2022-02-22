@@ -52,6 +52,9 @@ for j in 1 2 3; do
   admiralty_connect 1 $j
 done
 
+# fix GH issue #119: self target in other namespace
+admiralty_connect 1 1 other
+
 argo_setup_source 1
 argo_setup_target 2
 webhook_ready 1 admiralty multicluster-scheduler-controller-manager multicluster-scheduler multicluster-scheduler-cert
