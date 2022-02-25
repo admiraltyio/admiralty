@@ -42,8 +42,67 @@ admiralty_setup() {
     --set postDeleteJob.image.tag=$VERSION-amd64 \
     --set restarter.image.tag=$VERSION-amd64
   k $i delete pod --all -n admiralty
+}
 
-  k $i label ns default multicluster-scheduler=enabled --overwrite
+admiralty_connect() {
+  i=$1
+  j=$2
+  ns="${3:-default}"
+
+  if ! k "$i" get ns other; then
+    k "$i" create ns other
+  fi
+  k $i label ns $ns multicluster-scheduler=enabled --overwrite
+
+  if [[ $i == $j ]]; then
+    # if self target
+    cat <<EOF | k $i apply -f -
+kind: Target
+apiVersion: multicluster.admiralty.io/v1alpha1
+metadata:
+  name: c$j
+  namespace: $ns
+spec:
+  self: true
+EOF
+  else
+    if k $j cluster-info; then
+      # if cluster j exists
+
+      if ! k "$j" get ns other; then
+        k "$j" create ns other
+      fi
+
+      cat <<EOF | k $j apply -f -
+kind: Source
+apiVersion: multicluster.admiralty.io/v1alpha1
+metadata:
+  name: cluster$i
+  namespace: $ns
+spec:
+  serviceAccountName: cluster$i
+EOF
+      while ! k $j get sa cluster$i -n $ns; do sleep 1; done
+
+      SECRET_NAME=$(k $j get serviceaccount cluster1 -n $ns -o json | jq -r .secrets[0].name)
+      TOKEN=$(k $j get secret $SECRET_NAME -n $ns -o json | jq -r .data.token | base64 --decode)
+      KUBECONFIG=$(k $j config view --minify --raw -o json | jq '.users[0].user={token:"'$TOKEN'"} | .contexts[0].context.namespace="default"')
+      k $i create secret generic c$j -n $ns --from-literal=config="$KUBECONFIG" --dry-run -o yaml | k $i apply -f -
+    fi
+
+    # if cluster j doesn't exist, this is a misconfigured target
+    # which must be handled gracefully
+    cat <<EOF | k $i apply -f -
+kind: Target
+apiVersion: multicluster.admiralty.io/v1alpha1
+metadata:
+  name: c$j
+  namespace: $ns
+spec:
+  kubeconfigSecret:
+    name: c$j
+EOF
+  fi
 }
 
 if [[ "${BASH_SOURCE[0]:-}" == "${0}" ]]; then

@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 The Multicluster-Scheduler Authors.
+ * Copyright 2022 The Multicluster-Scheduler Authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,7 +37,7 @@ type Handler struct {
 	mutator mutator
 }
 
-func NewHandler(knownFinalizers []string) *Handler {
+func NewHandler(knownFinalizers map[string][]string) *Handler {
 	return &Handler{mutator: mutator{knownFinalizers: knownFinalizers}}
 }
 
@@ -65,7 +65,7 @@ func (h *Handler) Handle(_ context.Context, req admission.Request) admission.Res
 }
 
 type mutator struct {
-	knownFinalizers []string
+	knownFinalizers map[string][]string
 }
 
 func (m mutator) mutate(pod *corev1.Pod) error {
@@ -160,7 +160,9 @@ func (m mutator) mutate(pod *corev1.Pod) error {
 			finalizers = append(finalizers, f)
 		}
 	}
-	for _, f := range m.knownFinalizers {
+	// don't append finalizers of targets in different namespaces
+	// because they're useless, and wouldn't be removed because feedback controllers are namespaced
+	for _, f := range m.knownFinalizers[pod.Namespace] {
 		finalizers = append(finalizers, f)
 	}
 	pod.Finalizers = finalizers

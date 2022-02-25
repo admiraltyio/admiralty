@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 The Multicluster-Scheduler Authors.
+ * Copyright 2022 The Multicluster-Scheduler Authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@ package node
 import (
 	"os"
 
+	"admiralty.io/multicluster-scheduler/pkg/config/agent"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -26,11 +27,11 @@ import (
 	"admiralty.io/multicluster-scheduler/pkg/model/virtualnode"
 )
 
-func NodeFromOpts(c Opts) *v1.Node {
+func NodeFromOpts(t agent.Target) *v1.Node {
 	node := &v1.Node{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:   c.NodeName,
-			Labels: virtualnode.BaseLabels(),
+			Name:   t.VirtualNodeName,
+			Labels: virtualnode.BaseLabels(t.Namespace, t.Name),
 		},
 		Spec: v1.NodeSpec{
 			Taints: []v1.Taint{

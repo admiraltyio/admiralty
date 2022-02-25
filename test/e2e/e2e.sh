@@ -48,15 +48,12 @@ for i in 1 2; do
   admiralty_setup $i test/e2e/values.yaml
 done
 
-k 2 apply -f test/e2e/topologies/namespaced-burst/cluster2/source.yaml
-while ! k 2 get sa cluster1; do sleep 1; done
+for j in 1 2 3; do
+  admiralty_connect 1 $j
+done
 
-SECRET_NAME=$(k 2 get serviceaccount cluster1 -o json | jq -r .secrets[0].name)
-TOKEN=$(k 2 get secret $SECRET_NAME -o json | jq -r .data.token | base64 --decode)
-KUBECONFIG=$(k 2 config view --minify --raw -o json | jq '.users[0].user={token:"'$TOKEN'"} | .contexts[0].context.namespace="default"')
-k 1 create secret generic c2 --from-literal=config="$KUBECONFIG" --dry-run -o yaml | k 1 apply -f -
-
-k 1 apply -f test/e2e/topologies/namespaced-burst/cluster1/targets.yaml
+# fix GH issue #119: self target in other namespace
+admiralty_connect 1 1 other
 
 argo_setup_source 1
 argo_setup_target 2

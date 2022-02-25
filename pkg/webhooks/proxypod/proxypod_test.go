@@ -37,7 +37,10 @@ var testCases = map[string]struct {
 }{
 	"proxy pod": {
 		corev1.Pod{
-			ObjectMeta: v1.ObjectMeta{Annotations: map[string]string{common.AnnotationKeyElect: ""}},
+			ObjectMeta: v1.ObjectMeta{
+				Namespace:   "default",
+				Annotations: map[string]string{common.AnnotationKeyElect: ""},
+			},
 			Spec: corev1.PodSpec{
 				Containers: []corev1.Container{{
 					Name:  "nginx",
@@ -47,6 +50,7 @@ var testCases = map[string]struct {
 		},
 		corev1.Pod{
 			ObjectMeta: v1.ObjectMeta{
+				Namespace: "default",
 				Annotations: map[string]string{
 					common.AnnotationKeyElect:             "",
 					common.AnnotationKeySourcePodManifest: "HACK", // yaml serialization computed in test code
@@ -54,7 +58,7 @@ var testCases = map[string]struct {
 				Labels: map[string]string{
 					common.LabelKeyHasFinalizer: "true",
 				},
-				Finalizers: knownFinalizers,
+				Finalizers: knownFinalizers["default"],
 			},
 			Spec: corev1.PodSpec{
 				NodeSelector: map[string]string{
@@ -78,6 +82,9 @@ var testCases = map[string]struct {
 	},
 	"other pod": {
 		corev1.Pod{
+			ObjectMeta: v1.ObjectMeta{
+				Namespace: "default",
+			},
 			Spec: corev1.PodSpec{
 				Containers: []corev1.Container{{
 					Name:  "nginx",
@@ -86,6 +93,9 @@ var testCases = map[string]struct {
 			},
 		},
 		corev1.Pod{
+			ObjectMeta: v1.ObjectMeta{
+				Namespace: "default",
+			},
 			Spec: corev1.PodSpec{
 				Containers: []corev1.Container{{
 					Name:  "nginx",
@@ -97,6 +107,7 @@ var testCases = map[string]struct {
 	"keep labels and annotations (in general, object meta)": {
 		corev1.Pod{
 			ObjectMeta: v1.ObjectMeta{
+				Namespace:   "default",
 				Annotations: map[string]string{common.AnnotationKeyElect: "", "k1": "v1"},
 				Labels:      map[string]string{"k2": "v2"},
 			},
@@ -109,13 +120,14 @@ var testCases = map[string]struct {
 		},
 		corev1.Pod{
 			ObjectMeta: v1.ObjectMeta{
+				Namespace: "default",
 				Annotations: map[string]string{
 					common.AnnotationKeyElect:             "",
 					common.AnnotationKeySourcePodManifest: "HACK", // yaml serialization computed in test code
 					"k1":                                  "v1",
 				},
 				Labels:     map[string]string{"k2": "v2", common.LabelKeyHasFinalizer: "true"},
-				Finalizers: knownFinalizers,
+				Finalizers: knownFinalizers["default"],
 			},
 			Spec: corev1.PodSpec{
 				NodeSelector: map[string]string{
@@ -139,7 +151,7 @@ var testCases = map[string]struct {
 	},
 }
 
-var knownFinalizers = []string{common.KeyPrefix + "a", common.KeyPrefix + "b"}
+var knownFinalizers = map[string][]string{"default": {common.KeyPrefix + "a", common.KeyPrefix + "b"}}
 
 func TestMutate(t *testing.T) {
 	for k, v := range testCases {

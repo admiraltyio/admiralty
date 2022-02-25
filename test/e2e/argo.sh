@@ -76,6 +76,8 @@ argo_test() {
   j=$2
 
   KUBECONFIG=kubeconfig-cluster$i ./argo submit --serviceaccount argo-workflow --wait examples/argo-workflows/blog-scenario-a-multicluster.yaml
+  # delegate pods should be spread between both clusters
+  [ $(k "$i" get pod -l multicluster.admiralty.io/workflow | wc -l) -gt 1 ]
   [ $(k "$j" get pod -l multicluster.admiralty.io/workflow | wc -l) -gt 1 ]
   KUBECONFIG=kubeconfig-cluster$i ./argo delete --all
 }

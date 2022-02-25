@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 The Multicluster-Scheduler Authors.
+ * Copyright 2022 The Multicluster-Scheduler Authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@ import (
 	"regexp"
 	"time"
 
+	"admiralty.io/multicluster-scheduler/pkg/config/agent"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -47,7 +48,7 @@ type NodeStatusUpdater interface {
 }
 
 type upstream struct {
-	targetName string
+	target agent.Target
 
 	kubeclientset kubernetes.Interface
 
@@ -55,20 +56,19 @@ type upstream struct {
 	clusterSummaryLister listers.ClusterSummaryLister
 	nodeStatusUpdater    NodeStatusUpdater
 
-	excludedLabelsRegexp *regexp.Regexp
+	compiledExcludedLabelsRegexp *regexp.Regexp
 }
 
 func NewUpstreamController(
-	targetName string,
+	target agent.Target,
 	kubeclientset kubernetes.Interface,
 	nodeInformer coreinformers.NodeInformer,
 	clusterSummaryInformer informers.ClusterSummaryInformer,
 	nodeStatusUpdater NodeStatusUpdater,
-	excludedLabelsRegexp *string,
 ) *controller.Controller {
 
 	r := &upstream{
-		targetName:           targetName,
+		target:               target,
 		kubeclientset:        kubeclientset,
 		nodeLister:           nodeInformer.Lister(),
 		clusterSummaryLister: clusterSummaryInformer.Lister(),
@@ -82,21 +82,21 @@ func NewUpstreamController(
 	// so we need to filter here
 	nodeInformer.Informer().AddEventHandler(controller.HandleAddUpdateWith(func(obj interface{}) {
 		node := obj.(*corev1.Node)
-		if node.Name == r.targetName {
+		if node.Name == r.target.VirtualNodeName {
 			c.EnqueueKey(node.Name)
 		}
 	}))
 	clusterSummaryInformer.Informer().AddEventHandler(controller.HandleAllWith(func(_ interface{}) {
-		c.EnqueueKey(targetName)
+		c.EnqueueKey(target.VirtualNodeName)
 	}))
 
-	if excludedLabelsRegexp != nil {
+	if target.ExcludedLabelsRegexp != nil {
 		var err error
-		r.excludedLabelsRegexp, err = regexp.Compile(*excludedLabelsRegexp)
+		r.compiledExcludedLabelsRegexp, err = regexp.Compile(*target.ExcludedLabelsRegexp)
 		if err != nil {
 			// don't crash if regexp cannot be compiled
 			// TODO reject Target at admission
-			utilruntime.HandleError(fmt.Errorf("cannot compile excluded aggregated labels regexp for target %s: %v", targetName, err))
+			utilruntime.HandleError(fmt.Errorf("cannot compile excluded aggregated labels regexp for target %s: %v", target.VirtualNodeName, err))
 		}
 	}
 
@@ -185,9 +185,9 @@ func (r upstream) Handle(key interface{}) (requeueAfter *time.Duration, err erro
 }
 
 func (r upstream) reconcileLabels(clusterSummaryLabels map[string]string) map[string]string {
-	l := virtualnode.BaseLabels()
+	l := virtualnode.BaseLabels(r.target.Namespace, r.target.Name)
 	for k, v := range clusterSummaryLabels {
-		regExp := r.excludedLabelsRegexp
+		regExp := r.compiledExcludedLabelsRegexp
 		if regExp == nil || !regExp.MatchString(fmt.Sprintf("%s=%s", k, v)) {
 			l[k] = v
 		}

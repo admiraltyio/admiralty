@@ -39,8 +39,9 @@ import (
 )
 
 type Plugin struct {
-	handle  framework.Handle
-	targets map[string]*versioned.Clientset
+	handle           framework.Handle
+	targets          map[string]*versioned.Clientset
+	targetNamespaces map[string]string
 
 	failedNodeNamesByPodUID map[types.UID]map[string]bool
 	mx                      sync.RWMutex
@@ -100,6 +101,10 @@ func (pl *Plugin) Filter(ctx context.Context, state *framework.CycleState, pod *
 
 	if pl.unreservedInAPreviousCycle(pod.UID, nodeInfo.Node().Name) {
 		return framework.NewStatus(framework.UnschedulableAndUnresolvable, "unreserved in a previous cycle")
+	}
+
+	if ns := nodeInfo.Node().Labels[common.LabelKeyTargetNamespace]; ns != "" && ns != pod.Namespace {
+		return framework.NewStatus(framework.UnschedulableAndUnresolvable, "target in different namespace")
 	}
 
 	// working without a candidate scheduler, we'll create a single candidate AFTER a virtual node is selected
@@ -208,6 +213,7 @@ func (pl *Plugin) Unreserve(ctx context.Context, state *framework.CycleState, p 
 		pl.failedNodeNamesByPodUID[p.UID] = map[string]bool{}
 	}
 	pl.failedNodeNamesByPodUID[p.UID][nodeName] = true
+	// TODO we may never reach len(pl.targets) due to namespace filtering but not only (e.g., other filters) - use PostFilter
 	if len(pl.failedNodeNamesByPodUID[p.UID]) == len(pl.targets) {
 		pl.failedNodeNamesByPodUID[p.UID] = nil
 	}
@@ -262,6 +268,9 @@ func (pl *Plugin) PostBind(ctx context.Context, state *framework.CycleState, p *
 		if clusterName == targetClusterName {
 			continue
 		}
+		if ns := pl.targetNamespaces[clusterName]; ns != "" && ns != p.Namespace {
+			continue
+		}
 		err := target.MulticlusterV1alpha1().PodChaperons(p.Namespace).DeleteCollection(ctx, metav1.DeleteOptions{}, metav1.ListOptions{LabelSelector: common.LabelKeyParentUID + "=" + string(p.UID)})
 		utilruntime.HandleError(err)
 	}
@@ -277,13 +286,20 @@ func (pl *Plugin) PostBind(ctx context.Context, state *framework.CycleState, p *
 func New(_ runtime.Object, h framework.Handle) (framework.Plugin, error) {
 	agentCfg := agentconfig.NewFromCRD(context.Background())
 	n := len(agentCfg.Targets)
-	clients := make(map[string]*versioned.Clientset, n)
+	targets := make(map[string]*versioned.Clientset, n)
+	targetNamespaces := make(map[string]string, n)
 	for _, target := range agentCfg.Targets {
 		client, err := versioned.NewForConfig(target.ClientConfig)
 		utilruntime.Must(err)
-		clients[target.GetKey()] = client
+		targets[target.VirtualNodeName] = client
+		targetNamespaces[target.VirtualNodeName] = target.Namespace
 	}
 	// TODO... cache podchaperons with lister
 
-	return &Plugin{handle: h, targets: clients, failedNodeNamesByPodUID: map[types.UID]map[string]bool{}}, nil
+	return &Plugin{
+		handle:                  h,
+		targets:                 targets,
+		targetNamespaces:        targetNamespaces,
+		failedNodeNamesByPodUID: map[types.UID]map[string]bool{},
+	}, nil
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 The Multicluster-Scheduler Authors.
+ * Copyright 2022 The Multicluster-Scheduler Authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -41,7 +41,15 @@ type Config struct {
 func (c Config) GetKnownFinalizers() []string {
 	var knownFinalizers []string
 	for _, target := range c.Targets {
-		knownFinalizers = append(knownFinalizers, target.GetFinalizer())
+		knownFinalizers = append(knownFinalizers, target.Finalizer)
+	}
+	return knownFinalizers
+}
+
+func (c Config) GetKnownFinalizersByNamespace() map[string][]string {
+	knownFinalizers := map[string][]string{}
+	for _, target := range c.Targets {
+		knownFinalizers[target.Namespace] = append(knownFinalizers[target.Namespace], target.Finalizer)
 	}
 	return knownFinalizers
 }
@@ -52,14 +60,13 @@ type Target struct {
 	Self                 bool // optimization to re-use clients, informers, etc.
 	Namespace            string
 	ExcludedLabelsRegexp *string
+	VirtualNodeName      string
+	Finalizer            string
 }
 
-func (t Target) GetKey() string {
-	return name.FromParts(name.Long, []int{0}, []int{1}, "admiralty", t.Namespace, t.Name)
-}
-
-func (t Target) GetFinalizer() string {
-	return common.KeyPrefix + name.FromParts(name.Short, nil, []int{0}, t.Namespace, t.Name)
+func (t *Target) complete() {
+	t.VirtualNodeName = name.FromParts(name.Long, []int{0}, []int{1}, "admiralty", t.Namespace, t.Name)
+	t.Finalizer = common.KeyPrefix + name.FromParts(name.Short, nil, []int{0}, t.Namespace, t.Name)
 }
 
 // until we watch targets at runtime, we can already load them from objects at startup
@@ -114,6 +121,7 @@ func addClusterTarget(ctx context.Context, k *kubernetes.Clientset, agentCfg *Co
 		Self:                 t.Spec.Self,
 		ExcludedLabelsRegexp: t.Spec.ExcludedLabelsRegexp,
 	}
+	c.complete()
 	agentCfg.Targets = append(agentCfg.Targets, c)
 }
 
@@ -142,6 +150,7 @@ func addTarget(ctx context.Context, k *kubernetes.Clientset, agentCfg *Config, t
 		Self:                 t.Spec.Self,
 		ExcludedLabelsRegexp: t.Spec.ExcludedLabelsRegexp,
 	}
+	c.complete()
 	agentCfg.Targets = append(agentCfg.Targets, c)
 }
 

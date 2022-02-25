@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 The Multicluster-Scheduler Authors.
+ * Copyright 2022 The Multicluster-Scheduler Authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -169,7 +169,7 @@ func (r secretReconciler) Handle(obj interface{}) (requeueAfter *time.Duration, 
 
 	terminating := secret.DeletionTimestamp != nil
 
-	hasFinalizer, j := controller.HasFinalizer(secret.Finalizers, r.target.GetFinalizer())
+	hasFinalizer, j := controller.HasFinalizer(secret.Finalizers, r.target.Finalizer)
 
 	shouldFollow := r.shouldFollow(namespace, name)
 
@@ -233,7 +233,7 @@ func (r secretReconciler) shouldFollow(namespace, name string) bool {
 	utilruntime.Must(err)
 	for _, obj := range objs {
 		proxyPod := obj.(*corev1.Pod)
-		if proxypod.GetScheduledClusterName(proxyPod) == r.target.GetKey() {
+		if proxypod.GetScheduledClusterName(proxyPod) == r.target.VirtualNodeName {
 			return true
 		}
 	}
@@ -242,7 +242,7 @@ func (r secretReconciler) shouldFollow(namespace, name string) bool {
 
 func (r secretReconciler) addFinalizer(ctx context.Context, secret *corev1.Secret) (*corev1.Secret, error) {
 	secretCopy := secret.DeepCopy()
-	secretCopy.Finalizers = append(secretCopy.Finalizers, r.target.GetFinalizer())
+	secretCopy.Finalizers = append(secretCopy.Finalizers, r.target.Finalizer)
 	if secretCopy.Labels == nil {
 		secretCopy.Labels = map[string]string{}
 	}
