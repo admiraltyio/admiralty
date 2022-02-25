@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 The Multicluster-Scheduler Authors.
+ * Copyright 2022 The Multicluster-Scheduler Authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -170,7 +170,7 @@ func (r configMapReconciler) Handle(obj interface{}) (requeueAfter *time.Duratio
 
 	terminating := configMap.DeletionTimestamp != nil
 
-	hasFinalizer, j := controller.HasFinalizer(configMap.Finalizers, r.target.GetFinalizer())
+	hasFinalizer, j := controller.HasFinalizer(configMap.Finalizers, r.target.Finalizer)
 
 	shouldFollow := r.shouldFollow(namespace, name)
 
@@ -238,7 +238,7 @@ func (r configMapReconciler) shouldFollow(namespace string, name string) bool {
 	utilruntime.Must(err)
 	for _, obj := range objs {
 		proxyPod := obj.(*corev1.Pod)
-		if proxypod.GetScheduledClusterName(proxyPod) == r.target.GetKey() {
+		if proxypod.GetScheduledClusterName(proxyPod) == r.target.VirtualNodeName {
 			return true
 		}
 	}
@@ -247,7 +247,7 @@ func (r configMapReconciler) shouldFollow(namespace string, name string) bool {
 
 func (r configMapReconciler) addFinalizer(ctx context.Context, configMap *corev1.ConfigMap) (*corev1.ConfigMap, error) {
 	configMapCopy := configMap.DeepCopy()
-	configMapCopy.Finalizers = append(configMapCopy.Finalizers, r.target.GetFinalizer())
+	configMapCopy.Finalizers = append(configMapCopy.Finalizers, r.target.Finalizer)
 	if configMapCopy.Labels == nil {
 		configMapCopy.Labels = map[string]string{}
 	}

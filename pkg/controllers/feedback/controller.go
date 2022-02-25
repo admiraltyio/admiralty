@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 The Multicluster-Scheduler Authors.
+ * Copyright 2022 The Multicluster-Scheduler Authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -134,7 +134,7 @@ func (c *reconciler) Handle(obj interface{}) (requeueAfter *time.Duration, err e
 
 	proxyPodTerminating := proxyPod.DeletionTimestamp != nil
 
-	proxyPodHasFinalizer, j := controller.HasFinalizer(proxyPod.Finalizers, c.target.GetFinalizer())
+	proxyPodHasFinalizer, j := controller.HasFinalizer(proxyPod.Finalizers, c.target.Finalizer)
 
 	var candidate *multiclusterv1alpha1.PodChaperon
 	l, err := c.podChaperonsLister.PodChaperons(namespace).List(labels.SelectorFromSet(map[string]string{common.LabelKeyParentUID: string(proxyPod.UID)}))
@@ -151,7 +151,7 @@ func (c *reconciler) Handle(obj interface{}) (requeueAfter *time.Duration, err e
 	didSomething := false
 
 	virtualNodeName := proxypod.GetScheduledClusterName(proxyPod)
-	if proxyPodTerminating || virtualNodeName != "" && virtualNodeName != c.target.GetKey() {
+	if proxyPodTerminating || virtualNodeName != "" && virtualNodeName != c.target.VirtualNodeName {
 		if candidate != nil {
 			if err := c.customclientset.MulticlusterV1alpha1().PodChaperons(namespace).Delete(ctx, candidate.Name, metav1.DeleteOptions{}); err != nil && !errors.IsNotFound(err) {
 				return nil, err
@@ -165,7 +165,7 @@ func (c *reconciler) Handle(obj interface{}) (requeueAfter *time.Duration, err e
 		}
 	}
 
-	if candidate != nil && virtualNodeName == c.target.GetKey() {
+	if candidate != nil && virtualNodeName == c.target.VirtualNodeName {
 		delegate := candidate
 
 		mcProxyPodAnnotations, otherProxyPodAnnotations := common.SplitLabelsOrAnnotations(proxyPod.Annotations)

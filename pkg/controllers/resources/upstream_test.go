@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 The Multicluster-Scheduler Authors.
+ * Copyright 2022 The Multicluster-Scheduler Authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@ import (
 	"regexp"
 	"testing"
 
+	"admiralty.io/multicluster-scheduler/pkg/config/agent"
 	"admiralty.io/multicluster-scheduler/pkg/model/virtualnode"
 	"github.com/stretchr/testify/require"
 )
@@ -27,7 +28,7 @@ import (
 func Test_upstream_reconcileLabels(t *testing.T) {
 	clusterSummaryLabels := map[string]string{"k1": "v1", "k2": "v2", "prefix.io/k1": "v1"}
 	addBaseLabels := func(m map[string]string) map[string]string {
-		l := virtualnode.BaseLabels()
+		l := virtualnode.BaseLabels("target-namespace", "target-name")
 		for k, v := range m {
 			l[k] = v
 		}
@@ -65,7 +66,8 @@ func Test_upstream_reconcileLabels(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			r := upstream{
-				excludedLabelsRegexp: tt.excludedLabelsRegexp,
+				target:                       agent.Target{Name: "target-name", Namespace: "target-namespace"},
+				compiledExcludedLabelsRegexp: tt.excludedLabelsRegexp,
 			}
 			got := r.reconcileLabels(clusterSummaryLabels)
 			require.Equal(t, tt.want, got)

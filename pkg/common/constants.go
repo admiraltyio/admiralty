@@ -72,4 +72,8 @@ var (
 	AnnotationKeyOriginalSelector = KeyPrefix + "original-selector"
 
 	AnnotationKeyRestartedAt = KeyPrefix + "restartedAt"
+
+	LabelKeyTargetNamespace   = KeyPrefix + "target-namespace"
+	LabelKeyTargetName        = KeyPrefix + "target-name"
+	LabelKeyClusterTargetName = KeyPrefix + "cluster-target-name"
 )

@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 The Multicluster-Scheduler Authors.
+ * Copyright 2022 The Multicluster-Scheduler Authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,12 +20,18 @@ import (
 	"admiralty.io/multicluster-scheduler/pkg/common"
 )
 
-func BaseLabels() map[string]string {
-	return map[string]string{
+func BaseLabels(targetNamespace, targetName string) map[string]string {
+	l := map[string]string{
 		"type": "virtual-kubelet",
-		common.LabelAndTaintKeyVirtualKubeletProvider: common.VirtualKubeletProviderName,
-		"kubernetes.io/role":                          "cluster",
-		//"kubernetes.io/hostname": c.NodeName,
+		common.LabelAndTaintKeyVirtualKubeletProvider:             common.VirtualKubeletProviderName,
+		"kubernetes.io/role":                                      "cluster",
 		"alpha.service-controller.kubernetes.io/exclude-balancer": "true",
 	}
+	if targetNamespace == "" {
+		l[common.LabelKeyClusterTargetName] = targetName
+	} else {
+		l[common.LabelKeyTargetNamespace] = targetNamespace
+		l[common.LabelKeyTargetName] = targetName
+	}
+	return l
 }

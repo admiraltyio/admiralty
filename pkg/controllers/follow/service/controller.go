@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 The Multicluster-Scheduler Authors.
+ * Copyright 2022 The Multicluster-Scheduler Authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -127,7 +127,7 @@ func (r reconciler) Handle(obj interface{}) (requeueAfter *time.Duration, err er
 
 	terminating := svc.DeletionTimestamp != nil
 
-	hasFinalizer, j := controller.HasFinalizer(svc.Finalizers, r.target.GetFinalizer())
+	hasFinalizer, j := controller.HasFinalizer(svc.Finalizers, r.target.Finalizer)
 
 	shouldFollow, originalSelector, err := r.shouldFollow(svc)
 	if err != nil {
@@ -258,7 +258,7 @@ func (r reconciler) shouldFollow(service *corev1.Service) (bool, string, error) 
 }
 
 func (r reconciler) addFinalizer(actualCopy *corev1.Service) {
-	actualCopy.Finalizers = append(actualCopy.Finalizers, r.target.GetFinalizer())
+	actualCopy.Finalizers = append(actualCopy.Finalizers, r.target.Finalizer)
 	if actualCopy.Labels == nil {
 		actualCopy.Labels = map[string]string{}
 	}

@@ -200,12 +200,11 @@ func startOldStyleControllers(
 				targetPodChaperonInformer,
 			),
 			resources.NewUpstreamController(
-				target.GetKey(),
+				target,
 				k,
 				kubeInformerFactory.Core().V1().Nodes(),
 				targetClusterSummaryInformer,
-				nodeStatusUpdaters[target.GetKey()],
-				target.ExcludedLabelsRegexp,
+				nodeStatusUpdaters[target.VirtualNodeName],
 			),
 		)
 	}
@@ -286,7 +285,7 @@ func startWebhook(ctx context.Context, cfg *rest.Config, agentCfg agentconfig.Co
 	utilruntime.Must(err)
 
 	hookServer := webhookMgr.GetWebhookServer()
-	hookServer.Register("/mutate-v1-pod", &webhook.Admission{Handler: proxypod.NewHandler(agentCfg.GetKnownFinalizers())})
+	hookServer.Register("/mutate-v1-pod", &webhook.Admission{Handler: proxypod.NewHandler(agentCfg.GetKnownFinalizersByNamespace())})
 
 	go func() {
 		utilruntime.Must(webhookMgr.Start(ctx))
@@ -296,11 +295,11 @@ func startWebhook(ctx context.Context, cfg *rest.Config, agentCfg agentconfig.Co
 func startVirtualKubeletControllers(ctx context.Context, agentCfg agentconfig.Config, k kubernetes.Interface) map[string]resources.NodeStatusUpdater {
 	nodeStatusUpdaters := make(map[string]resources.NodeStatusUpdater, len(agentCfg.Targets))
 	for _, target := range agentCfg.Targets {
-		n := target.GetKey()
+		t := target
 		p := &node.NodeProvider{}
-		nodeStatusUpdaters[n] = p
+		nodeStatusUpdaters[t.VirtualNodeName] = p
 		go func() {
-			if err := node.Run(ctx, node.Opts{NodeName: n, EnableNodeLease: true}, k, p); err != nil && errors.Cause(err) != context.Canceled {
+			if err := node.Run(ctx, t, k, p); err != nil && errors.Cause(err) != context.Canceled {
 				vklog.G(ctx).Fatal(err)
 			}
 		}()
@@ -312,7 +311,7 @@ func startVirtualKubeletServers(ctx context.Context, agentCfg agentconfig.Config
 	targetConfigs := make(map[string]*rest.Config, len(agentCfg.Targets))
 	targetClients := make(map[string]kubernetes.Interface, len(agentCfg.Targets))
 	for _, target := range agentCfg.Targets {
-		n := target.GetKey()
+		n := target.VirtualNodeName
 		targetConfigs[n] = target.ClientConfig
 		targetClient, err := kubernetes.NewForConfig(target.ClientConfig)
 		utilruntime.Must(err)

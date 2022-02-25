@@ -19,24 +19,21 @@ package node
 import (
 	"context"
 
+	"admiralty.io/multicluster-scheduler/pkg/config/agent"
 	"github.com/virtual-kubelet/virtual-kubelet/log"
 	"github.com/virtual-kubelet/virtual-kubelet/node"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
-	v1 "k8s.io/client-go/kubernetes/typed/coordination/v1"
 )
 
-func Run(ctx context.Context, c Opts, client kubernetes.Interface, p node.NodeProvider) error {
-	ctx = log.WithLogger(ctx, log.G(ctx).WithFields(log.Fields{"node": c.NodeName}))
+func Run(ctx context.Context, t agent.Target, client kubernetes.Interface, p node.NodeProvider) error {
+	ctx = log.WithLogger(ctx, log.G(ctx).WithFields(log.Fields{"node": t.VirtualNodeName}))
 
-	var leaseClient v1.LeaseInterface
-	if c.EnableNodeLease {
-		leaseClient = client.CoordinationV1().Leases(corev1.NamespaceNodeLease)
-	}
+	leaseClient := client.CoordinationV1().Leases(corev1.NamespaceNodeLease)
 
-	n := NodeFromOpts(c)
+	n := NodeFromOpts(t)
 	nodeRunner, err := node.NewNodeController(
 		p,
 		n,

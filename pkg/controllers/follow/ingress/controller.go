@@ -153,7 +153,7 @@ func (r ingressReconciler) Handle(obj interface{}) (requeueAfter *time.Duration,
 
 	terminating := ingress.DeletionTimestamp != nil
 
-	hasFinalizer, j := controller.HasFinalizer(ingress.Finalizers, r.target.GetFinalizer())
+	hasFinalizer, j := controller.HasFinalizer(ingress.Finalizers, r.target.Finalizer)
 
 	shouldFollow := r.shouldFollow(ingress)
 
@@ -256,7 +256,7 @@ func (r ingressReconciler) shouldFollow(ingress *v1.Ingress) bool {
 
 func (r ingressReconciler) addFinalizer(ctx context.Context, ingress *v1.Ingress) (*v1.Ingress, error) {
 	ingressCopy := ingress.DeepCopy()
-	ingressCopy.Finalizers = append(ingressCopy.Finalizers, r.target.GetFinalizer())
+	ingressCopy.Finalizers = append(ingressCopy.Finalizers, r.target.Finalizer)
 	if ingressCopy.Labels == nil {
 		ingressCopy.Labels = map[string]string{}
 	}
