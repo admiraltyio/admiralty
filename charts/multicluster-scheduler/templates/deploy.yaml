@@ -69,7 +69,7 @@ spec:
       tolerations: {{ toYaml . | nindent 8 }}
         {{- end }}
 ---
-apiVersion: policy/v1beta1
+apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
   name: {{ include "fullname" . }}-controller-manager
@@ -134,7 +134,7 @@ spec:
       tolerations: {{ toYaml . | nindent 8 }}
         {{- end }}
 ---
-apiVersion: policy/v1beta1
+apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
   name: {{ include "fullname" . }}-proxy-scheduler
@@ -199,7 +199,7 @@ spec:
       tolerations: {{ toYaml . | nindent 8 }}
         {{- end }}
 ---
-apiVersion: policy/v1beta1
+apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
   name: {{ include "fullname" . }}-candidate-scheduler
@@ -265,7 +265,7 @@ spec:
       tolerations: {{ toYaml . | nindent 8 }}
         {{- end }}
 ---
-apiVersion: policy/v1beta1
+apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
   name: {{ include "fullname" . }}-restarter
