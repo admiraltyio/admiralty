@@ -28,6 +28,7 @@ source test/e2e/exec/test.sh
 source test/e2e/ingress/test.sh
 source test/e2e/virtual-node-labels/test.sh
 source test/e2e/cleanup/test.sh
+source test/e2e/no-reservation/test.sh
 source test/e2e/webhook_ready.sh
 source test/e2e/no-rogue-finalizer/test.sh
 
@@ -71,6 +72,7 @@ exec_test 1 2
 ingress_test 1 2
 virtual-node-labels_test 1 2
 cleanup_test 1
+no-reservation_test
 
 no-rogue-finalizer_test
 
