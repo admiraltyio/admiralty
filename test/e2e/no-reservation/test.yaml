@@ -1,0 +1,19 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: no-reservation
+spec:
+  selector:
+    matchLabels:
+      app: no-reservation
+  template:
+    metadata:
+      labels:
+        app: no-reservation
+      annotations:
+        multicluster.admiralty.io/elect: ""
+        multicluster.admiralty.io/no-reservation: ""
+    spec:
+      containers:
+        - name: pause
+          image: gcr.io/google_containers/pause

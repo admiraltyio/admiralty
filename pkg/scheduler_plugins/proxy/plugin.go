@@ -48,6 +48,7 @@ type Plugin struct {
 }
 
 var _ framework.FilterPlugin = &Plugin{}
+var _ framework.PostFilterPlugin = &Plugin{}
 var _ framework.ReservePlugin = &Plugin{}
 var _ framework.PreBindPlugin = &Plugin{}
 var _ framework.PostBindPlugin = &Plugin{}
@@ -172,6 +173,11 @@ func (pl *Plugin) unreservedInAPreviousCycle(podUID types.UID, nodeName string) 
 	return pl.failedNodeNamesByPodUID[podUID][nodeName]
 }
 
+func (pl *Plugin) PostFilter(ctx context.Context, state *framework.CycleState, pod *v1.Pod, filteredNodeStatusMap framework.NodeToStatusMap) (*framework.PostFilterResult, *framework.Status) {
+	pl.failedNodeNamesByPodUID[pod.UID] = nil
+	return nil, framework.NewStatus(framework.Unschedulable)
+}
+
 func (pl *Plugin) Reserve(ctx context.Context, state *framework.CycleState, p *v1.Pod, nodeName string) *framework.Status {
 	targetClusterName := virtualNodeNameToClusterName(nodeName)
 	c, err := pl.getCandidate(ctx, p, targetClusterName)
@@ -213,10 +219,6 @@ func (pl *Plugin) Unreserve(ctx context.Context, state *framework.CycleState, p 
 		pl.failedNodeNamesByPodUID[p.UID] = map[string]bool{}
 	}
 	pl.failedNodeNamesByPodUID[p.UID][nodeName] = true
-	// TODO we may never reach len(pl.targets) due to namespace filtering but not only (e.g., other filters) - use PostFilter
-	if len(pl.failedNodeNamesByPodUID[p.UID]) == len(pl.targets) {
-		pl.failedNodeNamesByPodUID[p.UID] = nil
-	}
 }
 
 const preBindWaitDuration = 60 * time.Second // increased from arbitrary 30 seconds, because Fargate takes 30-60 seconds
