@@ -209,6 +209,13 @@ rules:
       - deletecollection
       - patch
   - apiGroups:
+      - multicluster.admiralty.io
+    resources:
+      - podchaperons/finalizers
+      - sources/finalizers
+    verbs:
+      - update
+  - apiGroups:
       - ""
     resources:
       - services
@@ -236,6 +243,10 @@ rules:
   - apiGroups: [""]
     resources: ["pods"]
     verbs: ["list"]
+  - apiGroups: [""]
+    resources: ["pods/finalizers"]
+    verbs:
+      - update
   - apiGroups: [""]
     resources: ["pods/log"]
     verbs: ["get"]
