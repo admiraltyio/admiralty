@@ -20,32 +20,18 @@ set -exuo pipefail
 source test/e2e/aliases.sh
 source test/e2e/admiralty.sh
 
-cleanup_test() {
+delete-delegate_test() {
   i=$1
 
-  k $i apply -f test/e2e/cleanup/test.yaml
-  k $i rollout status deploy cleanup
-  target="$(k $i get pod -l app=cleanup -o json | jq -er '.items[0].metadata.finalizers[0] | split("-") | .[1]')"
-  k $i delete target $target
-
-  export -f cleanup_test_iteration
-  timeout --foreground 90s bash -c "until cleanup_test_iteration $i; do sleep 1; done"
-  # use --foreground to catch ctrl-c
-  # https://unix.stackexchange.com/a/233685
-
-  admiralty_connect $i "${target: -1}"
-  k $i delete -f test/e2e/cleanup/test.yaml
-}
-
-cleanup_test_iteration() {
-  i=$1
-
-  set -exuo pipefail
-  source test/e2e/aliases.sh
-
-  [ $(k $i get pod -l app=cleanup -o json | jq -e '.items[0].metadata.finalizers | length') -eq 0 ]
+  k $i apply -f test/e2e/delete-delegate/test.yaml
+  k $i rollout status deploy delete-delegate
+  target="$(k $i get pod -l app=delete-delegate -o json | jq -er '.items[0].metadata.finalizers[0] | split("-") | .[1]')"
+  j="${target: -1}"
+  k $j delete pod -l multicluster.admiralty.io/app=delete-delegate --wait --timeout=30s
+  k $j wait pod -l multicluster.admiralty.io/app=delete-delegate --for=condition=PodScheduled
+  k $i delete -f test/e2e/delete-delegate/test.yaml
 }
 
 if [[ "${BASH_SOURCE[0]:-}" == "${0}" ]]; then
-  cleanup_test "${@}"
+  delete-delegate_test "${@}"
 fi

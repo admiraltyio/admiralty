@@ -1,15 +1,15 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: cleanup
+  name: delete-delegate
 spec:
   selector:
     matchLabels:
-      app: cleanup
+      app: delete-delegate
   template:
     metadata:
       labels:
-        app: cleanup
+        app: delete-delegate
       annotations:
         multicluster.admiralty.io/elect: ""
     spec:

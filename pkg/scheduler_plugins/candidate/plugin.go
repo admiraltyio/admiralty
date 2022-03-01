@@ -53,9 +53,7 @@ func (pl *Plugin) Name() string {
 
 func (pl *Plugin) PreFilter(ctx context.Context, state *framework.CycleState, p *v1.Pod) *framework.Status {
 	// reset annotations
-	patch := []byte(`{"metadata":{"annotations":{
-"` + common.AnnotationKeyIsReserved + `":null,
-"` + common.AnnotationKeyIsAllowed + `":null}}}`)
+	patch := []byte(`{"metadata":{"annotations":{"` + common.AnnotationKeyIsReserved + `":null}}}`)
 	if _, err := pl.client.MulticlusterV1alpha1().PodChaperons(p.Namespace).Patch(ctx, p.Name, types.MergePatchType, patch, metav1.PatchOptions{}); err != nil {
 		return framework.NewStatus(framework.Error, err.Error())
 	}

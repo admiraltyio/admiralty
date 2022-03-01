@@ -39,3 +39,4 @@ kubemcsa
 kubeconfig*
 
 scratch/
+cluster-dump/
