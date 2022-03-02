@@ -20,17 +20,20 @@
 
 -->
 
-## v0.15.0-alpha.0
+## v0.15.0
 
-This release mainly adds support for newer Kubernetes versions, while dropping support for older versions.
-It supports Kubernetes 1.21 through 1.23. Previous releases supported Kubernetes 1.17 through 1.21.
+This release mainly adds support for Kubernetes 1.22+ (and OpenShift 4.9+), while dropping support for 1.20-.
 
 ### New Features
 
-- bbbf347 add support for Kubernetes 1.22 and 1.23 (and likely future versions, until something breaks)
+- bbbf347 add support for Kubernetes 1.22 and newer
+- b5d8d8e ([@hfwen0502](https://github.com/hfwen0502), thanks!) RBAC for OpenShift, or any distribution with the [OwnerReferencesPermissionEnforcement](https://kubernetes.io/docs/reference/access-authn-authz/admission-controllers/#ownerreferencespermissionenforcement) admission controller enabled
 
 ### Bugfixes
 
+- e30ba9f fix recreate delegate pod when deleted
+- e23bf9b fix retry without candidate scheduler
+- e97a695 fix "more than one candidate" error with self targets in multiple namespaces, and, in general, for targets using identities authorized (sometimes by mistake) in multiple namespaces
 - d7d5aca fix finalizer length limit overflow for long namespace/target names
 
 ### Breaking Changes

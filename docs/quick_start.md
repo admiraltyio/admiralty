@@ -72,14 +72,15 @@ values={[
     ```shell script
     images=(
       # cert-manager dependency
-      quay.io/jetstack/cert-manager-controller:v0.16.1
-      quay.io/jetstack/cert-manager-webhook:v0.16.1
-      quay.io/jetstack/cert-manager-cainjector:v0.16.1
+      quay.io/jetstack/cert-manager-controller:v1.7.1
+      quay.io/jetstack/cert-manager-webhook:v1.7.1
+      quay.io/jetstack/cert-manager-cainjector:v1.7.1
+      quay.io/jetstack/cert-manager-ctl:v1.7.1
       # admiralty open source
-      quay.io/admiralty/multicluster-scheduler-agent:0.14.1
-      quay.io/admiralty/multicluster-scheduler-scheduler:0.14.1
-      quay.io/admiralty/multicluster-scheduler-remove-finalizers:0.14.1
-      quay.io/admiralty/multicluster-scheduler-restarter:0.14.1
+      quay.io/admiralty/multicluster-scheduler-agent:0.15.0
+      quay.io/admiralty/multicluster-scheduler-scheduler:0.15.0
+      quay.io/admiralty/multicluster-scheduler-remove-finalizers:0.15.0
+      quay.io/admiralty/multicluster-scheduler-restarter:0.15.0
     )
     for image in "${images[@]}"
     do
@@ -99,12 +100,10 @@ values={[
 
     for CLUSTER_NAME in cd us eu
     do
-      kubectl --context kind-$CLUSTER_NAME create namespace cert-manager
-      kubectl --context kind-$CLUSTER_NAME apply --validate=false -f https://github.com/jetstack/cert-manager/releases/download/v0.16.1/cert-manager.crds.yaml
       helm install cert-manager jetstack/cert-manager \
         --kube-context kind-$CLUSTER_NAME \
-        --namespace cert-manager \
-        --version v0.16.1 \
+        --namespace cert-manager --create-namespace \
+        --version v1.7.1 --set installCRDs=true \
         --wait --debug
       # --wait to ensure release is ready before next steps
       # --debug to show progress, for lack of a better way,
@@ -126,11 +125,10 @@ helm repo update
 
 for CLUSTER_NAME in cd us eu
 do
-  kubectl --context kind-$CLUSTER_NAME create namespace admiralty
   helm install admiralty admiralty/multicluster-scheduler \
     --kube-context kind-$CLUSTER_NAME \
-    --namespace admiralty \
-    --version 0.14.1 \
+    --namespace admiralty --create-namespace \
+    --version 0.15.0 \
     --wait --debug
   # --wait to ensure release is ready before next steps
   # --debug to show progress, for lack of a better way,

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Copyright 2020 The Multicluster-Scheduler Authors.
+# Copyright 2022 The Multicluster-Scheduler Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -25,7 +25,9 @@ regex_opt=""
 #sed_opt="--quiet"
 #regex_opt="p"
 
-sed $sed_opt "s/--version $BEFORE_VERSION/--version $AFTER_VERSION/g$regex_opt" README.md
+sed $sed_opt "s/--version $BEFORE_VERSION/--version $AFTER_VERSION/g$regex_opt" docs/quick_start.md
+sed $sed_opt "s/:$BEFORE_VERSION/:$AFTER_VERSION/g$regex_opt" docs/quick_start.md
+sed $sed_opt "s/--version $BEFORE_VERSION/--version $AFTER_VERSION/g$regex_opt" docs/operator_guide/installation.md
 sed $sed_opt "s/^version: $BEFORE_VERSION$/version: $AFTER_VERSION/$regex_opt" charts/multicluster-scheduler/Chart.yaml
 sed $sed_opt "s/^appVersion: $BEFORE_VERSION$/appVersion: $AFTER_VERSION/$regex_opt" charts/multicluster-scheduler/Chart.yaml
 sed $sed_opt "s/$BEFORE_VERSION/$AFTER_VERSION/g$regex_opt" charts/multicluster-scheduler/README.md

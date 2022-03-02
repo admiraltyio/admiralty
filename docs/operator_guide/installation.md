@@ -21,14 +21,13 @@ custom_edit_url: https://github.com/admiraltyio/admiralty/edit/master/docs/opera
     kubectl config use-context changeme # if using multiple contexts
     ```
 
-1.  Refer to the [cert-manager documentation](https://cert-manager.io/docs/installation/kubernetes/) to install version 0.11+, if not already installed.
+1.  Refer to the [cert-manager documentation](https://cert-manager.io/docs/installation/kubernetes/) to install version 1.0+, if not already installed.
 
 1.  Install the Admiralty agent with Helm v3:
 
     ```shell script
-    kubectl create namespace admiralty
     helm install admiralty admiralty/multicluster-scheduler \
-        --namespace admiralty \
-        --version 0.14.1 \
+        --namespace admiralty --create-namespace \
+        --version 0.15.0 \
         --wait
     ```
