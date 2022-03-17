@@ -197,7 +197,12 @@ func (r reconciler) Handle(obj interface{}) (requeueAfter *time.Duration, err er
 			}
 		} else {
 			spec := svc.Spec.DeepCopy()
-			spec.ClusterIP = remoteSvc.Spec.ClusterIP
+			if spec.Type != corev1.ServiceTypeExternalName {
+				// ClusterIP is controlled locally.
+				// However, if the type field is changed to ExternalName, ClusterIP must be reset.
+				spec.ClusterIP = remoteSvc.Spec.ClusterIP   // ""
+				spec.ClusterIPs = remoteSvc.Spec.ClusterIPs // nil
+			}
 			if !reflect.DeepEqual(&remoteSvc.Spec, spec) {
 				remoteCopy := remoteSvc.DeepCopy()
 				remoteCopy.Spec = *spec.DeepCopy()
@@ -285,6 +290,11 @@ func makeRemoteService(actual *corev1.Service) *corev1.Service {
 	gold.Annotations[common.AnnotationKeyIsDelegate] = ""
 	controller.AddRemoteControllerReference(gold, actual)
 	gold.Spec = *actual.Spec.DeepCopy()
-	gold.Spec.ClusterIP = "" // cluster IP given by each cluster (not really a top-level spec)
+	if actual.Spec.ClusterIP != corev1.ClusterIPNone {
+		// cluster IP given by each cluster (not really a top-level spec)
+		// but don't empty for headless services (keep None)
+		gold.Spec.ClusterIP = ""
+		gold.Spec.ClusterIPs = nil
+	}
 	return gold
 }

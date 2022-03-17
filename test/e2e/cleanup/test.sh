@@ -15,7 +15,7 @@
 # limitations under the License.
 #
 
-set -exuo pipefail
+set -euo pipefail
 
 source test/e2e/aliases.sh
 source test/e2e/admiralty.sh
@@ -29,7 +29,7 @@ cleanup_test() {
   k $i delete target $target
 
   export -f cleanup_test_iteration
-  timeout --foreground 90s bash -c "until cleanup_test_iteration $i; do sleep 1; done"
+  timeout --foreground 120s bash -c "until cleanup_test_iteration $i; do sleep 1; done"
   # use --foreground to catch ctrl-c
   # https://unix.stackexchange.com/a/233685
 
@@ -40,10 +40,10 @@ cleanup_test() {
 cleanup_test_iteration() {
   i=$1
 
-  set -exuo pipefail
+  set -euo pipefail
   source test/e2e/aliases.sh
 
-  [ $(k $i get pod -l app=cleanup -o json | jq -e '.items[0].metadata.finalizers | length') -eq 0 ]
+  [ $(k $i get pod -l app=cleanup -o json | jq -e '.items[0].metadata.finalizers | length') -eq 0 ] || return 1
 }
 
 if [[ "${BASH_SOURCE[0]:-}" == "${0}" ]]; then

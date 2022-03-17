@@ -15,7 +15,7 @@
 # limitations under the License.
 #
 
-set -exuo pipefail
+set -euo pipefail
 
 source test/e2e/aliases.sh
 source test/e2e/admiralty.sh
@@ -29,7 +29,7 @@ no-reservation_test() {
   k 1 apply -f test/e2e/no-reservation/test.yaml
 
   export -f no-reservation_test_iteration
-  timeout --foreground 30s bash -c "until no-reservation_test_iteration; do sleep 1; done"
+  timeout --foreground 60s bash -c "until no-reservation_test_iteration; do sleep 1; done"
   # use --foreground to catch ctrl-c
   # https://unix.stackexchange.com/a/233685
 
@@ -42,7 +42,7 @@ no-reservation_test() {
 }
 
 no-reservation_test_iteration() {
-  set -exuo pipefail
+  set -euo pipefail
   source test/e2e/aliases.sh
 
   k 1 get pod -l app=no-reservation -o json | jq -e '.items[0].status.conditions[] | select(.type == "PodScheduled") | .reason == "Unschedulable"'
