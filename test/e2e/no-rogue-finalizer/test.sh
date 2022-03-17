@@ -21,7 +21,7 @@ source test/e2e/aliases.sh
 no-rogue-finalizer_test() {
   # give the controllers 30s to clean up after other test objects have been deleted
   export -f no-rogue-finalizer_test_iteration
-  timeout --foreground 5s bash -c "until no-rogue-finalizer_test_iteration; do sleep 1; done"
+  timeout --foreground 30s bash -c "until no-rogue-finalizer_test_iteration; do sleep 1; done"
   # use --foreground to catch ctrl-c
   # https://unix.stackexchange.com/a/233685
 }
@@ -33,7 +33,7 @@ no-rogue-finalizer_test_iteration() {
   # check that we didn't add finalizers to uncontrolled resources
   finalizer="multicluster.admiralty.io/"
   for resource in pods configmaps secrets services ingresses; do
-    [ $(k 1 get $resource -A -o custom-columns=FINALIZERS:.metadata.finalizers | grep -c $finalizer) -eq 0 ] || exit 1
+    k 1 get $resource -A -o custom-columns=FINALIZERS:.metadata.finalizers | grep -qv $finalizer
   done
 }
 
