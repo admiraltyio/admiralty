@@ -15,7 +15,7 @@
 # limitations under the License.
 #
 
-set -exuo pipefail
+set -euo pipefail
 
 source test/e2e/aliases.sh
 source test/e2e/admiralty.sh

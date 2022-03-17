@@ -27,12 +27,13 @@ no-rogue-finalizer_test() {
 }
 
 no-rogue-finalizer_test_iteration() {
+  set -euo pipefail
   source test/e2e/aliases.sh
 
   # check that we didn't add finalizers to uncontrolled resources
   finalizer="multicluster.admiralty.io/"
   for resource in pods configmaps secrets services ingresses; do
-    [ $(k 1 get $resource -A -o custom-columns=FINALIZERS:.metadata.finalizers | grep -c $finalizer) -eq 0 ]
+    [ $(k 1 get $resource -A -o custom-columns=FINALIZERS:.metadata.finalizers | grep -c $finalizer) -eq 0 ] || exit 1
   done
 }
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Copyright 2020 The Multicluster-Scheduler Authors.
+# Copyright 2022 The Multicluster-Scheduler Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -37,12 +37,13 @@ ingress_test_iteration() {
   i=$1
   j=$2
 
+  set -euo pipefail
   source test/e2e/aliases.sh
 
-  [ $(k "$j" get ingress | wc -l) -eq 2 ] # including header
-  [ $(k "$j" get service | wc -l) -eq 3 ] # including header and the "kubernetes" service
+  [ $(k "$j" get ingress | wc -l) -eq 2 ] || return 1 # including header
+  [ $(k "$j" get service | wc -l) -eq 3 ] || return 1 # including header and the "kubernetes" service
 
-  k "$i" annotate ing follow annotate=test
+  k "$i" annotate ing follow annotate=test --overwrite
   k "$j" get ing follow --no-headers -o custom-columns=ANNOTATIONS:.metadata.annotations | grep "annotate:test"
 }
 
