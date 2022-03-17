@@ -20,6 +20,12 @@
 
 -->
 
+## v0.15.1
+
+### Bugfixes
+
+- 2581da6 fix service propagation: handle new ClusterIPs dual-stack field
+
 ## v0.15.0
 
 This release mainly adds support for Kubernetes 1.22+ (and OpenShift 4.9+), while dropping support for 1.20-.

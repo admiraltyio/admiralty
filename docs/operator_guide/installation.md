@@ -28,6 +28,6 @@ custom_edit_url: https://github.com/admiraltyio/admiralty/edit/master/docs/opera
     ```shell script
     helm install admiralty admiralty/multicluster-scheduler \
         --namespace admiralty --create-namespace \
-        --version 0.15.0 \
+        --version 0.15.1 \
         --wait
     ```
