@@ -26,6 +26,7 @@ func BaseLabels(targetNamespace, targetName string) map[string]string {
 		common.LabelAndTaintKeyVirtualKubeletProvider:             common.VirtualKubeletProviderName,
 		"kubernetes.io/role":                                      "cluster",
 		"alpha.service-controller.kubernetes.io/exclude-balancer": "true",
+		"node.kubernetes.io/exclude-from-external-load-balancers": "true",
 	}
 	if targetNamespace == "" {
 		l[common.LabelKeyClusterTargetName] = targetName
