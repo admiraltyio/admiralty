@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Copyright 2022 The Multicluster-Scheduler Authors.
+# Copyright 2023 The Multicluster-Scheduler Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,7 +19,7 @@ set -euo pipefail
 
 source test/e2e/aliases.sh
 
-argo_version=3.1.9
+argo_version=3.4.5
 argo_manifest="https://github.com/argoproj/argo-workflows/releases/download/v$argo_version/install.yaml"
 argo_img="argoproj/argoexec:v$argo_version"
 
@@ -50,11 +50,6 @@ argo_setup_source() {
     k "$i" create ns argo
   fi
   k "$i" apply -n argo -f "$argo_manifest"
-
-  # kind uses containerd not docker so we change the argo executor (default: docker)
-  # TODO modify install.yaml instead
-  k "$i" patch cm -n argo workflow-controller-configmap --patch '{"data":{"config":"{\"containerRuntimeExecutor\":\"k8sapi\"}"}}'
-  k "$i" delete pod --all -n argo # reload config map
 
   k "$i" apply -f examples/argo-workflows/_service-account.yaml
 

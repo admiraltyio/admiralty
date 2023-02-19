@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Copyright 2022 The Multicluster-Scheduler Authors.
+# Copyright 2023 The Multicluster-Scheduler Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -81,11 +81,19 @@ metadata:
   namespace: $ns
 spec:
   serviceAccountName: cluster$i
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: cluster$i
+  namespace: $ns
+  annotations:
+    kubernetes.io/service-account.name: cluster$i
+type: kubernetes.io/service-account-token
 EOF
       while ! k $j get sa cluster$i -n $ns; do sleep 1; done
 
-      SECRET_NAME=$(k $j get serviceaccount cluster1 -n $ns -o json | jq -r .secrets[0].name)
-      TOKEN=$(k $j get secret $SECRET_NAME -n $ns -o json | jq -r .data.token | base64 --decode)
+      TOKEN=$(k $j get secret cluster$i -n $ns -o json | jq -r .data.token | base64 --decode)
       KUBECONFIG=$(k $j config view --minify --raw -o json | jq '.users[0].user={token:"'$TOKEN'"} | .contexts[0].context.namespace="default"')
       k $i create secret generic c$j -n $ns --from-literal=config="$KUBECONFIG" --dry-run -o yaml | k $i apply -f -
     fi
