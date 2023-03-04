@@ -81,19 +81,10 @@ metadata:
   namespace: $ns
 spec:
   serviceAccountName: cluster$i
----
-apiVersion: v1
-kind: Secret
-metadata:
-  name: cluster$i
-  namespace: $ns
-  annotations:
-    kubernetes.io/service-account.name: cluster$i
-type: kubernetes.io/service-account-token
 EOF
-      while ! k $j get secret cluster$i -n $ns -o json | jq -e .data.token; do sleep 1; done
+      while ! k $j get sa cluster$i -n $ns; do sleep 1; done
 
-      TOKEN=$(k $j get secret cluster$i -n $ns -o json | jq -r .data.token | base64 --decode)
+      TOKEN=$(k $j create token cluster$i -n $ns)
       KUBECONFIG=$(k $j config view --minify --raw -o json | jq '.users[0].user={token:"'$TOKEN'"} | .contexts[0].context.namespace="default"')
       k $i create secret generic c$j -n $ns --from-literal=config="$KUBECONFIG" --dry-run -o yaml | k $i apply -f -
     fi
