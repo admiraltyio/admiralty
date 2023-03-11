@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Copyright 2022 The Multicluster-Scheduler Authors.
+# Copyright 2023 The Multicluster-Scheduler Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -29,7 +29,7 @@ cert_manager_setup() {
 
   h $i upgrade --install cert-manager jetstack/cert-manager \
     --namespace cert-manager --create-namespace \
-    --version v1.7.1 --set installCRDs=true \
+    --version v1.11.0 --set installCRDs=true \
     --wait --debug --timeout=1m
 }
 

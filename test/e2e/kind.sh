@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Copyright 2022 The Multicluster-Scheduler Authors.
+# Copyright 2023 The Multicluster-Scheduler Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -22,19 +22,18 @@ source test/e2e/aliases.sh
 # images built for kind v0.11.1
 # https://github.com/kubernetes-sigs/kind/releases/tag/v0.11.1
 declare -A kind_images
-kind_images[1.21]="kindest/node:v1.21.1@sha256:69860bda5563ac81e3c0057d654b5253219618a22ec3a346306239bba8cfa1a6"
-kind_images[1.20]="kindest/node:v1.20.7@sha256:cbeaf907fc78ac97ce7b625e4bf0de16e3ea725daf6b04f930bd14c67c671ff9"
-kind_images[1.19]="kindest/node:v1.19.11@sha256:07db187ae84b4b7de440a73886f008cf903fcf5764ba8106a9fd5243d6f32729"
-kind_images[1.18]="kindest/node:v1.18.19@sha256:7af1492e19b3192a79f606e43c35fb741e520d195f96399284515f077b3b622c"
-kind_images[1.17]="kindest/node:v1.17.17@sha256:66f1d0d91a88b8a001811e2f1054af60eef3b669a9a74f9b6db871f2f1eeed00"
-kind_images[1.16]="kindest/node:v1.16.15@sha256:83067ed51bf2a3395b24687094e283a7c7c865ccc12a8b1d7aa673ba0c5e8861"
-kind_images[1.15]="kindest/node:v1.15.12@sha256:b920920e1eda689d9936dfcf7332701e80be12566999152626b2c9d730397a95"
-kind_images[1.14]="kindest/node:v1.14.10@sha256:f8a66ef82822ab4f7569e91a5bccaf27bceee135c1457c512e54de8c6f7219f8"
-# "known to work well" (k8s 1.22 wasn't released when kind 0.11.1 was released)
-kind_images[1.22]="kindest/node:v1.22.0@sha256:b8bda84bb3a190e6e028b1760d277454a72267a5454b57db34437c34a588d047"
-kind_images[1.23]="kindest/node:v1.23.0@sha256:49824ab1727c04e56a21a5d8372a402fcd32ea51ac96a2706a12af38934f81ac"
 
-K8S_VERSION="${K8S_VERSION:-"1.23"}"
+kind_images[1.25]="kindest/node:v1.25.3@sha256:f52781bc0d7a19fb6c405c2af83abfeb311f130707a0e219175677e366cc45d1"
+kind_images[1.24]="kindest/node:v1.24.7@sha256:577c630ce8e509131eab1aea12c022190978dd2f745aac5eb1fe65c0807eb315"
+kind_images[1.23]="kindest/node:v1.23.13@sha256:ef453bb7c79f0e3caba88d2067d4196f427794086a7d0df8df4f019d5e336b61"
+kind_images[1.22]="kindest/node:v1.22.15@sha256:7d9708c4b0873f0fe2e171e2b1b7f45ae89482617778c1c875f1053d4cef2e41"
+kind_images[1.21]="kindest/node:v1.21.14@sha256:9d9eb5fb26b4fbc0c6d95fa8c790414f9750dd583f5d7cee45d92e8c26670aa1"
+kind_images[1.20]="kindest/node:v1.20.15@sha256:a32bf55309294120616886b5338f95dd98a2f7231519c7dedcec32ba29699394"
+kind_images[1.19]="kindest/node:v1.19.16@sha256:476cb3269232888437b61deca013832fee41f9f074f9bed79f57e4280f7c48b7"
+# "known to work well" (k8s 1.26 wasn't released when kind 0.17.0 was released)
+kind_images[1.26]="kindest/node:v1.26.0@sha256:691e24bd2417609db7e589e1a479b902d2e209892a10ce375fab60a8407c7352"
+
+K8S_VERSION="${K8S_VERSION:-"1.26"}"
 
 kind_setup() {
   i=$1
@@ -47,7 +46,6 @@ kind_setup() {
   NODE_IP=$(docker inspect "${CLUSTER}-control-plane" --format "{{ .NetworkSettings.Networks.kind.IPAddress }}")
   kind get kubeconfig --name $CLUSTER --internal | \
     sed "s/${CLUSTER}-control-plane/${NODE_IP}/g" >kubeconfig-$CLUSTER
-  k $i apply -f test/e2e/must-run-as-non-root.yaml
 }
 
 if [[ "${BASH_SOURCE[0]:-}" == "${0}" ]]; then
