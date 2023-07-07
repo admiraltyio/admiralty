@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Copyright 2022 The Multicluster-Scheduler Authors.
+# Copyright 2023 The Multicluster-Scheduler Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -64,6 +64,9 @@ webhook_ready 1 admiralty multicluster-scheduler-controller-manager multicluster
 #k 1 taint nodes -l virtual-kubelet.io/provider=admiralty node.kubernetes.io/network-unavailable=:NoSchedule
 # unfortunately, we can't use kubectl to taint nodes with node.kubernetes.io/network-unavailable
 # some system defaulting admission controller overwriting the reserved taint?
+
+# fix GH issue #152: different default priority in target cluster
+k 2 apply -f test/e2e/priorityclass.yaml
 
 argo_test 1 2
 follow_test 1 2

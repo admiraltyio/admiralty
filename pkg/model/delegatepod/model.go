@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 The Multicluster-Scheduler Authors.
+ * Copyright 2023 The Multicluster-Scheduler Authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -77,6 +77,9 @@ func MakeDelegatePod(proxyPod *corev1.Pod) (*v1alpha1.PodChaperon, error) {
 	if _, ok := srcPod.Annotations[common.AnnotationKeyNoReservation]; !ok {
 		delegatePod.Spec.SchedulerName = common.CandidateSchedulerName
 	}
+
+	// support different default priority in target cluster
+	delegatePod.Spec.Priority = nil
 
 	return delegatePod, nil
 }
