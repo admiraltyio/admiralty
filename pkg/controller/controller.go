@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 The Multicluster-Scheduler Authors.
+ * Copyright 2023 The Multicluster-Scheduler Authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -176,11 +176,11 @@ func (c *Controller) EnqueueRemoteController(ownerKind string, getOwner GetOwner
 			parentUID, ok = a[common.LabelKeyParentUID]
 		}
 		if ok {
-			parentNamespace := a[common.LabelKeyParentNamespace]
+			parentNamespace := a[common.AnnotationKeyParentNamespace]
 			if parentNamespace == "" {
 				parentNamespace = object.GetNamespace()
 			}
-			parentName := a[common.LabelKeyParentName]
+			parentName := a[common.AnnotationKeyParentName]
 			if parentName == "" {
 				parentName = object.GetName()
 			}
@@ -207,8 +207,8 @@ func AddRemoteControllerReference(child metav1.Object, parent metav1.Object) {
 		child.SetAnnotations(a)
 	}
 	a[common.LabelKeyParentUID] = string(parent.GetUID())
-	a[common.LabelKeyParentNamespace] = parent.GetNamespace()
-	a[common.LabelKeyParentName] = parent.GetName()
+	a[common.AnnotationKeyParentNamespace] = parent.GetNamespace()
+	a[common.AnnotationKeyParentName] = parent.GetName()
 }
 
 func ParentControlsChild(child metav1.Object, parent metav1.Object) bool {
