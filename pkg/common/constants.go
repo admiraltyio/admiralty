@@ -63,6 +63,8 @@ var (
 
 	LabelKeyHasFinalizer = KeyPrefix + "has-finalizer"
 
+	LabelKeyParentClusterName = KeyPrefix + "parent-cluster-name"
+	// used to get pod chaperon (whose name is generated) given proxy pod ("list one" hack), without indexer
 	LabelKeyParentUID            = KeyPrefix + "parent-uid"
 	AnnotationKeyParentName      = KeyPrefix + "parent-name"
 	AnnotationKeyParentNamespace = KeyPrefix + "parent-namespace"

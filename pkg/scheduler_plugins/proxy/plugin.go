@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 The Multicluster-Scheduler Authors.
+ * Copyright 2023 The Multicluster-Scheduler Authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@ package proxy
 import (
 	"context"
 	"fmt"
+	"os"
 	"sync"
 	"time"
 
@@ -40,6 +41,7 @@ import (
 
 type Plugin struct {
 	handle           framework.Handle
+	clusterName      string
 	targets          map[string]*versioned.Clientset
 	targetNamespaces map[string]string
 
@@ -129,7 +131,7 @@ func (pl *Plugin) Filter(ctx context.Context, state *framework.CycleState, pod *
 		}
 		// create candidate if not exists
 		if c == nil {
-			c, err := delegatepod.MakeDelegatePod(pod)
+			c, err := delegatepod.MakeDelegatePod(pod, pl.clusterName)
 			if err != nil {
 				return false, err
 			}
@@ -186,7 +188,7 @@ func (pl *Plugin) Reserve(ctx context.Context, state *framework.CycleState, p *v
 	}
 	if c == nil {
 		if _, ok := p.Annotations[common.AnnotationKeyNoReservation]; ok {
-			c, err := delegatepod.MakeDelegatePod(p)
+			c, err := delegatepod.MakeDelegatePod(p, pl.clusterName)
 			if err != nil {
 				return framework.NewStatus(framework.Error, err.Error())
 			}
@@ -300,6 +302,7 @@ func New(_ runtime.Object, h framework.Handle) (framework.Plugin, error) {
 
 	return &Plugin{
 		handle:                  h,
+		clusterName:             os.Getenv("CLUSTER_NAME"),
 		targets:                 targets,
 		targetNamespaces:        targetNamespaces,
 		failedNodeNamesByPodUID: map[types.UID]map[string]bool{},

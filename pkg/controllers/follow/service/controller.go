@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 The Multicluster-Scheduler Authors.
+ * Copyright 2023 The Multicluster-Scheduler Authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -41,7 +41,8 @@ import (
 )
 
 type reconciler struct {
-	target agentconfig.Target
+	clusterName string
+	target      agentconfig.Target
 
 	kubeclientset kubernetes.Interface
 	remoteClient  kubernetes.Interface
@@ -55,6 +56,7 @@ type reconciler struct {
 }
 
 func NewController(
+	clusterName string,
 	target agentconfig.Target,
 
 	kubeclientset kubernetes.Interface,
@@ -67,7 +69,8 @@ func NewController(
 	remoteSvcInformer coreinformers.ServiceInformer) *controller.Controller {
 
 	r := &reconciler{
-		target: target,
+		clusterName: clusterName,
+		target:      target,
 
 		kubeclientset: kubeclientset,
 		remoteClient:  remoteClient,
@@ -91,12 +94,7 @@ func NewController(
 
 	svcInformer.Informer().AddEventHandler(controller.HandleAddUpdateWith(c.EnqueueObject))
 
-	remoteSvcInformer.Informer().AddEventHandler(controller.HandleAllWith(c.EnqueueRemoteController(
-		"Service",
-		func(namespace, name string) (metav1.Object, error) {
-			return r.svcLister.Services(namespace).Get(name)
-		},
-	)))
+	remoteSvcInformer.Informer().AddEventHandler(controller.HandleAllWith(c.EnqueueRemoteController(clusterName)))
 
 	epInformer.Informer().AddEventHandler(controller.HandleAddUpdateWith(c.EnqueueObject))
 
@@ -113,9 +111,19 @@ func (r reconciler) Handle(obj interface{}) (requeueAfter *time.Duration, err er
 	namespace, name, err := cache.SplitMetaNamespaceKey(key)
 	utilruntime.Must(err)
 
+	remoteSvc, err := r.remoteSvcLister.Services(namespace).Get(name)
+	if err != nil && !errors.IsNotFound(err) {
+		return nil, err
+	}
+
 	svc, err := r.svcLister.Services(namespace).Get(name)
 	if err != nil {
 		if errors.IsNotFound(err) {
+			if remoteSvc != nil && controller.IsRemoteControlled(remoteSvc, r.clusterName) {
+				if err := r.remoteClient.CoreV1().Services(namespace).Delete(ctx, name, metav1.DeleteOptions{}); err != nil && !errors.IsNotFound(err) {
+					return nil, fmt.Errorf("cannot delete orphaned service: %v", err)
+				}
+			}
 			return nil, nil
 		}
 		return nil, err
@@ -136,10 +144,6 @@ func (r reconciler) Handle(obj interface{}) (requeueAfter *time.Duration, err er
 
 	// get remote owned services
 	// eponymous services that aren't owned are not included (because we don't want to delete them, see below)
-	remoteSvc, err := r.remoteSvcLister.Services(namespace).Get(name)
-	if err != nil && !errors.IsNotFound(err) {
-		return nil, err
-	}
 	if remoteSvc != nil && !controller.ParentControlsChild(remoteSvc, svc) {
 		return nil, nil
 	}
@@ -190,7 +194,7 @@ func (r reconciler) Handle(obj interface{}) (requeueAfter *time.Duration, err er
 		}
 
 		if remoteSvc == nil {
-			gold := makeRemoteService(svc) // at this point, svc includes updates from above (including reroute and cilium)
+			gold := r.makeRemoteService(svc) // at this point, svc includes updates from above (including reroute and cilium)
 			_, err := r.remoteClient.CoreV1().Services(namespace).Create(ctx, gold, metav1.CreateOptions{})
 			if err != nil && !errors.IsAlreadyExists(err) {
 				return nil, err
@@ -203,9 +207,12 @@ func (r reconciler) Handle(obj interface{}) (requeueAfter *time.Duration, err er
 				spec.ClusterIP = remoteSvc.Spec.ClusterIP   // ""
 				spec.ClusterIPs = remoteSvc.Spec.ClusterIPs // nil
 			}
-			if !reflect.DeepEqual(&remoteSvc.Spec, spec) {
+			if !reflect.DeepEqual(&remoteSvc.Spec, spec) || remoteSvc.Labels[common.LabelKeyParentClusterName] != r.clusterName {
 				remoteCopy := remoteSvc.DeepCopy()
 				remoteCopy.Spec = *spec.DeepCopy()
+				// add or update parent cluster name
+				// labels is non-nil because it includes parent UID
+				remoteCopy.Labels[common.LabelKeyParentClusterName] = r.clusterName
 				_, err := r.remoteClient.CoreV1().Services(namespace).Update(ctx, remoteCopy, metav1.UpdateOptions{})
 				if err != nil {
 					return nil, err
@@ -276,7 +283,7 @@ func (r reconciler) removeFinalizer(ctx context.Context, actual *corev1.Service,
 	return r.kubeclientset.CoreV1().Services(actual.Namespace).Update(ctx, actualCopy, metav1.UpdateOptions{})
 }
 
-func makeRemoteService(actual *corev1.Service) *corev1.Service {
+func (r reconciler) makeRemoteService(actual *corev1.Service) *corev1.Service {
 	gold := &corev1.Service{}
 	gold.Name = actual.Name
 	gold.Labels = make(map[string]string, len(actual.Labels))
@@ -288,7 +295,7 @@ func makeRemoteService(actual *corev1.Service) *corev1.Service {
 		gold.Annotations[k] = v
 	}
 	gold.Annotations[common.AnnotationKeyIsDelegate] = ""
-	controller.AddRemoteControllerReference(gold, actual)
+	controller.AddRemoteControllerReference(gold, actual, r.clusterName)
 	gold.Spec = *actual.Spec.DeepCopy()
 	if actual.Spec.ClusterIP != corev1.ClusterIPNone {
 		// cluster IP given by each cluster (not really a top-level spec)

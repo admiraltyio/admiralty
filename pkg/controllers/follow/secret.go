@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 The Multicluster-Scheduler Authors.
+ * Copyright 2023 The Multicluster-Scheduler Authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -40,7 +40,8 @@ import (
 const proxyPodBySecrets = "proxyPodBySecrets"
 
 type secretReconciler struct {
-	target agentconfig.Target
+	clusterName string
+	target      agentconfig.Target
 
 	kubeclientset kubernetes.Interface
 	remoteClient  kubernetes.Interface
@@ -54,6 +55,7 @@ type secretReconciler struct {
 }
 
 func NewSecretController(
+	clusterName string,
 	target agentconfig.Target,
 
 	kubeclientset kubernetes.Interface,
@@ -65,7 +67,8 @@ func NewSecretController(
 	remoteSecretInformer coreinformers.SecretInformer) *controller.Controller {
 
 	r := &secretReconciler{
-		target: target,
+		clusterName: clusterName,
+		target:      target,
 
 		kubeclientset: kubeclientset,
 		remoteClient:  remoteClient,
@@ -82,10 +85,7 @@ func NewSecretController(
 
 	secretInformer.Informer().AddEventHandler(controller.HandleAddUpdateWith(c.EnqueueObject))
 
-	getSecret := func(namespace, name string) (metav1.Object, error) {
-		return r.secretLister.Secrets(namespace).Get(name)
-	}
-	remoteSecretInformer.Informer().AddEventHandler(controller.HandleAllWith(c.EnqueueRemoteController("Secret", getSecret)))
+	remoteSecretInformer.Informer().AddEventHandler(controller.HandleAllWith(c.EnqueueRemoteController(clusterName)))
 
 	podInformer.Informer().AddEventHandler(controller.HandleAllWith(enqueueProxyPodsSecrets(c)))
 	utilruntime.Must(podInformer.Informer().AddIndexers(map[string]cache.IndexFunc{
@@ -159,9 +159,19 @@ func (r secretReconciler) Handle(obj interface{}) (requeueAfter *time.Duration, 
 	namespace, name, err := cache.SplitMetaNamespaceKey(key)
 	utilruntime.Must(err)
 
+	remoteSecret, err := r.remoteSecretLister.Secrets(namespace).Get(name)
+	if err != nil && !errors.IsNotFound(err) {
+		return nil, err
+	}
+
 	secret, err := r.secretLister.Secrets(namespace).Get(name)
 	if err != nil {
 		if errors.IsNotFound(err) {
+			if remoteSecret != nil && controller.IsRemoteControlled(remoteSecret, r.clusterName) {
+				if err := r.remoteClient.CoreV1().Services(namespace).Delete(ctx, name, metav1.DeleteOptions{}); err != nil && !errors.IsNotFound(err) {
+					return nil, fmt.Errorf("cannot delete orphaned secret: %v", err)
+				}
+			}
 			return nil, nil
 		}
 		return nil, err
@@ -176,10 +186,6 @@ func (r secretReconciler) Handle(obj interface{}) (requeueAfter *time.Duration, 
 	// get remote owned secrets
 	// eponymous secrets that aren't owned are not included (because we don't want to delete them, see below)
 	// include owned secrets in targets that no longer need them (because we shouldn't forget them when deleting)
-	remoteSecret, err := r.remoteSecretLister.Secrets(namespace).Get(name)
-	if err != nil && !errors.IsNotFound(err) {
-		return nil, err
-	}
 	if remoteSecret != nil && !controller.ParentControlsChild(remoteSecret, secret) {
 		return nil, nil
 	}
@@ -204,18 +210,24 @@ func (r secretReconciler) Handle(obj interface{}) (requeueAfter *time.Duration, 
 		}
 
 		if remoteSecret == nil {
-			gold := makeRemoteSecret(secret)
+			gold := r.makeRemoteSecret(secret)
 			_, err := r.remoteClient.CoreV1().Secrets(namespace).Create(ctx, gold, metav1.CreateOptions{})
 			if err != nil && !errors.IsAlreadyExists(err) {
 				return nil, err
 			}
-		} else if !reflect.DeepEqual(remoteSecret.Data, secret.Data) {
+		} else if !reflect.DeepEqual(remoteSecret.Data, secret.Data) ||
+			remoteSecret.Labels[common.LabelKeyParentClusterName] != r.clusterName {
+
 			remoteSecretCopy := remoteSecret.DeepCopy()
 			remoteSecretCopy.Data = make(map[string][]byte, len(secret.Data))
 			for k, v := range secret.Data {
 				remoteSecretCopy.Data[k] = make([]byte, len(v))
 				copy(remoteSecretCopy.Data[k], v)
 			}
+			// add or update parent cluster name
+			// labels is non-nil because it includes parent UID
+			remoteSecretCopy.Labels[common.LabelKeyParentClusterName] = r.clusterName
+
 			_, err := r.remoteClient.CoreV1().Secrets(namespace).Update(ctx, remoteSecretCopy, metav1.UpdateOptions{})
 			if err != nil {
 				return nil, err
@@ -256,7 +268,7 @@ func (r secretReconciler) removeFinalizer(ctx context.Context, secret *corev1.Se
 	return r.kubeclientset.CoreV1().Secrets(secret.Namespace).Update(ctx, secretCopy, metav1.UpdateOptions{})
 }
 
-func makeRemoteSecret(secret *corev1.Secret) *corev1.Secret {
+func (r secretReconciler) makeRemoteSecret(secret *corev1.Secret) *corev1.Secret {
 	gold := &corev1.Secret{}
 	gold.Name = secret.Name
 	gold.Labels = make(map[string]string, len(secret.Labels))
@@ -267,7 +279,7 @@ func makeRemoteSecret(secret *corev1.Secret) *corev1.Secret {
 	for k, v := range secret.Annotations {
 		gold.Annotations[k] = v
 	}
-	controller.AddRemoteControllerReference(gold, secret)
+	controller.AddRemoteControllerReference(gold, secret, r.clusterName)
 	gold.Type = secret.Type
 	gold.Data = make(map[string][]byte, len(secret.Data))
 	for k, v := range secret.Data {

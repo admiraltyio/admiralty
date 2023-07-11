@@ -164,49 +164,65 @@ func (c *Controller) EnqueueController(ownerKind string, getOwner GetOwner) func
 	}
 }
 
-func (c *Controller) EnqueueRemoteController(ownerKind string, getOwner GetOwner) func(obj interface{}) {
+func (c *Controller) EnqueueRemoteController(parentClusterName string) func(obj interface{}) {
 	return func(obj interface{}) {
 		object := obj.(metav1.Object)
-		a := object.GetAnnotations()
-		parentUID, ok := a[common.LabelKeyParentUID]
-		if !ok {
-			// for backward compatibility use labels instead,
-			// even though didn't work for parent names longer than 63 characters
-			a = object.GetLabels()
-			parentUID, ok = a[common.LabelKeyParentUID]
-		}
-		if ok {
-			parentNamespace := a[common.AnnotationKeyParentNamespace]
-			if parentNamespace == "" {
-				parentNamespace = object.GetNamespace()
-			}
-			parentName := a[common.AnnotationKeyParentName]
-			if parentName == "" {
-				parentName = object.GetName()
-			}
-			owner, err := getOwner(parentNamespace, parentName)
-			if err != nil {
-				return
-			}
-
-			if string(owner.GetUID()) != parentUID {
-				// TODO handle unlikely yet possible cross-cluster UID conflict with signing
-				return
-			}
-
-			c.EnqueueObject(owner)
+		if IsRemoteControlled(object, parentClusterName) {
+			c.workqueue.Add(ParentKey(object))
 			return
 		}
 	}
 }
 
-func AddRemoteControllerReference(child metav1.Object, parent metav1.Object) {
+func IsRemoteControlled(object metav1.Object, parentClusterName string) bool {
+	v, ok := object.GetLabels()[common.LabelKeyParentClusterName]
+	// support empty parent cluster name
+	// check that label is present to filter out regular objects
+	return ok && v == parentClusterName
+}
+
+func ParentKey(child metav1.Object) string {
+	a := child.GetAnnotations()
+	parentNamespace := a[common.AnnotationKeyParentNamespace]
+	if parentNamespace == "" {
+		parentNamespace = child.GetNamespace()
+	}
+	parentName := a[common.AnnotationKeyParentName]
+	if parentName == "" {
+		parentName = child.GetName()
+	}
+	if parentNamespace != "" {
+		return parentNamespace + "/" + parentName
+	}
+	return parentName
+}
+
+func IndexByRemoteController(parentClusterName string) cache.IndexFunc {
+	return func(obj interface{}) ([]string, error) {
+		meta, ok := obj.(metav1.Object)
+		if !ok {
+			return nil, nil
+		}
+		if !IsRemoteControlled(meta, parentClusterName) {
+			return nil, nil
+		}
+		return []string{ParentKey(meta)}, nil
+	}
+}
+
+func AddRemoteControllerReference(child metav1.Object, parent metav1.Object, parentClusterName string) {
+	l := child.GetLabels()
+	if l == nil {
+		l = map[string]string{}
+		child.SetLabels(l)
+	}
+	l[common.LabelKeyParentUID] = string(parent.GetUID())
+	l[common.LabelKeyParentClusterName] = parentClusterName
 	a := child.GetAnnotations()
 	if a == nil {
 		a = map[string]string{}
 		child.SetAnnotations(a)
 	}
-	a[common.LabelKeyParentUID] = string(parent.GetUID())
 	a[common.AnnotationKeyParentNamespace] = parent.GetNamespace()
 	a[common.AnnotationKeyParentName] = parent.GetName()
 }

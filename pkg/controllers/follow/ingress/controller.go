@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 The Multicluster-Scheduler Authors.
+ * Copyright 2023 The Multicluster-Scheduler Authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -44,7 +44,8 @@ import (
 const ingressByService = "ingressByService"
 
 type ingressReconciler struct {
-	target agentconfig.Target
+	clusterName string
+	target      agentconfig.Target
 
 	kubeclientset kubernetes.Interface
 	remoteClient  kubernetes.Interface
@@ -58,6 +59,7 @@ type ingressReconciler struct {
 }
 
 func NewIngressController(
+	clusterName string,
 	target agentconfig.Target,
 
 	kubeclientset kubernetes.Interface,
@@ -69,7 +71,8 @@ func NewIngressController(
 	remoteIngressInformer networkinginformers.IngressInformer) *controller.Controller {
 
 	r := &ingressReconciler{
-		target: target,
+		clusterName: clusterName,
+		target:      target,
 
 		kubeclientset: kubeclientset,
 		remoteClient:  remoteClient,
@@ -92,10 +95,7 @@ func NewIngressController(
 
 	ingressInformer.Informer().AddEventHandler(controller.HandleAddUpdateWith(c.EnqueueObject))
 
-	getIngress := func(namespace, name string) (metav1.Object, error) {
-		return r.ingressLister.Ingresses(namespace).Get(name)
-	}
-	remoteIngressInformer.Informer().AddEventHandler(controller.HandleAllWith(c.EnqueueRemoteController("Ingress", getIngress)))
+	remoteIngressInformer.Informer().AddEventHandler(controller.HandleAllWith(c.EnqueueRemoteController(clusterName)))
 
 	svcInformer.Informer().AddEventHandler(controller.HandleAllWith(r.enqueueIngressForService(c)))
 	utilruntime.Must(ingressInformer.Informer().AddIndexers(map[string]cache.IndexFunc{
@@ -139,9 +139,19 @@ func (r ingressReconciler) Handle(obj interface{}) (requeueAfter *time.Duration,
 	namespace, name, err := cache.SplitMetaNamespaceKey(key)
 	utilruntime.Must(err)
 
+	remoteIngress, err := r.remoteIngressLister.Ingresses(namespace).Get(name)
+	if err != nil && !errors.IsNotFound(err) {
+		return nil, err
+	}
+
 	ingress, err := r.ingressLister.Ingresses(namespace).Get(name)
 	if err != nil {
 		if errors.IsNotFound(err) {
+			if remoteIngress != nil && controller.IsRemoteControlled(remoteIngress, r.clusterName) {
+				if err := r.remoteClient.NetworkingV1().Ingresses(namespace).Delete(ctx, name, metav1.DeleteOptions{}); err != nil && !errors.IsNotFound(err) {
+					return nil, fmt.Errorf("cannot delete orphaned ingress: %v", err)
+				}
+			}
 			return nil, nil
 		}
 		return nil, err
@@ -160,10 +170,6 @@ func (r ingressReconciler) Handle(obj interface{}) (requeueAfter *time.Duration,
 	// get remote owned ingresses
 	// eponymous ingresses that aren't owned are not included (because we don't want to delete them, see below)
 	// include owned ingresses in targets that no longer need them (because we shouldn't forget them when deleting)
-	remoteIngress, err := r.remoteIngressLister.Ingresses(namespace).Get(name)
-	if err != nil && !errors.IsNotFound(err) {
-		return nil, err
-	}
 	if remoteIngress != nil && !controller.ParentControlsChild(remoteIngress, ingress) {
 		return nil, nil
 	}
@@ -186,7 +192,7 @@ func (r ingressReconciler) Handle(obj interface{}) (requeueAfter *time.Duration,
 		}
 
 		if remoteIngress == nil {
-			gold := makeRemoteIngress(ingress)
+			gold := r.makeRemoteIngress(ingress)
 			_, err := r.remoteClient.NetworkingV1().Ingresses(namespace).Create(ctx, gold, metav1.CreateOptions{})
 			if err != nil && !errors.IsAlreadyExists(err) {
 				return nil, err
@@ -229,6 +235,12 @@ func (r ingressReconciler) shouldUpdate(remoteIngress *v1.Ingress, ingress *v1.I
 			remoteIngressCopy.Annotations[annotationKey] = annotationValue
 			klog.Infof("Adding annotation to remote Ingress: [%s:%s]", annotationKey, annotationValue)
 		}
+		shouldUpdate = true
+	}
+	if remoteIngress.Labels[common.LabelKeyParentClusterName] != r.clusterName {
+		// add or update parent cluster name
+		// labels is non-nil because it includes parent UID
+		remoteIngressCopy.Labels[common.LabelKeyParentClusterName] = r.clusterName
 		shouldUpdate = true
 	}
 	return remoteIngressCopy, shouldUpdate
@@ -274,7 +286,7 @@ func (r ingressReconciler) removeFinalizer(ctx context.Context, ingress *v1.Ingr
 	return r.kubeclientset.NetworkingV1().Ingresses(ingress.Namespace).Update(ctx, ingressCopy, metav1.UpdateOptions{})
 }
 
-func makeRemoteIngress(ingress *v1.Ingress) *v1.Ingress {
+func (r ingressReconciler) makeRemoteIngress(ingress *v1.Ingress) *v1.Ingress {
 	gold := &v1.Ingress{}
 	gold.Name = ingress.Name
 	gold.Labels = make(map[string]string, len(ingress.Labels))
@@ -287,7 +299,7 @@ func makeRemoteIngress(ingress *v1.Ingress) *v1.Ingress {
 	}
 	gold.Annotations[common.AnnotationKeyIsDelegate] = ""
 	gold.Annotations[common.AnnotationKeyGlobal] = "true"
-	controller.AddRemoteControllerReference(gold, ingress)
+	controller.AddRemoteControllerReference(gold, ingress, r.clusterName)
 	gold.Spec = *ingress.Spec.DeepCopy()
 	return gold
 }
