@@ -24,7 +24,7 @@ delete-chaperon_test() {
 
   k $i apply -f test/e2e/delete-chaperon/test.yaml
   k $i wait pod test-delete-chaperon --for=condition=PodScheduled
-  target="$(k $i get pod test-delete-chaperon -o json | jq -er '.metadata.finalizers[0] | split("-") | .[1]')"
+  target="$(k $i get pod test-delete-chaperon -o json | jq -er '.spec.nodeName')"
   j="${target: -1}"
   uid="$(k $i get pod test-delete-chaperon -o json | jq -er '.metadata.uid')"
   k $j delete podchaperon -l multicluster.admiralty.io/parent-uid="$uid" --wait --timeout=30s

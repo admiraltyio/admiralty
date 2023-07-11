@@ -169,7 +169,7 @@ func (r configMapReconciler) Handle(obj interface{}) (requeueAfter *time.Duratio
 	if err != nil {
 		if errors.IsNotFound(err) {
 			if remoteConfigMap != nil && controller.IsRemoteControlled(remoteConfigMap, r.clusterName) {
-				if err := r.remoteClient.CoreV1().Services(namespace).Delete(ctx, name, metav1.DeleteOptions{}); err != nil && !errors.IsNotFound(err) {
+				if err := r.remoteClient.CoreV1().ConfigMaps(namespace).Delete(ctx, name, metav1.DeleteOptions{}); err != nil && !errors.IsNotFound(err) {
 					return nil, fmt.Errorf("cannot delete orphaned configmap: %v", err)
 				}
 			}

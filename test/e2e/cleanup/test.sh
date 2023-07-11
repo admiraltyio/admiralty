@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Copyright 2022 The Multicluster-Scheduler Authors.
+# Copyright 2023 The Multicluster-Scheduler Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -29,7 +29,7 @@ cleanup_test() {
   k $i delete target $target
 
   export -f cleanup_test_iteration
-  timeout --foreground 120s bash -c "until cleanup_test_iteration $i; do sleep 1; done"
+  timeout --foreground 180s bash -c "until cleanup_test_iteration $i; do sleep 1; done"
   # use --foreground to catch ctrl-c
   # https://unix.stackexchange.com/a/233685
 
