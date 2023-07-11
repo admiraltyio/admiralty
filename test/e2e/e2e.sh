@@ -31,6 +31,8 @@ source test/e2e/cleanup/test.sh
 source test/e2e/no-reservation/test.sh
 source test/e2e/webhook_ready.sh
 source test/e2e/no-rogue-finalizer/test.sh
+source test/e2e/delete-chaperon/test.sh
+source test/e2e/delete-delegate/test.sh
 
 argo_setup_once
 cert_manager_setup_once
@@ -75,6 +77,8 @@ exec_test 1 2
 ingress_test 1 2
 virtual-node-labels_test 1 2
 cleanup_test 1
+delete-chaperon_test 1
+delete-delegate_test 1
 no-reservation_test
 
 no-rogue-finalizer_test

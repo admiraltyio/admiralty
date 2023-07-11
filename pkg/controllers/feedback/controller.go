@@ -167,47 +167,53 @@ func (c *reconciler) Handle(obj interface{}) (requeueAfter *time.Duration, err e
 		}
 	}
 
-	if candidate != nil && virtualNodeName == c.target.VirtualNodeName {
-		delegate := candidate
+	if virtualNodeName == c.target.VirtualNodeName {
+		if candidate != nil {
+			delegate := candidate
 
-		mcProxyPodAnnotations, otherProxyPodAnnotations := common.SplitLabelsOrAnnotations(proxyPod.Annotations)
-		_, otherDelegatePodAnnotations := common.SplitLabelsOrAnnotations(delegate.Annotations)
+			mcProxyPodAnnotations, otherProxyPodAnnotations := common.SplitLabelsOrAnnotations(proxyPod.Annotations)
+			_, otherDelegatePodAnnotations := common.SplitLabelsOrAnnotations(delegate.Annotations)
 
-		needUpdate := !reflect.DeepEqual(otherProxyPodAnnotations, otherDelegatePodAnnotations)
-		if needUpdate {
-			for k, v := range otherDelegatePodAnnotations {
-				mcProxyPodAnnotations[k] = v
+			needUpdate := !reflect.DeepEqual(otherProxyPodAnnotations, otherDelegatePodAnnotations)
+			if needUpdate {
+				for k, v := range otherDelegatePodAnnotations {
+					mcProxyPodAnnotations[k] = v
+				}
+				podCopy := proxyPod.DeepCopy()
+				podCopy.Annotations = mcProxyPodAnnotations
+
+				var err error
+				if proxyPod, err = c.kubeclientset.CoreV1().Pods(namespace).Update(ctx, podCopy, metav1.UpdateOptions{}); err != nil {
+					return nil, err
+				}
 			}
-			podCopy := proxyPod.DeepCopy()
-			podCopy.Annotations = mcProxyPodAnnotations
 
-			var err error
-			if proxyPod, err = c.kubeclientset.CoreV1().Pods(namespace).Update(ctx, podCopy, metav1.UpdateOptions{}); err != nil {
+			// we can't group annotation and status updates into an update,
+			// because general update ignores status
+
+			needStatusUpdate := deep.Equal(proxyPod.Status, delegate.Status) != nil
+			if needStatusUpdate {
+				podCopy := proxyPod.DeepCopy()
+				podCopy.Status = delegate.Status
+
+				var err error
+				if proxyPod, err = c.kubeclientset.CoreV1().Pods(namespace).UpdateStatus(ctx, podCopy, metav1.UpdateOptions{}); err != nil {
+					return nil, err
+				}
+			}
+
+			needRemoteUpdate := delegate.Labels[common.LabelKeyParentClusterName] != c.clusterName
+			if needRemoteUpdate {
+				delegateCopy := delegate.DeepCopy()
+				delegateCopy.Labels[common.LabelKeyParentClusterName] = c.clusterName
+				var err error
+				if delegate, err = c.customclientset.MulticlusterV1alpha1().PodChaperons(namespace).Update(ctx, delegateCopy, metav1.UpdateOptions{}); err != nil {
+					return nil, fmt.Errorf("cannot update candidate pod chaperon")
+				}
+			}
+		} else {
+			if err = c.kubeclientset.CoreV1().Pods(namespace).Delete(ctx, name, metav1.DeleteOptions{}); err != nil {
 				return nil, err
-			}
-		}
-
-		// we can't group annotation and status updates into an update,
-		// because general update ignores status
-
-		needStatusUpdate := deep.Equal(proxyPod.Status, delegate.Status) != nil
-		if needStatusUpdate {
-			podCopy := proxyPod.DeepCopy()
-			podCopy.Status = delegate.Status
-
-			var err error
-			if proxyPod, err = c.kubeclientset.CoreV1().Pods(namespace).UpdateStatus(ctx, podCopy, metav1.UpdateOptions{}); err != nil {
-				return nil, err
-			}
-		}
-
-		needRemoteUpdate := delegate.Labels[common.LabelKeyParentClusterName] != c.clusterName
-		if needRemoteUpdate {
-			delegateCopy := delegate.DeepCopy()
-			delegateCopy.Labels[common.LabelKeyParentClusterName] = c.clusterName
-			var err error
-			if delegate, err = c.customclientset.MulticlusterV1alpha1().PodChaperons(namespace).Update(ctx, delegateCopy, metav1.UpdateOptions{}); err != nil {
-				return nil, fmt.Errorf("cannot update candidate pod chaperon")
 			}
 		}
 	}
