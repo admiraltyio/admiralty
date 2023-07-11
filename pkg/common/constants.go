@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 The Multicluster-Scheduler Authors.
+ * Copyright 2023 The Multicluster-Scheduler Authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -63,9 +63,11 @@ var (
 
 	LabelKeyHasFinalizer = KeyPrefix + "has-finalizer"
 
-	LabelKeyParentUID       = KeyPrefix + "parent-uid"
-	LabelKeyParentName      = KeyPrefix + "parent-name"
-	LabelKeyParentNamespace = KeyPrefix + "parent-namespace"
+	LabelKeyParentClusterName = KeyPrefix + "parent-cluster-name"
+	// used to get pod chaperon (whose name is generated) given proxy pod ("list one" hack), without indexer
+	LabelKeyParentUID            = KeyPrefix + "parent-uid"
+	AnnotationKeyParentName      = KeyPrefix + "parent-name"
+	AnnotationKeyParentNamespace = KeyPrefix + "parent-namespace"
 
 	AnnotationKeyCiliumGlobalService = "io.cilium/global-service"
 

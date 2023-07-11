@@ -32,7 +32,7 @@ func IsDelegate(pod *corev1.Pod) bool {
 	return pod.Spec.SchedulerName == common.CandidateSchedulerName
 }
 
-func MakeDelegatePod(proxyPod *corev1.Pod) (*v1alpha1.PodChaperon, error) {
+func MakeDelegatePod(proxyPod *corev1.Pod, clusterName string) (*v1alpha1.PodChaperon, error) {
 	srcPod, err := proxypod.GetSourcePod(proxyPod)
 	if err != nil {
 		return nil, err
@@ -49,8 +49,6 @@ func MakeDelegatePod(proxyPod *corev1.Pod) (*v1alpha1.PodChaperon, error) {
 	}
 
 	labels, _ := ChangeLabels(srcPod.Labels)
-	// used to get pod chaperon given proxy pod ("list one" hack)
-	labels[common.LabelKeyParentUID] = string(proxyPod.UID)
 
 	delegatePod := &v1alpha1.PodChaperon{
 		ObjectMeta: metav1.ObjectMeta{
@@ -60,7 +58,7 @@ func MakeDelegatePod(proxyPod *corev1.Pod) (*v1alpha1.PodChaperon, error) {
 			Annotations:  annotations},
 		Spec: *srcPod.Spec.DeepCopy()}
 
-	controller.AddRemoteControllerReference(delegatePod, proxyPod)
+	controller.AddRemoteControllerReference(delegatePod, proxyPod, clusterName)
 
 	if _, ok := srcPod.Annotations[common.AnnotationKeyUseConstraintsFromSpecForProxyPodScheduling]; ok {
 		delegatePod.Spec.NodeSelector = nil
@@ -69,10 +67,9 @@ func MakeDelegatePod(proxyPod *corev1.Pod) (*v1alpha1.PodChaperon, error) {
 		delegatePod.Spec.TopologySpreadConstraints = nil
 	}
 
+	// At this stage, we remove incompatible fields rather than keep known compatible ones only,
+	// so we can discover current and future incompatibilities as we encounter them.
 	removeServiceAccount(&delegatePod.Spec)
-	// TODO? add compatible fields instead of removing incompatible ones
-	// (for forward compatibility and we've certainly forgotten incompatible fields...)
-	// TODO... maybe make this configurable, sort of like Federation v2 Overrides
 
 	if _, ok := srcPod.Annotations[common.AnnotationKeyNoReservation]; !ok {
 		delegatePod.Spec.SchedulerName = common.CandidateSchedulerName

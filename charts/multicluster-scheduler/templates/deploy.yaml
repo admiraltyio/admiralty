@@ -20,6 +20,8 @@ spec:
         - name: controller-manager
           args: ["--leader-elect"]
           env:
+            - name: CLUSTER_NAME
+              value: {{ .Values.clusterName }}
             # POD_NAME for leader election
             - name: POD_NAME
               valueFrom:
@@ -104,6 +106,9 @@ spec:
         - name: proxy-scheduler
           image: {{ .Values.scheduler.image.repository }}:{{ default .Chart.AppVersion .Values.scheduler.image.tag }}
           args: ["--config", "/etc/admiralty/proxy-scheduler-config"]
+          env:
+            - name: CLUSTER_NAME
+              value: {{ .Values.clusterName }}
           volumeMounts:
             - name: config
               mountPath: /etc/admiralty

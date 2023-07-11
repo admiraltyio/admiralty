@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 The Multicluster-Scheduler Authors.
+ * Copyright 2023 The Multicluster-Scheduler Authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"os"
 	"time"
 
 	"admiralty.io/multicluster-scheduler/pkg/controllers/cleanup"
@@ -125,6 +126,8 @@ func startOldStyleControllers(
 	var factories []startable
 	var controllers []runnable
 
+	clusterName := os.Getenv("CLUSTER_NAME")
+
 	for _, target := range agentCfg.Targets {
 		kubeInformerFactory := kubeinformers.NewSharedInformerFactoryWithOptions(k, time.Second*30, kubeinformers.WithNamespace(target.Namespace))
 		factories = append(factories, kubeInformerFactory)
@@ -156,6 +159,7 @@ func startOldStyleControllers(
 			controllers = append(
 				controllers,
 				follow.NewConfigMapController(
+					clusterName,
 					target,
 					k,
 					targetKubeClient,
@@ -164,6 +168,7 @@ func startOldStyleControllers(
 					targetKubeInformerFactory.Core().V1().ConfigMaps(),
 				),
 				service.NewController(
+					clusterName,
 					target,
 					k,
 					targetKubeClient,
@@ -173,6 +178,7 @@ func startOldStyleControllers(
 					targetKubeInformerFactory.Core().V1().Services(),
 				),
 				follow.NewSecretController(
+					clusterName,
 					target,
 					k,
 					targetKubeClient,
@@ -181,6 +187,7 @@ func startOldStyleControllers(
 					targetKubeInformerFactory.Core().V1().Secrets(),
 				),
 				ingress.NewIngressController(
+					clusterName,
 					target,
 					k,
 					targetKubeClient,
@@ -193,6 +200,7 @@ func startOldStyleControllers(
 		controllers = append(
 			controllers,
 			feedback.NewController(
+				clusterName,
 				target,
 				k,
 				targetCustomClient,

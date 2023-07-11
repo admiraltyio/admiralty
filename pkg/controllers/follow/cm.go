@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 The Multicluster-Scheduler Authors.
+ * Copyright 2023 The Multicluster-Scheduler Authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -40,7 +40,8 @@ import (
 const proxyPodByConfigMaps = "proxyPodByConfigMaps"
 
 type configMapReconciler struct {
-	target agentconfig.Target
+	clusterName string
+	target      agentconfig.Target
 
 	kubeclientset kubernetes.Interface
 	remoteClient  kubernetes.Interface
@@ -54,6 +55,7 @@ type configMapReconciler struct {
 }
 
 func NewConfigMapController(
+	clusterName string,
 	target agentconfig.Target,
 
 	kubeclientset kubernetes.Interface,
@@ -65,7 +67,8 @@ func NewConfigMapController(
 	remoteConfigMapInformer coreinformers.ConfigMapInformer) *controller.Controller {
 
 	r := &configMapReconciler{
-		target: target,
+		clusterName: clusterName,
+		target:      target,
 
 		kubeclientset: kubeclientset,
 		remoteClient:  remoteClient,
@@ -88,10 +91,7 @@ func NewConfigMapController(
 
 	configMapInformer.Informer().AddEventHandler(controller.HandleAddUpdateWith(c.EnqueueObject))
 
-	getConfigMap := func(namespace, name string) (metav1.Object, error) {
-		return r.configMapLister.ConfigMaps(namespace).Get(name)
-	}
-	remoteConfigMapInformer.Informer().AddEventHandler(controller.HandleAllWith(c.EnqueueRemoteController("ConfigMap", getConfigMap)))
+	remoteConfigMapInformer.Informer().AddEventHandler(controller.HandleAllWith(c.EnqueueRemoteController(clusterName)))
 
 	podInformer.Informer().AddEventHandler(controller.HandleAllWith(enqueueProxyPodsConfigMaps(c)))
 	utilruntime.Must(podInformer.Informer().AddIndexers(map[string]cache.IndexFunc{
@@ -160,9 +160,19 @@ func (r configMapReconciler) Handle(obj interface{}) (requeueAfter *time.Duratio
 	namespace, name, err := cache.SplitMetaNamespaceKey(key)
 	utilruntime.Must(err)
 
+	remoteConfigMap, err := r.remoteConfigMapLister.ConfigMaps(namespace).Get(name)
+	if err != nil && !errors.IsNotFound(err) {
+		return nil, err
+	}
+
 	configMap, err := r.configMapLister.ConfigMaps(namespace).Get(name)
 	if err != nil {
 		if errors.IsNotFound(err) {
+			if remoteConfigMap != nil && controller.IsRemoteControlled(remoteConfigMap, r.clusterName) {
+				if err := r.remoteClient.CoreV1().Services(namespace).Delete(ctx, name, metav1.DeleteOptions{}); err != nil && !errors.IsNotFound(err) {
+					return nil, fmt.Errorf("cannot delete orphaned configmap: %v", err)
+				}
+			}
 			return nil, nil
 		}
 		return nil, err
@@ -177,10 +187,6 @@ func (r configMapReconciler) Handle(obj interface{}) (requeueAfter *time.Duratio
 	// get remote owned configMaps
 	// eponymous configMaps that aren't owned are not included (because we don't want to delete them, see below)
 	// include owned configMaps in targets that no longer need them (because we shouldn't forget them when deleting)
-	remoteConfigMap, err := r.remoteConfigMapLister.ConfigMaps(namespace).Get(name)
-	if err != nil && !errors.IsNotFound(err) {
-		return nil, err
-	}
 	if remoteConfigMap != nil && !controller.ParentControlsChild(remoteConfigMap, configMap) {
 		return nil, nil
 	}
@@ -205,12 +211,15 @@ func (r configMapReconciler) Handle(obj interface{}) (requeueAfter *time.Duratio
 		}
 
 		if remoteConfigMap == nil {
-			gold := makeRemoteConfigMap(configMap)
+			gold := r.makeRemoteConfigMap(configMap)
 			_, err := r.remoteClient.CoreV1().ConfigMaps(namespace).Create(ctx, gold, metav1.CreateOptions{})
 			if err != nil && !errors.IsAlreadyExists(err) {
 				return nil, err
 			}
-		} else if !reflect.DeepEqual(remoteConfigMap.Data, configMap.Data) || !reflect.DeepEqual(remoteConfigMap.BinaryData, configMap.BinaryData) {
+		} else if !reflect.DeepEqual(remoteConfigMap.Data, configMap.Data) ||
+			!reflect.DeepEqual(remoteConfigMap.BinaryData, configMap.BinaryData) ||
+			remoteConfigMap.Labels[common.LabelKeyParentClusterName] != r.clusterName {
+
 			remoteConfigMapCopy := remoteConfigMap.DeepCopy()
 			remoteConfigMapCopy.Data = make(map[string]string, len(configMap.Data))
 			for k, v := range configMap.Data {
@@ -221,6 +230,10 @@ func (r configMapReconciler) Handle(obj interface{}) (requeueAfter *time.Duratio
 				remoteConfigMapCopy.BinaryData[k] = make([]byte, len(v))
 				copy(remoteConfigMapCopy.BinaryData[k], v)
 			}
+			// add or update parent cluster name
+			// labels is non-nil because it includes parent UID
+			remoteConfigMapCopy.Labels[common.LabelKeyParentClusterName] = r.clusterName
+
 			_, err := r.remoteClient.CoreV1().ConfigMaps(namespace).Update(ctx, remoteConfigMapCopy, metav1.UpdateOptions{})
 			if err != nil {
 				return nil, err
@@ -261,7 +274,7 @@ func (r configMapReconciler) removeFinalizer(ctx context.Context, configMap *cor
 	return r.kubeclientset.CoreV1().ConfigMaps(configMap.Namespace).Update(ctx, configMapCopy, metav1.UpdateOptions{})
 }
 
-func makeRemoteConfigMap(configMap *corev1.ConfigMap) *corev1.ConfigMap {
+func (r configMapReconciler) makeRemoteConfigMap(configMap *corev1.ConfigMap) *corev1.ConfigMap {
 	gold := &corev1.ConfigMap{}
 	gold.Name = configMap.Name
 	gold.Labels = make(map[string]string, len(configMap.Labels))
@@ -272,7 +285,7 @@ func makeRemoteConfigMap(configMap *corev1.ConfigMap) *corev1.ConfigMap {
 	for k, v := range configMap.Annotations {
 		gold.Annotations[k] = v
 	}
-	controller.AddRemoteControllerReference(gold, configMap)
+	controller.AddRemoteControllerReference(gold, configMap, r.clusterName)
 	gold.Data = make(map[string]string, len(configMap.Data))
 	for k, v := range configMap.Data {
 		gold.Data[k] = v

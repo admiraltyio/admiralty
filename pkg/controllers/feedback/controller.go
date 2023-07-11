@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 The Multicluster-Scheduler Authors.
+ * Copyright 2023 The Multicluster-Scheduler Authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -50,18 +50,11 @@ import (
 
 // this file is modified from k8s.io/sample-controller
 
-const controllerAgentName = "admiralty"
-
-const (
-	// SuccessSynced is used as part of the Event 'reason' when a proxy pod is synced
-	SuccessSynced = "Synced"
-	// MessageResourceSynced is the message used for an Event fired when a proxy pod
-	// is synced successfully
-	MessageResourceSynced = "proxy pod synced successfully"
-)
+const podChaperonByPodNamespacedName = "podChaperonByPodNamespacedName"
 
 type reconciler struct {
-	target agent.Target
+	clusterName string
+	target      agent.Target
 
 	kubeclientset   kubernetes.Interface
 	customclientset clientset.Interface
@@ -69,11 +62,12 @@ type reconciler struct {
 	podsLister         corelisters.PodLister
 	podChaperonsLister listers.PodChaperonLister
 
-	recorder record.EventRecorder
+	podChaperonIndex cache.Indexer
 }
 
 // NewController returns a new feedback controller
 func NewController(
+	clusterName string,
 	target agent.Target,
 	kubeclientset kubernetes.Interface,
 	customclientset clientset.Interface,
@@ -85,10 +79,10 @@ func NewController(
 	eventBroadcaster := record.NewBroadcaster()
 	eventBroadcaster.StartLogging(klog.Infof)
 	eventBroadcaster.StartRecordingToSink(&typedcorev1.EventSinkImpl{Interface: kubeclientset.CoreV1().Events("")})
-	recorder := eventBroadcaster.NewRecorder(scheme.Scheme, corev1.EventSource{Component: controllerAgentName})
 
 	r := &reconciler{
-		target: target,
+		clusterName: clusterName,
+		target:      target,
 
 		kubeclientset:   kubeclientset,
 		customclientset: customclientset,
@@ -96,10 +90,9 @@ func NewController(
 		podsLister:         podInformer.Lister(),
 		podChaperonsLister: podChaperonInformer.Lister(),
 
-		recorder: recorder,
+		podChaperonIndex: podChaperonInformer.Informer().GetIndexer(),
 	}
 
-	getPod := func(namespace, name string) (metav1.Object, error) { return r.podsLister.Pods(namespace).Get(name) }
 	c := controller.New("feedback", r, podInformer.Informer().HasSynced, podChaperonInformer.Informer().HasSynced)
 
 	enqueueProxyPod := func(obj interface{}) {
@@ -110,7 +103,11 @@ func NewController(
 	}
 
 	podInformer.Informer().AddEventHandler(controller.HandleAddUpdateWith(enqueueProxyPod))
-	podChaperonInformer.Informer().AddEventHandler(controller.HandleAllWith(c.EnqueueRemoteController("Pod", getPod)))
+	podChaperonInformer.Informer().AddEventHandler(controller.HandleAllWith(c.EnqueueRemoteController(clusterName)))
+
+	utilruntime.Must(podChaperonInformer.Informer().AddIndexers(map[string]cache.IndexFunc{
+		podChaperonByPodNamespacedName: controller.IndexByRemoteController(clusterName),
+	}))
 
 	return c
 }
@@ -125,17 +122,26 @@ func (c *reconciler) Handle(obj interface{}) (requeueAfter *time.Duration, err e
 	proxyPod, err := c.podsLister.Pods(namespace).Get(name)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			utilruntime.HandleError(fmt.Errorf("proxy pod '%s' in work queue no longer exists", key))
+			objs, err := c.podChaperonIndex.ByIndex(podChaperonByPodNamespacedName, key)
+			utilruntime.Must(err)
+			for _, obj := range objs {
+				candidate := obj.(*multiclusterv1alpha1.PodChaperon)
+				if err := c.customclientset.MulticlusterV1alpha1().PodChaperons(namespace).Delete(ctx, candidate.Name, metav1.DeleteOptions{}); err != nil && !errors.IsNotFound(err) {
+					return nil, fmt.Errorf("cannot delete orphaned pod chaperon: %v", err)
+				}
+			}
 			return nil, nil
+		} else {
+			return nil, fmt.Errorf("cannot get proxy pod: %v", err)
 		}
-
-		return nil, err
 	}
 
 	proxyPodTerminating := proxyPod.DeletionTimestamp != nil
 
 	proxyPodHasFinalizer, j := controller.HasFinalizer(proxyPod.Finalizers, c.target.Finalizer)
 
+	// get pod chaperon by parent UID (when parent still exists) rather than using index
+	// for backward compatibility with existing pod chaperons
 	var candidate *multiclusterv1alpha1.PodChaperon
 	l, err := c.podChaperonsLister.PodChaperons(namespace).List(labels.SelectorFromSet(map[string]string{common.LabelKeyParentUID: string(proxyPod.UID)}))
 	if err != nil {
@@ -148,20 +154,16 @@ func (c *reconciler) Handle(obj interface{}) (requeueAfter *time.Duration, err e
 		candidate = l[0]
 	}
 
-	didSomething := false
-
 	virtualNodeName := proxypod.GetScheduledClusterName(proxyPod)
 	if proxyPodTerminating || virtualNodeName != "" && virtualNodeName != c.target.VirtualNodeName {
 		if candidate != nil {
 			if err := c.customclientset.MulticlusterV1alpha1().PodChaperons(namespace).Delete(ctx, candidate.Name, metav1.DeleteOptions{}); err != nil && !errors.IsNotFound(err) {
 				return nil, err
 			}
-			didSomething = true
 		} else if proxyPodHasFinalizer {
 			if proxyPod, err = c.removeFinalizer(ctx, proxyPod, j); err != nil {
 				return nil, err
 			}
-			didSomething = true
 		}
 	}
 
@@ -183,7 +185,6 @@ func (c *reconciler) Handle(obj interface{}) (requeueAfter *time.Duration, err e
 			if proxyPod, err = c.kubeclientset.CoreV1().Pods(namespace).Update(ctx, podCopy, metav1.UpdateOptions{}); err != nil {
 				return nil, err
 			}
-			didSomething = true
 		}
 
 		// we can't group annotation and status updates into an update,
@@ -198,17 +199,23 @@ func (c *reconciler) Handle(obj interface{}) (requeueAfter *time.Duration, err e
 			if proxyPod, err = c.kubeclientset.CoreV1().Pods(namespace).UpdateStatus(ctx, podCopy, metav1.UpdateOptions{}); err != nil {
 				return nil, err
 			}
-			didSomething = true
+		}
+
+		needRemoteUpdate := delegate.Labels[common.LabelKeyParentClusterName] != c.clusterName
+		if needRemoteUpdate {
+			delegateCopy := delegate.DeepCopy()
+			delegateCopy.Labels[common.LabelKeyParentClusterName] = c.clusterName
+			var err error
+			if delegate, err = c.customclientset.MulticlusterV1alpha1().PodChaperons(namespace).Update(ctx, delegateCopy, metav1.UpdateOptions{}); err != nil {
+				return nil, fmt.Errorf("cannot update candidate pod chaperon")
+			}
 		}
 	}
 
-	if didSomething {
-		c.recorder.Event(proxyPod, corev1.EventTypeNormal, SuccessSynced, MessageResourceSynced)
-	}
 	return nil, nil
 }
 
-func (c reconciler) removeFinalizer(ctx context.Context, pod *corev1.Pod, j int) (*corev1.Pod, error) {
+func (c *reconciler) removeFinalizer(ctx context.Context, pod *corev1.Pod, j int) (*corev1.Pod, error) {
 	podCopy := pod.DeepCopy()
 	podCopy.Finalizers = append(podCopy.Finalizers[:j], podCopy.Finalizers[j+1:]...)
 	return c.kubeclientset.CoreV1().Pods(pod.Namespace).Update(ctx, podCopy, metav1.UpdateOptions{})

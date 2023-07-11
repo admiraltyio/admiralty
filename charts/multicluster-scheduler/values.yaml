@@ -3,6 +3,8 @@ fullnameOverride: ""
 
 #imagePullSecretName: ""
 
+clusterName: ""
+
 sourceController:
   enabled: true
 
