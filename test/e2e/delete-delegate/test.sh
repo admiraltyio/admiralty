@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Copyright 2022 The Multicluster-Scheduler Authors.
+# Copyright 2023 The Multicluster-Scheduler Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -28,8 +28,23 @@ delete-delegate_test() {
   target="$(k $i get pod -l app=delete-delegate -o json | jq -er '.items[0].metadata.finalizers[0] | split("-") | .[1]')"
   j="${target: -1}"
   k $j delete pod -l multicluster.admiralty.io/app=delete-delegate --wait --timeout=30s
+
+  export -f delete-delegate_test_iteration
+  timeout --foreground 30s bash -c "until delete-delegate_test_iteration $j; do sleep 1; done"
+  # use --foreground to catch ctrl-c
+  # https://unix.stackexchange.com/a/233685
+
   k $j wait pod -l multicluster.admiralty.io/app=delete-delegate --for=condition=PodScheduled
   k $i delete -f test/e2e/delete-delegate/test.yaml
+}
+
+delete-delegate_test_iteration() {
+  j=$1
+
+  set -euo pipefail
+  source test/e2e/aliases.sh
+
+  [ "$(k "$j" get pod -l multicluster.admiralty.io/app=delete-delegate | wc -l)" -eq 2 ] || return 1 # including header
 }
 
 if [[ "${BASH_SOURCE[0]:-}" == "${0}" ]]; then

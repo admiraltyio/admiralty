@@ -90,5 +90,5 @@ jobs:
         if: ${{ failure() }}
         uses: actions/upload-artifact@v2
         with:
-          name: cluster-dump
+          name: cluster-dump-${{ matrix.k8s_version }}
           path: cluster-dump

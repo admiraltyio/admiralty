@@ -168,7 +168,7 @@ func (r secretReconciler) Handle(obj interface{}) (requeueAfter *time.Duration, 
 	if err != nil {
 		if errors.IsNotFound(err) {
 			if remoteSecret != nil && controller.IsRemoteControlled(remoteSecret, r.clusterName) {
-				if err := r.remoteClient.CoreV1().Services(namespace).Delete(ctx, name, metav1.DeleteOptions{}); err != nil && !errors.IsNotFound(err) {
+				if err := r.remoteClient.CoreV1().Secrets(namespace).Delete(ctx, name, metav1.DeleteOptions{}); err != nil && !errors.IsNotFound(err) {
 					return nil, fmt.Errorf("cannot delete orphaned secret: %v", err)
 				}
 			}
