@@ -78,7 +78,7 @@ ingress_test 1 2
 virtual-node-labels_test 1 2
 cleanup_test 1
 delete-chaperon_test 1
-delete-delegate_test 1
+delete-delegate_test 1 2
 no-reservation_test
 
 no-rogue-finalizer_test

@@ -51,6 +51,8 @@ var (
 	AnnotationKeyIsReserved = KeyPrefix + "is-reserved"
 	AnnotationKeyIsAllowed  = KeyPrefix + "is-allowed"
 
+	AnnotationKeyPodMissingSince = KeyPrefix + "pod-missing-since"
+
 	// annotations on following services and ingresses (for cloud controller manager to configure DNS)
 
 	AnnotationKeyGlobal = KeyPrefix + "global"

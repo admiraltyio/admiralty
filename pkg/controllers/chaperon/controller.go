@@ -33,6 +33,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	coreinformers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes"
@@ -42,7 +43,8 @@ import (
 	"k8s.io/client-go/tools/record"
 )
 
-// this file is modified from k8s.io/sample-controller
+// TODO: configurable
+var PodRecreatedIfPodChaperonNotDeletedAfter = time.Minute
 
 type reconciler struct {
 	kubeclientset   kubernetes.Interface
@@ -96,16 +98,50 @@ func (c *reconciler) Handle(obj interface{}) (requeueAfter *time.Duration, err e
 		return nil, err
 	}
 
-	pod, err := c.podsLister.Pods(podChaperon.Namespace).Get(podChaperon.Name)
-	if errors.IsNotFound(err) {
-		pod, err = c.kubeclientset.CoreV1().Pods(podChaperon.Namespace).Create(ctx, newPod(podChaperon), metav1.CreateOptions{})
+	var podMissingSince time.Time
+	podMissingSinceStr, podMissing := podChaperon.Annotations[common.AnnotationKeyPodMissingSince]
+	if podMissing {
+		var err error
+		podMissingSince, err = time.Parse(time.RFC3339, podMissingSinceStr)
+		if err != nil {
+			return nil, fmt.Errorf("cannot parse %s annotation value: %v", common.AnnotationKeyPodMissingSince, err)
+		}
 	}
+
+	pod, err := c.podsLister.Pods(podChaperon.Namespace).Get(podChaperon.Name)
 	if err != nil {
-		return nil, err
+		if !errors.IsNotFound(err) {
+			return nil, err
+		}
+
+		podNeverExisted := podChaperon.Status.Phase == ""
+		if podNeverExisted || podMissing && time.Since(podMissingSince) > PodRecreatedIfPodChaperonNotDeletedAfter && podChaperon.Spec.RestartPolicy == corev1.RestartPolicyAlways {
+			var err error
+			pod, err = c.kubeclientset.CoreV1().Pods(podChaperon.Namespace).Create(ctx, newPod(podChaperon), metav1.CreateOptions{})
+			if err != nil {
+				return nil, fmt.Errorf("cannot create pod for pod chaperon %v", err)
+			}
+		} else if !podMissing {
+			patch := []byte(`{"metadata":{"annotations":{"` + common.AnnotationKeyPodMissingSince + `":"` + time.Now().Format(time.RFC3339) + `"}}}`)
+			if _, err := c.customclientset.MulticlusterV1alpha1().PodChaperons(namespace).Patch(ctx, name, types.MergePatchType, patch, metav1.PatchOptions{}); err != nil {
+				return nil, fmt.Errorf("cannot patch pod chaperon: %v", err)
+			}
+			return nil, nil
+		} else {
+			return nil, nil
+		}
 	}
 
 	if !metav1.IsControlledBy(pod, podChaperon) {
 		return nil, fmt.Errorf("resource %q already exists and is not managed by PodChaperon", pod.Name)
+	}
+
+	if podMissing {
+		patch := []byte(`{"metadata":{"annotations":{"` + common.AnnotationKeyPodMissingSince + `":null}}}`)
+		_, err := c.customclientset.MulticlusterV1alpha1().PodChaperons(namespace).Patch(ctx, name, types.MergePatchType, patch, metav1.PatchOptions{})
+		if err != nil {
+			return nil, fmt.Errorf("cannot patch pod chaperon: %v", err)
+		}
 	}
 
 	// TODO: support allowed pod spec updates: containers[*].image, initContainers[*].image, activeDeadlineSeconds, tolerations (only additions to tolerations)
