@@ -286,14 +286,17 @@ func addClusterScopedFactoriesAndControllers(
 
 func startWebhook(ctx context.Context, cfg *rest.Config, agentCfg agentconfig.Config) {
 	webhookMgr, err := manager.New(cfg, manager.Options{
-		Port:               9443,
-		CertDir:            "/tmp/k8s-webhook-server/serving-certs",
-		MetricsBindAddress: "0",
+		Port:                   9443,
+		CertDir:                "/tmp/k8s-webhook-server/serving-certs",
+		MetricsBindAddress:     "0",
+		HealthProbeBindAddress: ":8080",
 	})
 	utilruntime.Must(err)
 
 	hookServer := webhookMgr.GetWebhookServer()
 	hookServer.Register("/mutate-v1-pod", &webhook.Admission{Handler: proxypod.NewHandler(agentCfg.GetKnownFinalizersByNamespace())})
+
+	utilruntime.Must(webhookMgr.AddReadyzCheck("webhook-ready", hookServer.StartedChecker()))
 
 	go func() {
 		utilruntime.Must(webhookMgr.Start(ctx))
