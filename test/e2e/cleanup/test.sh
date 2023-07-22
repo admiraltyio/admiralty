@@ -25,15 +25,17 @@ cleanup_test() {
 
   k $i apply -f test/e2e/cleanup/test.yaml
   k $i rollout status deploy cleanup
-  target="$(k $i get pod -l app=cleanup -o json | jq -er '.items[0].metadata.finalizers[0] | split("-") | .[1]')"
-  k $i delete target $target
+  nodeName="$(k $i get pod -l app=cleanup -o json | jq -er '.items[0].spec.nodeName')"
+  j="${nodeName: -1}"
+  k $i delete target c$j
 
   export -f cleanup_test_iteration
   timeout --foreground 180s bash -c "until cleanup_test_iteration $i; do sleep 1; done"
   # use --foreground to catch ctrl-c
   # https://unix.stackexchange.com/a/233685
 
-  admiralty_connect $i "${target: -1}"
+  admiralty_connect $i $j
+  k $i wait --for condition=available --timeout=120s deployment multicluster-scheduler-controller-manager -n admiralty
   k $i delete -f test/e2e/cleanup/test.yaml
 }
 

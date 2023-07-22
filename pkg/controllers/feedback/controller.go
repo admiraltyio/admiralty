@@ -167,6 +167,14 @@ func (c *reconciler) Handle(obj interface{}) (requeueAfter *time.Duration, err e
 		}
 	}
 
+	if candidate != nil {
+		if _, podMissing := candidate.Annotations[common.AnnotationKeyPodMissingSince]; podMissing {
+			if err := c.customclientset.MulticlusterV1alpha1().PodChaperons(namespace).Delete(ctx, candidate.Name, metav1.DeleteOptions{}); err != nil && !errors.IsNotFound(err) {
+				return nil, fmt.Errorf("cannot delete pod chaperon")
+			}
+		}
+	}
+
 	if virtualNodeName == c.target.VirtualNodeName {
 		if candidate != nil {
 			delegate := candidate

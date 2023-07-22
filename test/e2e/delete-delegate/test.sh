@@ -22,29 +22,46 @@ source test/e2e/admiralty.sh
 
 delete-delegate_test() {
   i=$1
+  j=$2
 
+  k $j label node --all a=b --overwrite
   k $i apply -f test/e2e/delete-delegate/test.yaml
-  k $i rollout status deploy delete-delegate
-  target="$(k $i get pod -l app=delete-delegate -o json | jq -er '.items[0].metadata.finalizers[0] | split("-") | .[1]')"
-  j="${target: -1}"
-  k $j delete pod -l multicluster.admiralty.io/app=delete-delegate --wait --timeout=30s
+  k $i wait pod test-delete-delegate --for=condition=PodScheduled
+
+  # when the cluster connection is interrupted for more than a minute,
+  # the delegate pod (with restart policy always) should be recreated
+
+  k $i scale deploy -n admiralty multicluster-scheduler-controller-manager --replicas=0
+  uid="$(k $j get pod -l multicluster.admiralty.io/app=delete-delegate -o json | jq -er '.items[0].metadata.uid')"
+  echo $uid
+  k $j delete pod -l multicluster.admiralty.io/app=delete-delegate
 
   export -f delete-delegate_test_iteration
-  timeout --foreground 30s bash -c "until delete-delegate_test_iteration $j; do sleep 1; done"
+  timeout --foreground 120s bash -c "until delete-delegate_test_iteration $j $uid; do sleep 1; done"
   # use --foreground to catch ctrl-c
   # https://unix.stackexchange.com/a/233685
-
   k $j wait pod -l multicluster.admiralty.io/app=delete-delegate --for=condition=PodScheduled
-  k $i delete -f test/e2e/delete-delegate/test.yaml
+
+  # when the cluster connection is working, the proxy pod should be deleted
+  # to respect the invariant that pods can't resuscitate
+
+  k $i scale deploy -n admiralty multicluster-scheduler-controller-manager --replicas=2
+  k $j delete pod -l multicluster.admiralty.io/app=delete-delegate --wait --timeout=30s
+
+  k $i wait pod test-delete-delegate --for=delete
+
+  k $j label node --all a-
 }
 
 delete-delegate_test_iteration() {
   j=$1
+  old_uid=$2
 
   set -euo pipefail
   source test/e2e/aliases.sh
 
-  [ "$(k "$j" get pod -l multicluster.admiralty.io/app=delete-delegate | wc -l)" -eq 2 ] || return 1 # including header
+  new_uid="$(k "$j" get pod -l multicluster.admiralty.io/app=delete-delegate -o json | jq -er '.items[0].metadata.uid')" || return 1
+  [ "$new_uid" != "$old_uid" ] || return 1
 }
 
 if [[ "${BASH_SOURCE[0]:-}" == "${0}" ]]; then
