@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 The Multicluster-Scheduler Authors.
+ * Copyright 2023 The Multicluster-Scheduler Authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,57 +18,26 @@ package proxypod // import "admiralty.io/multicluster-scheduler/pkg/webhooks/pro
 
 import (
 	"context"
-	"net/http"
+	"fmt"
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/util/json"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/runtime/inject"
-	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
+	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/yaml"
 
 	"admiralty.io/multicluster-scheduler/pkg/common"
 )
 
-type Handler struct {
-	decoder *admission.Decoder
-	client  client.Client
-	mutator mutator
+type Mutator struct {
+	KnownFinalizers map[string][]string
 }
 
-func NewHandler(knownFinalizers map[string][]string) *Handler {
-	return &Handler{mutator: mutator{knownFinalizers: knownFinalizers}}
-}
-
-func (h *Handler) Handle(_ context.Context, req admission.Request) admission.Response {
-	srcPod := &corev1.Pod{}
-	err := h.decoder.Decode(req, srcPod)
-	if err != nil {
-		return admission.Errored(http.StatusBadRequest, err)
+func (m Mutator) Default(ctx context.Context, obj runtime.Object) error {
+	pod, ok := obj.(*corev1.Pod)
+	if !ok {
+		return fmt.Errorf("expected a Pod but got a %T", obj)
 	}
 
-	// namespace isn't necessarily set in the raw object (but defined in resource URL)
-	srcPod.Namespace = req.Namespace
-
-	proxyPod := srcPod.DeepCopy()
-	if err := h.mutator.mutate(proxyPod); err != nil {
-		return admission.Errored(http.StatusInternalServerError, err)
-	}
-
-	proxyPodRaw, err := json.Marshal(proxyPod)
-	if err != nil {
-		return admission.Errored(http.StatusInternalServerError, err)
-	}
-
-	return admission.PatchResponseFromRaw(req.Object.Raw, proxyPodRaw)
-}
-
-type mutator struct {
-	knownFinalizers map[string][]string
-}
-
-func (m mutator) mutate(pod *corev1.Pod) error {
 	if _, ok := pod.Annotations[common.AnnotationKeyElect]; !ok {
 		// not a multicluster pod
 		return nil
@@ -162,7 +131,7 @@ func (m mutator) mutate(pod *corev1.Pod) error {
 	}
 	// don't append finalizers of targets in different namespaces
 	// because they're useless, and wouldn't be removed because feedback controllers are namespaced
-	for _, f := range m.knownFinalizers[pod.Namespace] {
+	for _, f := range m.KnownFinalizers[pod.Namespace] {
 		finalizers = append(finalizers, f)
 	}
 	pod.Finalizers = finalizers
@@ -173,25 +142,5 @@ func (m mutator) mutate(pod *corev1.Pod) error {
 	}
 	pod.Labels[common.LabelKeyHasFinalizer] = "true"
 
-	return nil
-}
-
-// Handler implements inject.Client.
-// A client will be automatically injected.
-var _ inject.Client = &Handler{}
-
-// InjectClient injects the client.
-func (h *Handler) InjectClient(c client.Client) error {
-	h.client = c
-	return nil
-}
-
-// Handler implements inject.Decoder.
-// A decoder will be automatically injected.
-var _ admission.DecoderInjector = &Handler{}
-
-// InjectDecoder injects the decoder.
-func (h *Handler) InjectDecoder(d *admission.Decoder) error {
-	h.decoder = d
 	return nil
 }

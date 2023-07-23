@@ -38,7 +38,7 @@ import (
 
 	"admiralty.io/multicluster-scheduler/pkg/common"
 	"admiralty.io/multicluster-scheduler/pkg/controller"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 )
 
 const ingressByService = "ingressByService"

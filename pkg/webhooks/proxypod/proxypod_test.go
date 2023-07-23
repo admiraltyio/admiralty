@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 The Multicluster-Scheduler Authors.
+ * Copyright 2023 The Multicluster-Scheduler Authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 package proxypod
 
 import (
+	"context"
 	"testing"
 
 	"github.com/go-test/deep"
@@ -162,9 +163,9 @@ func TestMutate(t *testing.T) {
 		if k != "other pod" {
 			v.mutatedPod.Annotations[common.AnnotationKeySourcePodManifest] = string(podManifest)
 		}
-		m := mutator{knownFinalizers: knownFinalizers}
+		m := Mutator{KnownFinalizers: knownFinalizers}
 		mutatedPod := v.pod.DeepCopy()
-		if err := m.mutate(mutatedPod); err != nil {
+		if err := m.Default(context.Background(), mutatedPod); err != nil {
 			t.Errorf("%s failed: %v", k, err)
 		}
 		diff := deep.Equal(mutatedPod, &v.mutatedPod)
