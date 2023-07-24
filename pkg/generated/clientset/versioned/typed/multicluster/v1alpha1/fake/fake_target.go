@@ -24,7 +24,6 @@ import (
 	v1alpha1 "admiralty.io/multicluster-scheduler/pkg/apis/multicluster/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
-	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"
 	testing "k8s.io/client-go/testing"
@@ -36,9 +35,9 @@ type FakeTargets struct {
 	ns   string
 }
 
-var targetsResource = schema.GroupVersionResource{Group: "multicluster.admiralty.io", Version: "v1alpha1", Resource: "targets"}
+var targetsResource = v1alpha1.SchemeGroupVersion.WithResource("targets")
 
-var targetsKind = schema.GroupVersionKind{Group: "multicluster.admiralty.io", Version: "v1alpha1", Kind: "Target"}
+var targetsKind = v1alpha1.SchemeGroupVersion.WithKind("Target")
 
 // Get takes name of the target, and returns the corresponding target object, and an error if there is any.
 func (c *FakeTargets) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.Target, err error) {

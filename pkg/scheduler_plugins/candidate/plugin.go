@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 The Multicluster-Scheduler Authors.
+ * Copyright 2023 The Multicluster-Scheduler Authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,7 +26,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
 	"k8s.io/kubernetes/pkg/scheduler/framework"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 
@@ -51,13 +51,13 @@ func (pl *Plugin) Name() string {
 	return Name
 }
 
-func (pl *Plugin) PreFilter(ctx context.Context, state *framework.CycleState, p *v1.Pod) *framework.Status {
+func (pl *Plugin) PreFilter(ctx context.Context, state *framework.CycleState, p *v1.Pod) (*framework.PreFilterResult, *framework.Status) {
 	// reset annotations
 	patch := []byte(`{"metadata":{"annotations":{"` + common.AnnotationKeyIsReserved + `":null}}}`)
 	if _, err := pl.client.MulticlusterV1alpha1().PodChaperons(p.Namespace).Patch(ctx, p.Name, types.MergePatchType, patch, metav1.PatchOptions{}); err != nil {
-		return framework.NewStatus(framework.Error, err.Error())
+		return nil, framework.NewStatus(framework.Error, err.Error())
 	}
-	return nil
+	return nil, nil
 }
 
 func (pl *Plugin) PreFilterExtensions() framework.PreFilterExtensions {

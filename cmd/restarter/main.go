@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 The Multicluster-Scheduler Authors.
+ * Copyright 2023 The Multicluster-Scheduler Authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,12 +36,7 @@ import (
 )
 
 func main() {
-	stopCh := signals.SetupSignalHandler()
-	ctx, cancel := context.WithCancel(context.Background())
-	go func() {
-		<-stopCh
-		cancel()
-	}()
+	ctx := signals.SetupSignalHandler()
 
 	cfg, ns, err := config.ConfigAndNamespaceForKubeconfigAndContext("", "")
 	utilruntime.Must(err)
@@ -62,8 +57,8 @@ func main() {
 		customInformerFactory.Multicluster().V1alpha1().Targets(),
 		kubeInformerFactory.Core().V1().Secrets())
 
-	kubeInformerFactory.Start(stopCh)
-	customInformerFactory.Start(stopCh)
+	kubeInformerFactory.Start(ctx.Done())
+	customInformerFactory.Start(ctx.Done())
 
 	var leaderElect bool
 	flag.BoolVar(&leaderElect, "leader-elect", false, "Start a leader election client and gain leadership before executing the main loop. Enable this when running replicated components for high availability.")
@@ -71,9 +66,9 @@ func main() {
 
 	if leaderElect {
 		leaderelection.Run(ctx, ns, "admiralty-restarter", k, func(ctx context.Context) {
-			utilruntime.Must(targetCtrl.Run(1, stopCh))
+			utilruntime.Must(targetCtrl.Run(ctx, 1))
 		})
 	} else {
-		utilruntime.Must(targetCtrl.Run(1, stopCh))
+		utilruntime.Must(targetCtrl.Run(ctx, 1))
 	}
 }

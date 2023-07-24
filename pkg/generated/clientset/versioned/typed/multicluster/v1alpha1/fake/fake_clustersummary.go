@@ -24,7 +24,6 @@ import (
 	v1alpha1 "admiralty.io/multicluster-scheduler/pkg/apis/multicluster/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
-	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"
 	testing "k8s.io/client-go/testing"
@@ -35,9 +34,9 @@ type FakeClusterSummaries struct {
 	Fake *FakeMulticlusterV1alpha1
 }
 
-var clustersummariesResource = schema.GroupVersionResource{Group: "multicluster.admiralty.io", Version: "v1alpha1", Resource: "clustersummaries"}
+var clustersummariesResource = v1alpha1.SchemeGroupVersion.WithResource("clustersummaries")
 
-var clustersummariesKind = schema.GroupVersionKind{Group: "multicluster.admiralty.io", Version: "v1alpha1", Kind: "ClusterSummary"}
+var clustersummariesKind = v1alpha1.SchemeGroupVersion.WithKind("ClusterSummary")
 
 // Get takes name of the clusterSummary, and returns the corresponding clusterSummary object, and an error if there is any.
 func (c *FakeClusterSummaries) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.ClusterSummary, err error) {
