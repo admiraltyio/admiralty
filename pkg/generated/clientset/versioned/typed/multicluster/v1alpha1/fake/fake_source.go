@@ -24,7 +24,6 @@ import (
 	v1alpha1 "admiralty.io/multicluster-scheduler/pkg/apis/multicluster/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
-	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"
 	testing "k8s.io/client-go/testing"
@@ -36,9 +35,9 @@ type FakeSources struct {
 	ns   string
 }
 
-var sourcesResource = schema.GroupVersionResource{Group: "multicluster.admiralty.io", Version: "v1alpha1", Resource: "sources"}
+var sourcesResource = v1alpha1.SchemeGroupVersion.WithResource("sources")
 
-var sourcesKind = schema.GroupVersionKind{Group: "multicluster.admiralty.io", Version: "v1alpha1", Kind: "Source"}
+var sourcesKind = v1alpha1.SchemeGroupVersion.WithKind("Source")
 
 // Get takes name of the source, and returns the corresponding source object, and an error if there is any.
 func (c *FakeSources) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.Source, err error) {

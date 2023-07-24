@@ -110,7 +110,9 @@ spec:
       containers:
         - name: proxy-scheduler
           image: {{ .Values.scheduler.image.repository }}:{{ default .Chart.AppVersion .Values.scheduler.image.tag }}
-          args: ["--config", "/etc/admiralty/proxy-scheduler-config"]
+          args:
+            - --config=/etc/admiralty/proxy-scheduler-config
+            - --pod-max-in-unschedulable-pods-duration=60s
           env:
             - name: CLUSTER_NAME
               value: {{ .Values.clusterName }}

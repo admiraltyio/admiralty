@@ -23,27 +23,9 @@ import (
 	"os"
 	"time"
 
-	"admiralty.io/multicluster-scheduler/pkg/controllers/cleanup"
-	"admiralty.io/multicluster-scheduler/pkg/leaderelection"
-	"admiralty.io/multicluster-service-account/pkg/config"
-	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
-	vklog "github.com/virtual-kubelet/virtual-kubelet/log"
-	logruslogger "github.com/virtual-kubelet/virtual-kubelet/log/logrus"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
-	"k8s.io/apimachinery/pkg/util/wait"
-	kubeinformers "k8s.io/client-go/informers"
-	"k8s.io/client-go/kubernetes"
-	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
-	"k8s.io/client-go/rest"
-	"k8s.io/klog"
-	"k8s.io/sample-controller/pkg/signals"
-	"sigs.k8s.io/controller-runtime/pkg/manager"
-	"sigs.k8s.io/controller-runtime/pkg/webhook"
-
 	agentconfig "admiralty.io/multicluster-scheduler/pkg/config/agent"
 	"admiralty.io/multicluster-scheduler/pkg/controllers/chaperon"
+	"admiralty.io/multicluster-scheduler/pkg/controllers/cleanup"
 	"admiralty.io/multicluster-scheduler/pkg/controllers/feedback"
 	"admiralty.io/multicluster-scheduler/pkg/controllers/follow"
 	"admiralty.io/multicluster-scheduler/pkg/controllers/follow/ingress"
@@ -54,21 +36,34 @@ import (
 	clientset "admiralty.io/multicluster-scheduler/pkg/generated/clientset/versioned"
 	informers "admiralty.io/multicluster-scheduler/pkg/generated/informers/externalversions"
 	"admiralty.io/multicluster-scheduler/pkg/generated/informers/externalversions/multicluster/v1alpha1"
+	"admiralty.io/multicluster-scheduler/pkg/leaderelection"
 	"admiralty.io/multicluster-scheduler/pkg/vk/csr"
 	"admiralty.io/multicluster-scheduler/pkg/vk/http"
 	"admiralty.io/multicluster-scheduler/pkg/vk/node"
 	"admiralty.io/multicluster-scheduler/pkg/webhooks/proxypod"
+	"admiralty.io/multicluster-service-account/pkg/config"
+	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
+	vklog "github.com/virtual-kubelet/virtual-kubelet/log"
+	logruslogger "github.com/virtual-kubelet/virtual-kubelet/log/logrus"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/apimachinery/pkg/util/wait"
+	kubeinformers "k8s.io/client-go/informers"
+	"k8s.io/client-go/kubernetes"
+	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
+	"k8s.io/client-go/rest"
+	"k8s.io/klog/v2"
+	"k8s.io/sample-controller/pkg/signals"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 )
 
 // TODO standardize logging
 
 func main() {
-	stopCh := signals.SetupSignalHandler()
-	ctx, cancel := context.WithCancel(context.Background())
-	go func() {
-		<-stopCh
-		cancel()
-	}()
+	ctx := signals.SetupSignalHandler()
 
 	o := parseFlags()
 	setupLogging(ctx, o)
@@ -86,20 +81,20 @@ func main() {
 
 	if o.leaderElect {
 		leaderelection.Run(ctx, ns, "admiralty-controller-manager", k, func(ctx context.Context) {
-			runControllers(ctx, stopCh, agentCfg, cfg, k)
+			runControllers(ctx, agentCfg, cfg, k)
 		})
 	} else {
-		runControllers(ctx, stopCh, agentCfg, cfg, k)
+		runControllers(ctx, agentCfg, cfg, k)
 	}
 }
 
-func runControllers(ctx context.Context, stopCh <-chan struct{}, agentCfg agentconfig.Config, cfg *rest.Config, k *kubernetes.Clientset) {
+func runControllers(ctx context.Context, agentCfg agentconfig.Config, cfg *rest.Config, k *kubernetes.Clientset) {
 	var nodeStatusUpdaters map[string]resources.NodeStatusUpdater
 	if len(agentCfg.Targets) > 0 {
 		nodeStatusUpdaters = startVirtualKubeletControllers(ctx, agentCfg, k)
 	}
-	startOldStyleControllers(ctx, stopCh, agentCfg, cfg, k, nodeStatusUpdaters)
-	<-stopCh
+	startOldStyleControllers(ctx, agentCfg, cfg, k, nodeStatusUpdaters)
+	<-ctx.Done()
 }
 
 type startable interface {
@@ -109,12 +104,11 @@ type startable interface {
 
 type runnable interface {
 	// Run blocks
-	Run(threadiness int, stopCh <-chan struct{}) error
+	Run(ctx context.Context, threadiness int) error
 }
 
 func startOldStyleControllers(
 	ctx context.Context,
-	stopCh <-chan struct{},
 	agentCfg agentconfig.Config,
 	cfg *rest.Config,
 	k *kubernetes.Clientset,
@@ -219,12 +213,12 @@ func startOldStyleControllers(
 	factories, controllers = addClusterScopedFactoriesAndControllers(ctx, agentCfg, k, customClient, factories, controllers)
 
 	for _, f := range factories {
-		f.Start(stopCh)
+		f.Start(ctx.Done())
 	}
 
 	for _, c := range controllers {
 		c := c
-		go func() { utilruntime.Must(c.Run(1, stopCh)) }()
+		go func() { utilruntime.Must(c.Run(ctx, 1)) }()
 	}
 }
 
@@ -285,21 +279,22 @@ func addClusterScopedFactoriesAndControllers(
 }
 
 func startWebhook(ctx context.Context, cfg *rest.Config, agentCfg agentconfig.Config) {
-	webhookMgr, err := manager.New(cfg, manager.Options{
-		Port:                   9443,
-		CertDir:                "/tmp/k8s-webhook-server/serving-certs",
+	mgr, err := manager.New(cfg, manager.Options{
 		MetricsBindAddress:     "0",
 		HealthProbeBindAddress: ":8080",
 	})
 	utilruntime.Must(err)
 
-	hookServer := webhookMgr.GetWebhookServer()
-	hookServer.Register("/mutate-v1-pod", &webhook.Admission{Handler: proxypod.NewHandler(agentCfg.GetKnownFinalizersByNamespace())})
+	err = builder.WebhookManagedBy(mgr).
+		For(&corev1.Pod{}).
+		WithDefaulter(proxypod.Mutator{KnownFinalizers: agentCfg.GetKnownFinalizersByNamespace()}).
+		Complete()
+	utilruntime.Must(err)
 
-	utilruntime.Must(webhookMgr.AddReadyzCheck("webhook-ready", hookServer.StartedChecker()))
+	utilruntime.Must(mgr.AddReadyzCheck("webhook-ready", mgr.GetWebhookServer().StartedChecker()))
 
 	go func() {
-		utilruntime.Must(webhookMgr.Start(ctx))
+		utilruntime.Must(mgr.Start(ctx))
 	}()
 }
 

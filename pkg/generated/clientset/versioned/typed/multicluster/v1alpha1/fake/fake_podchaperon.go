@@ -24,7 +24,6 @@ import (
 	v1alpha1 "admiralty.io/multicluster-scheduler/pkg/apis/multicluster/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	labels "k8s.io/apimachinery/pkg/labels"
-	schema "k8s.io/apimachinery/pkg/runtime/schema"
 	types "k8s.io/apimachinery/pkg/types"
 	watch "k8s.io/apimachinery/pkg/watch"
 	testing "k8s.io/client-go/testing"
@@ -36,9 +35,9 @@ type FakePodChaperons struct {
 	ns   string
 }
 
-var podchaperonsResource = schema.GroupVersionResource{Group: "multicluster.admiralty.io", Version: "v1alpha1", Resource: "podchaperons"}
+var podchaperonsResource = v1alpha1.SchemeGroupVersion.WithResource("podchaperons")
 
-var podchaperonsKind = schema.GroupVersionKind{Group: "multicluster.admiralty.io", Version: "v1alpha1", Kind: "PodChaperon"}
+var podchaperonsKind = v1alpha1.SchemeGroupVersion.WithKind("PodChaperon")
 
 // Get takes name of the podChaperon, and returns the corresponding podChaperon object, and an error if there is any.
 func (c *FakePodChaperons) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.PodChaperon, err error) {

@@ -19,21 +19,19 @@ set -euo pipefail
 
 source test/e2e/aliases.sh
 
-# images built for kind v0.11.1
-# https://github.com/kubernetes-sigs/kind/releases/tag/v0.11.1
+# images built for kind v0.20.0
+# https://github.com/kubernetes-sigs/kind/releases/tag/v0.20.0
 declare -A kind_images
 
-kind_images[1.25]="kindest/node:v1.25.3@sha256:f52781bc0d7a19fb6c405c2af83abfeb311f130707a0e219175677e366cc45d1"
-kind_images[1.24]="kindest/node:v1.24.7@sha256:577c630ce8e509131eab1aea12c022190978dd2f745aac5eb1fe65c0807eb315"
-kind_images[1.23]="kindest/node:v1.23.13@sha256:ef453bb7c79f0e3caba88d2067d4196f427794086a7d0df8df4f019d5e336b61"
-kind_images[1.22]="kindest/node:v1.22.15@sha256:7d9708c4b0873f0fe2e171e2b1b7f45ae89482617778c1c875f1053d4cef2e41"
-kind_images[1.21]="kindest/node:v1.21.14@sha256:9d9eb5fb26b4fbc0c6d95fa8c790414f9750dd583f5d7cee45d92e8c26670aa1"
-kind_images[1.20]="kindest/node:v1.20.15@sha256:a32bf55309294120616886b5338f95dd98a2f7231519c7dedcec32ba29699394"
-kind_images[1.19]="kindest/node:v1.19.16@sha256:476cb3269232888437b61deca013832fee41f9f074f9bed79f57e4280f7c48b7"
-# "known to work well" (k8s 1.26 wasn't released when kind 0.17.0 was released)
-kind_images[1.26]="kindest/node:v1.26.0@sha256:691e24bd2417609db7e589e1a479b902d2e209892a10ce375fab60a8407c7352"
+kind_images[1.27]="kindest/node:v1.27.3@sha256:3966ac761ae0136263ffdb6cfd4db23ef8a83cba8a463690e98317add2c9ba72"
+kind_images[1.26]="kindest/node:v1.26.6@sha256:6e2d8b28a5b601defe327b98bd1c2d1930b49e5d8c512e1895099e4504007adb"
+kind_images[1.25]="kindest/node:v1.25.11@sha256:227fa11ce74ea76a0474eeefb84cb75d8dad1b08638371ecf0e86259b35be0c8"
+kind_images[1.24]="kindest/node:v1.24.15@sha256:7db4f8bea3e14b82d12e044e25e34bd53754b7f2b0e9d56df21774e6f66a70ab"
+kind_images[1.23]="kindest/node:v1.23.17@sha256:59c989ff8a517a93127d4a536e7014d28e235fb3529d9fba91b3951d461edfdb"
+kind_images[1.22]="kindest/node:v1.22.17@sha256:f5b2e5698c6c9d6d0adc419c0deae21a425c07d81bbf3b6a6834042f25d4fba2"
+kind_images[1.21]="kindest/node:v1.21.14@sha256:8a4e9bb3f415d2bb81629ce33ef9c76ba514c14d707f9797a01e3216376ba093"
 
-K8S_VERSION="${K8S_VERSION:-"1.26"}"
+K8S_VERSION="${K8S_VERSION:-"1.27"}"
 
 kind_setup() {
   i=$1

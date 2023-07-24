@@ -18,13 +18,13 @@ set -euo pipefail
 
 # from https://kubernetes.io/docs/tasks/tools/install-kubectl/
 
-curl -LO https://dl.k8s.io/release/v1.26.0/bin/linux/amd64/kubectl
+curl -LO https://dl.k8s.io/release/v1.27.4/bin/linux/amd64/kubectl
 chmod +x ./kubectl
 sudo mv ./kubectl /usr/local/bin/kubectl
 
 # from https://kind.sigs.k8s.io/docs/user/quick-start/
 
-curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.17.0/kind-linux-amd64
+curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.20.0/kind-linux-amd64
 chmod +x ./kind
 sudo mv ./kind /usr/local/bin/kind
 
