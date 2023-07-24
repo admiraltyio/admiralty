@@ -4,7 +4,7 @@ go 1.20
 
 require (
 	admiralty.io/multicluster-service-account v0.6.1
-	github.com/go-test/deep v1.0.8
+	github.com/go-test/deep v1.1.0
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/pkg/errors v0.9.1
 	github.com/sirupsen/logrus v1.9.0
