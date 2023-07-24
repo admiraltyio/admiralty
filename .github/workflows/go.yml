@@ -32,9 +32,6 @@ jobs:
       - name: Verify code gen, go vet, go test
         run: ./test/test.sh
 
-      - name: Install Docker
-        run: ./build/install_docker.sh
-
       - name: go build, docker build
         run: VERSION=$GITHUB_SHA OUTPUT_TAR_GZ=true ./build/build.sh
 
@@ -66,9 +63,6 @@ jobs:
 
       - name: Check out code into the Go module directory
         uses: actions/checkout@v2
-
-      - name: Install Docker
-        run: ./build/install_docker.sh
 
       - name: Download image artifacts
         uses: actions/download-artifact@v2
