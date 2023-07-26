@@ -325,7 +325,7 @@ func startVirtualKubeletServers(ctx context.Context, agentCfg agentconfig.Config
 	}
 
 	certPEM, keyPEM, err := csr.GetCertificateFromKubernetesAPIServer(ctx, k)
-	if err == wait.ErrWaitTimeout {
+	if wait.Interrupted(err) {
 		utilruntime.HandleError(fmt.Errorf("timed out waiting for virtual kubelet serving certificate to be signed, pod logs/exec won't be supported"))
 		return
 	}
