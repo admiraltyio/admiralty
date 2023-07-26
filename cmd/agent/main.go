@@ -42,10 +42,10 @@ import (
 	"admiralty.io/multicluster-scheduler/pkg/vk/node"
 	"admiralty.io/multicluster-scheduler/pkg/webhooks/proxypod"
 	"admiralty.io/multicluster-service-account/pkg/config"
+	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 	vklog "github.com/virtual-kubelet/virtual-kubelet/log"
-	logruslogger "github.com/virtual-kubelet/virtual-kubelet/log/logrus"
+	vkklog "github.com/virtual-kubelet/virtual-kubelet/log/klogv2"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -57,16 +57,18 @@ import (
 	"k8s.io/klog/v2"
 	"k8s.io/sample-controller/pkg/signals"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
+	crlog "sigs.k8s.io/controller-runtime/pkg/log"
+	crzap "sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 )
-
-// TODO standardize logging
 
 func main() {
 	ctx := signals.SetupSignalHandler()
 
 	o := parseFlags()
-	setupLogging(ctx, o)
+
+	logger := setupLogging(ctx, o)
+	ctx = logr.NewContext(ctx, logger)
 
 	agentCfg := agentconfig.NewFromCRD(ctx)
 
@@ -344,26 +346,22 @@ func startVirtualKubeletServers(ctx context.Context, agentCfg agentconfig.Config
 }
 
 type options struct {
-	logLevel    string
 	leaderElect bool
+	zap         crzap.Options
 }
 
 func parseFlags() *options {
 	o := &options{}
-	flag.StringVar(&o.logLevel, "log-level", "info", `set the log level, e.g. "debug", "info", "warn", "error"`)
 	flag.BoolVar(&o.leaderElect, "leader-elect", false, "Start a leader election client and gain leadership before executing the main loop. Enable this when running replicated components for high availability.")
 	klog.InitFlags(nil)
-	flag.Parse()
+	o.zap.BindFlags(flag.CommandLine)
 	return o
 }
 
-func setupLogging(ctx context.Context, o *options) {
-	vklog.L = logruslogger.FromLogrus(logrus.NewEntry(logrus.StandardLogger()))
-	if o.logLevel != "" {
-		lvl, err := logrus.ParseLevel(o.logLevel)
-		if err != nil {
-			vklog.G(ctx).Fatal(errors.Wrap(err, "could not parse log level"))
-		}
-		logrus.SetLevel(lvl)
-	}
+func setupLogging(ctx context.Context, o *options) logr.Logger {
+	logger := crzap.New(crzap.UseFlagOptions(&o.zap))
+	crlog.SetLogger(logger)
+	klog.SetLogger(logger)
+	vklog.L = vkklog.New(vklog.Fields{})
+	return logger
 }
