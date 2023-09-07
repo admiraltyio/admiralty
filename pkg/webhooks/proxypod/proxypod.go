@@ -88,23 +88,31 @@ func (m Mutator) Default(ctx context.Context, obj runtime.Object) error {
 		}
 
 		// add user-defined proxy pod scheduling constraints
-		for k, v := range proxyPodSched.NodeSelector {
-			pod.Spec.NodeSelector[k] = v
+		if proxyPodSched.NodeSelector != nil {
+			for k, v := range proxyPodSched.NodeSelector {
+				pod.Spec.NodeSelector[k] = v
+			}
 		}
 
-		for _, t := range proxyPodSched.Tolerations {
-			pod.Spec.Tolerations = append(pod.Spec.Tolerations, t)
+		if proxyPodSched.Tolerations != nil {
+			for _, t := range proxyPodSched.Tolerations {
+				pod.Spec.Tolerations = append(pod.Spec.Tolerations, t)
+			}
 		}
 
 		pod.Spec.Affinity = proxyPodSched.Affinity
 		pod.Spec.TopologySpreadConstraints = proxyPodSched.TopologySpreadConstraints
 	} else if _, ok := pod.Annotations[common.AnnotationKeyUseConstraintsFromSpecForProxyPodScheduling]; ok {
-		for k, v := range srcPod.Spec.NodeSelector {
-			pod.Spec.NodeSelector[k] = v
+		if srcPod.Spec.NodeSelector != nil {
+			for k, v := range srcPod.Spec.NodeSelector {
+				pod.Spec.NodeSelector[k] = v
+			}
 		}
 
-		for _, t := range srcPod.Spec.Tolerations {
-			pod.Spec.Tolerations = append(pod.Spec.Tolerations, t)
+		if srcPod.Spec.Tolerations != nil {
+			for _, t := range srcPod.Spec.Tolerations {
+				pod.Spec.Tolerations = append(pod.Spec.Tolerations, t)
+			}
 		}
 
 		pod.Spec.Affinity = srcPod.Spec.Affinity
