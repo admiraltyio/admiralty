@@ -33,3 +33,4 @@ webhooks:
         scope: '*'
     sideEffects: None
     admissionReviewVersions: [v1beta1]
+    reinvocationPolicy: {{ .Values.webhook.reinvocationPolicy }}

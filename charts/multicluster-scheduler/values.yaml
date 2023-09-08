@@ -120,3 +120,6 @@ debug:
   proxyScheduler: false
   candidateScheduler: false
   restarter: false
+
+webhook:
+  reinvocationPolicy: Never

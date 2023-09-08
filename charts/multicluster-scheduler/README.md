@@ -53,3 +53,4 @@ Multicluster-scheduler uses [finalizers](https://kubernetes.io/docs/tasks/access
 | restarter.securityContext | object | `{}` |  |
 | restarter.affinity | object | `{}` |  |
 | restarter.tolerations | array | `[]` |  |
+| webhook.reinvocationPolicy | string | `"Never"` |  |
