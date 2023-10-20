@@ -60,7 +60,7 @@ admiralty_connect 1 1 other
 
 argo_setup_source 1
 argo_setup_target 2
-webhook_ready 1 admiralty multicluster-scheduler-controller-manager multicluster-scheduler multicluster-scheduler-cert
+webhook_ready 1 admiralty admiralty-controller-manager admiralty admiralty-cert
 
 # TODO simulate route controller not being able to create network routes to virtual nodes
 #k 1 taint nodes -l virtual-kubelet.io/provider=admiralty node.kubernetes.io/network-unavailable=:NoSchedule

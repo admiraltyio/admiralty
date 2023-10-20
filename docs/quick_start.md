@@ -3,8 +3,6 @@ title: Quick Start
 custom_edit_url: https://github.com/admiraltyio/admiralty/edit/master/docs/quick_start.md
 ---
 
-
-
 import Tabs from '@theme/Tabs'; import TabItem from '@theme/TabItem';
 
 This guide provides copy-and-paste instructions to try out Admiralty Open Source. We
@@ -21,7 +19,7 @@ helpful to get familiar with Admiralty in general.
 
 <Tabs defaultValue="global"
 values={[
-    {label: 'Global batch', value: 'global'}, {label: 'Regional batch', value: 'regional'},
+{label: 'Global batch', value: 'global'}, {label: 'Regional batch', value: 'regional'},
 ]}>
 <TabItem value="global">
 
@@ -72,15 +70,14 @@ values={[
     ```shell script
     images=(
       # cert-manager dependency
-      quay.io/jetstack/cert-manager-controller:v1.7.1
-      quay.io/jetstack/cert-manager-webhook:v1.7.1
-      quay.io/jetstack/cert-manager-cainjector:v1.7.1
-      quay.io/jetstack/cert-manager-ctl:v1.7.1
+      quay.io/jetstack/cert-manager-controller:v1.13.1
+      quay.io/jetstack/cert-manager-webhook:v1.13.1
+      quay.io/jetstack/cert-manager-cainjector:v1.13.1
       # admiralty open source
-      quay.io/admiralty/multicluster-scheduler-agent:0.15.1
-      quay.io/admiralty/multicluster-scheduler-scheduler:0.15.1
-      quay.io/admiralty/multicluster-scheduler-remove-finalizers:0.15.1
-      quay.io/admiralty/multicluster-scheduler-restarter:0.15.1
+      public.ecr.aws/v7x5q9o1/admiralty-agent:0.16.0-alpha.0
+      public.ecr.aws/v7x5q9o1/admiralty-scheduler:0.16.0-alpha.0
+      public.ecr.aws/v7x5q9o1/admiralty-remove-finalizers:0.16.0-alpha.0
+      public.ecr.aws/v7x5q9o1/admiralty-restarter:0.16.0-alpha.0
     )
     for image in "${images[@]}"
     do
@@ -103,7 +100,7 @@ values={[
       helm install cert-manager jetstack/cert-manager \
         --kube-context kind-$CLUSTER_NAME \
         --namespace cert-manager --create-namespace \
-        --version v1.7.1 --set installCRDs=true \
+        --version v1.13.1 --set installCRDs=true \
         --wait --debug
       # --wait to ensure release is ready before next steps
       # --debug to show progress, for lack of a better way,
@@ -120,15 +117,12 @@ values={[
 Install Admiralty in each cluster:
 
 ```shell script
-helm repo add admiralty https://charts.admiralty.io
-helm repo update
-
 for CLUSTER_NAME in cd us eu
 do
-  helm install admiralty admiralty/multicluster-scheduler \
+  helm install admiralty oci://public.ecr.aws/v7x5q9o1/admiralty \
     --kube-context kind-$CLUSTER_NAME \
     --namespace admiralty --create-namespace \
-    --version 0.15.1 \
+    --version 0.16.0-alpha.0 \
     --wait --debug
   # --wait to ensure release is ready before next steps
   # --debug to show progress, for lack of a better way,
@@ -145,7 +139,7 @@ done
 1.  For each workload cluster,
 
     1. create a Kubernetes service account in the workload cluster for the management cluster,
-    1. extract its default token,
+    1. create a token for it,
     1. get a Kubernetes API address that is routable from the management cluster—here, the IP address of the kind workload cluster's only (master) node container in your machine's shared Docker network,
     1. prepare a kubeconfig using the token and address found above, and the server certificate from your kubeconfig (luckily also valid for this address, not just the address in your kubeconfig),
     1. save the prepared kubeconfig in a secret in the management cluster:
@@ -157,13 +151,7 @@ done
       kubectl --context kind-$CLUSTER_NAME create serviceaccount cd
 
       # ii.
-      SECRET_NAME=$(kubectl --context kind-$CLUSTER_NAME get serviceaccount cd \
-        --output json | \
-        jq -r '.secrets[0].name')
-      TOKEN=$(kubectl --context kind-$CLUSTER_NAME get secret $SECRET_NAME \
-        --output json | \
-        jq -r '.data.token' | \
-        base64 --decode)
+      TOKEN=$(kubectl --context kind-$CLUSTER_NAME create token cd)
 
       # iii.
       IP=$(docker inspect $CLUSTER_NAME-control-plane \
@@ -180,8 +168,8 @@ done
     done
     ```
 
-    :::note Security Notice
-    Kubernetes service account tokens exposed as secrets are valid forever, or until those secrets are deleted. A leak may go undetected indefinitely. If you use Kubernetes service account tokens as a cross-cluster authentication method in production, we recommend rotating the tokens as often as practical. However, [there are other methods](concepts/authentication.md), including using Admiralty Cloud.
+    :::note Tokens Expire
+    Tokens created this way typically expire after an hour. You could create a [token bound to a secret](https://kubernetes.io/docs/tasks/configure-pod-container/configure-service-account/#manually-create-a-long-lived-api-token-for-a-serviceaccount), that would potentially never expire, but we don't recommend it. There are [more secure durable methods](concepts/authentication.md).
     :::
 
     :::note Other Platforms

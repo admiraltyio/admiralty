@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Copyright 2020 The Multicluster-Scheduler Authors.
+# Copyright 2023 The Multicluster-Scheduler Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,15 +17,19 @@
 
 set -euo pipefail
 
+# constants
+default_registry="public.ecr.aws/v7x5q9o1"
+
+# environment variables
+# required
+VERSION="${VERSION}"
+
 # delete any leftover packaged charts
 # (otherwise dates in index for their versions would be modified)
-rm -f _out/multicluster-scheduler-*.tgz
+rm -f _out/admiralty-*.tgz
 
 helm package charts/multicluster-scheduler -d _out
-curl -s https://charts.admiralty.io/index.yaml >_out/index_old.yaml
-helm repo index _out --merge _out/index_old.yaml --url https://charts.admiralty.io
 
-# release CRDs separately, esp. for `helm upgrade`
-cat charts/multicluster-scheduler/crds/* >_out/admiralty.crds.yaml
+aws ecr-public get-login-password --region us-east-1 | helm registry login --username AWS --password-stdin public.ecr.aws
 
-# TODO: upload Helm chart and new index (with no-cache, max-age=0)
+helm push _out/admiralty-"${VERSION}".tgz oci://$default_registry

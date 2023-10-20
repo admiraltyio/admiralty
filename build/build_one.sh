@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Copyright 2021 The Multicluster-Scheduler Authors.
+# Copyright 2023 The Multicluster-Scheduler Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,7 +18,7 @@
 set -euo pipefail
 
 # constants
-default_bin_prefix=multicluster-scheduler-
+default_bin_prefix=admiralty-
 
 # environment variables
 # required

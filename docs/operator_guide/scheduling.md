@@ -113,7 +113,7 @@ metadata:
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: multicluster-scheduler-source
+  name: admiralty-source
 subjects:
   - kind: ServiceAccount
     name: c1
@@ -126,7 +126,7 @@ metadata:
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: multicluster-scheduler-cluster-summary-viewer
+  name: admiralty-cluster-summary-viewer
 subjects:
   - kind: ServiceAccount
     name: c1

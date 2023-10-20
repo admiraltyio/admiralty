@@ -31,7 +31,7 @@ delete-delegate_test() {
   # when the cluster connection is interrupted for more than a minute,
   # the delegate pod (with restart policy always) should be recreated
 
-  k $i scale deploy -n admiralty multicluster-scheduler-controller-manager --replicas=0
+  k $i scale deploy -n admiralty admiralty-controller-manager --replicas=0
   uid="$(k $j get pod -l multicluster.admiralty.io/app=delete-delegate -o json | jq -er '.items[0].metadata.uid')"
   echo $uid
   k $j delete pod -l multicluster.admiralty.io/app=delete-delegate
@@ -45,7 +45,7 @@ delete-delegate_test() {
   # when the cluster connection is working, the proxy pod should be deleted
   # to respect the invariant that pods can't resuscitate
 
-  k $i scale deploy -n admiralty multicluster-scheduler-controller-manager --replicas=2
+  k $i scale deploy -n admiralty admiralty-controller-manager --replicas=2
   k $j delete pod -l multicluster.admiralty.io/app=delete-delegate --wait --timeout=30s
 
   k $i wait pod test-delete-delegate --for=delete

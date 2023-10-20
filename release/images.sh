@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Copyright 2020 The Multicluster-Scheduler Authors.
+# Copyright 2023 The Multicluster-Scheduler Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,10 +18,10 @@
 set -euo pipefail
 
 imgs=(
-  multicluster-scheduler-agent
-  multicluster-scheduler-remove-finalizers
-  multicluster-scheduler-scheduler
-  multicluster-scheduler-restarter
+  admiralty-agent
+  admiralty-remove-finalizers
+  admiralty-scheduler
+  admiralty-restarter
 )
 
 for img in "${imgs[@]}"; do

@@ -5,12 +5,7 @@ custom_edit_url: https://github.com/admiraltyio/admiralty/edit/master/docs/opera
 
 
 
-1.  [Install Helm v3](https://helm.sh/docs/intro/install/) on your machine if not already installed, as it is the only supported way to install the Admiralty agent at the moment. Once installed, add the Admiralty chart repository:
-
-    ```shell script
-    helm repo add admiralty https://charts.admiralty.io
-    helm repo update
-    ```
+1.  [Install Helm v3](https://helm.sh/docs/intro/install/) on your machine if not already installed, as it is the only supported way to install the Admiralty agent at the moment.
 
     The Admiralty agent must be installed in all clusters that you want to connect. Repeat the following steps for each cluster:
 
@@ -26,8 +21,8 @@ custom_edit_url: https://github.com/admiraltyio/admiralty/edit/master/docs/opera
 1.  Install the Admiralty agent with Helm v3:
 
     ```shell script
-    helm install admiralty admiralty/multicluster-scheduler \
+    helm install admiralty oci://public.ecr.aws/v7x5q9o1/admiralty \
         --namespace admiralty --create-namespace \
-        --version 0.15.1 \
+        --version 0.16.0-alpha.0 \
         --wait
     ```

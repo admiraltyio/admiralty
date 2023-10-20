@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Copyright 2020 The Multicluster-Scheduler Authors.
+# Copyright 2023 The Multicluster-Scheduler Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,7 +18,7 @@
 set -euo pipefail
 
 # constants
-default_registry="quay.io/admiralty"
+default_registry="public.ecr.aws/v7x5q9o1"
 default_archs="amd64 arm64 ppc64le s390x"
 
 # environment variables
@@ -28,6 +28,8 @@ VERSION="${VERSION}"
 # optional
 REGISTRY="${REGISTRY:-$default_registry}"
 ARCHS="${ARCHS:-$default_archs}"
+
+aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws
 
 read -ra archs <<<"$ARCHS"
 

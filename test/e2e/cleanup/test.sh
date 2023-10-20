@@ -35,7 +35,7 @@ cleanup_test() {
   # https://unix.stackexchange.com/a/233685
 
   admiralty_connect $i $j
-  k $i wait --for condition=available --timeout=120s deployment multicluster-scheduler-controller-manager -n admiralty
+  k $i wait --for condition=available --timeout=120s deployment admiralty-controller-manager -n admiralty
   k $i delete -f test/e2e/cleanup/test.yaml
 }
 

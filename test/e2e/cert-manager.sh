@@ -29,7 +29,7 @@ cert_manager_setup() {
 
   h $i upgrade --install cert-manager jetstack/cert-manager \
     --namespace cert-manager --create-namespace \
-    --version v1.11.0 --set installCRDs=true \
+    --version v1.13.1 --set installCRDs=true \
     --wait --debug --timeout=1m
 }
 

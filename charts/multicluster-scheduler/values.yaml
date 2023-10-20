@@ -11,7 +11,7 @@ sourceController:
 controllerManager:
   replicas: 2
   image:
-    repository: "quay.io/admiralty/multicluster-scheduler-agent"
+    repository: "public.ecr.aws/v7x5q9o1/admiralty-agent"
     tag: "" # (default: .Chart.AppVersion)
     pullPolicy: IfNotPresent
   resources: {}
@@ -38,7 +38,7 @@ controllerManager:
 scheduler:
   replicas: 2
   image:
-    repository: "quay.io/admiralty/multicluster-scheduler-scheduler"
+    repository: "public.ecr.aws/v7x5q9o1/admiralty-scheduler"
     tag: "" # (default: .Chart.AppVersion)
     pullPolicy: IfNotPresent
   resources: {}
@@ -64,7 +64,7 @@ scheduler:
 
 postDeleteJob:
   image:
-    repository: "quay.io/admiralty/multicluster-scheduler-remove-finalizers"
+    repository: "public.ecr.aws/v7x5q9o1/admiralty-remove-finalizers"
     tag: "" # (default: .Chart.AppVersion)
     pullPolicy: IfNotPresent
   nodeSelector: {}
@@ -91,7 +91,7 @@ postDeleteJob:
 restarter:
   replicas: 2
   image:
-    repository: "quay.io/admiralty/multicluster-scheduler-restarter"
+    repository: "public.ecr.aws/v7x5q9o1/admiralty-restarter"
     tag: "" # (default: .Chart.AppVersion)
     pullPolicy: IfNotPresent
   nodeSelector: {}

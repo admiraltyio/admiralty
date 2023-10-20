@@ -27,16 +27,16 @@ admiralty_setup() {
   i=$1
   VALUES=$2
 
-  kind load docker-image multicluster-scheduler-agent:$VERSION-amd64 --name cluster$i
-  kind load docker-image multicluster-scheduler-scheduler:$VERSION-amd64 --name cluster$i
-  kind load docker-image multicluster-scheduler-remove-finalizers:$VERSION-amd64 --name cluster$i
-  kind load docker-image multicluster-scheduler-restarter:$VERSION-amd64 --name cluster$i
+  kind load docker-image admiralty-agent:$VERSION-amd64 --name cluster$i
+  kind load docker-image admiralty-scheduler:$VERSION-amd64 --name cluster$i
+  kind load docker-image admiralty-remove-finalizers:$VERSION-amd64 --name cluster$i
+  kind load docker-image admiralty-restarter:$VERSION-amd64 --name cluster$i
 
-  h $i upgrade --install multicluster-scheduler charts/multicluster-scheduler -n admiralty --create-namespace -f $VALUES \
-    --set controllerManager.image.repository=multicluster-scheduler-agent \
-    --set scheduler.image.repository=multicluster-scheduler-scheduler \
-    --set postDeleteJob.image.repository=multicluster-scheduler-remove-finalizers \
-    --set restarter.image.repository=multicluster-scheduler-restarter \
+  h $i upgrade --install admiralty charts/multicluster-scheduler -n admiralty --create-namespace -f $VALUES \
+    --set controllerManager.image.repository=admiralty-agent \
+    --set scheduler.image.repository=admiralty-scheduler \
+    --set postDeleteJob.image.repository=admiralty-remove-finalizers \
+    --set restarter.image.repository=admiralty-restarter \
     --set controllerManager.image.tag=$VERSION-amd64 \
     --set scheduler.image.tag=$VERSION-amd64 \
     --set postDeleteJob.image.tag=$VERSION-amd64 \
