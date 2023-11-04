@@ -59,6 +59,7 @@ func (m Mutator) Default(ctx context.Context, obj runtime.Object) error {
 		// pod.Annotations is not nil because we checked it contains AnnotationKeyElect
 		pod.Annotations[common.AnnotationKeySourcePodManifest] = string(srcPodManifest)
 	} else {
+		srcPod = &corev1.Pod{}
 		if err := yaml.UnmarshalStrict([]byte(pod.Annotations[common.AnnotationKeySourcePodManifest]), srcPod); err != nil {
 			return err
 		}
