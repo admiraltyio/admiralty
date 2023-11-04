@@ -18,7 +18,7 @@
 set -euo pipefail
 
 # constants
-default_registry="public.ecr.aws/v7x5q9o1"
+default_registry="public.ecr.aws/admiralty"
 
 # environment variables
 # required

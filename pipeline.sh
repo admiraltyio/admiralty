@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Copyright 2020 The Multicluster-Scheduler Authors.
+# Copyright 2023 The Multicluster-Scheduler Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -32,4 +32,4 @@ echo "release images"
 release/images.sh
 echo "release chart"
 release/chart.sh
-# TODO: create release on GitHub with CRDs
+# TODO: create release on GitHub

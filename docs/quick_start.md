@@ -74,10 +74,10 @@ values={[
       quay.io/jetstack/cert-manager-webhook:v1.13.1
       quay.io/jetstack/cert-manager-cainjector:v1.13.1
       # admiralty open source
-      public.ecr.aws/v7x5q9o1/admiralty-agent:0.16.0-alpha.0
-      public.ecr.aws/v7x5q9o1/admiralty-scheduler:0.16.0-alpha.0
-      public.ecr.aws/v7x5q9o1/admiralty-remove-finalizers:0.16.0-alpha.0
-      public.ecr.aws/v7x5q9o1/admiralty-restarter:0.16.0-alpha.0
+      public.ecr.aws/admiralty/admiralty-agent:0.16.0
+      public.ecr.aws/admiralty/admiralty-scheduler:0.16.0
+      public.ecr.aws/admiralty/admiralty-remove-finalizers:0.16.0
+      public.ecr.aws/admiralty/admiralty-restarter:0.16.0
     )
     for image in "${images[@]}"
     do
@@ -119,10 +119,10 @@ Install Admiralty in each cluster:
 ```shell script
 for CLUSTER_NAME in cd us eu
 do
-  helm install admiralty oci://public.ecr.aws/v7x5q9o1/admiralty \
+  helm install admiralty oci://public.ecr.aws/admiralty/admiralty \
     --kube-context kind-$CLUSTER_NAME \
     --namespace admiralty --create-namespace \
-    --version 0.16.0-alpha.0 \
+    --version 0.16.0 \
     --wait --debug
   # --wait to ensure release is ready before next steps
   # --debug to show progress, for lack of a better way,

@@ -19,8 +19,8 @@ Admiralty uses [finalizers](https://kubernetes.io/docs/tasks/access-kubernetes-a
 | fullnameOverride | string | `""` | Override chart and release names in object names |
 | imagePullSecretName | string | `""` |  |
 | controllerManager.replicas | integer | `2` |  |
-| controllerManager.image.repository | string | `"public.ecr.aws/v7x5q9o1/admiralty-agent"` |  |
-| controllerManager.image.tag | string | `"0.16.0-alpha.0"` |  |
+| controllerManager.image.repository | string | `"public.ecr.aws/admiralty/admiralty-agent"` |  |
+| controllerManager.image.tag | string | `"0.16.0"` |  |
 | controllerManager.image.pullPolicy | string | `"IfNotPresent"` |  |
 | controllerManager.resources | object | `{}` |  |
 | controllerManager.nodeSelector | object | `{}` |  |
@@ -28,16 +28,16 @@ Admiralty uses [finalizers](https://kubernetes.io/docs/tasks/access-kubernetes-a
 | controllerManager.affinity | object | `{}` |  |
 | controllerManager.tolerations | array | `[]` |  |
 | scheduler.replicas | integer | `2` |  |
-| scheduler.image.repository | string | `"public.ecr.aws/v7x5q9o1/admiralty-scheduler"` |  |
-| scheduler.image.tag | string | `"0.16.0-alpha.0"` |  |
+| scheduler.image.repository | string | `"public.ecr.aws/admiralty/admiralty-scheduler"` |  |
+| scheduler.image.tag | string | `"0.16.0"` |  |
 | scheduler.image.pullPolicy | string | `"IfNotPresent"` |  |
 | scheduler.resources | object | `{}` |  |
 | scheduler.nodeSelector | object | `{}` |  |
 | scheduler.securityContext | object | `{}` |  |
 | scheduler.affinity | object | `{}` |  |
 | scheduler.tolerations | array | `[]` |  |
-| postDeleteJob.image.repository | string | `"public.ecr.aws/v7x5q9o1/admiralty-remove-finalizers"` |  |
-| postDeleteJob.image.tag | string | `"0.16.0-alpha.0"` |  |
+| postDeleteJob.image.repository | string | `"public.ecr.aws/admiralty/admiralty-remove-finalizers"` |  |
+| postDeleteJob.image.tag | string | `"0.16.0"` |  |
 | postDeleteJob.image.pullPolicy | string | `"IfNotPresent"` |  |
 | postDeleteJob.resources | object | `{}` |  |
 | postDeleteJob.nodeSelector | object | `{}` |  |
@@ -45,8 +45,8 @@ Admiralty uses [finalizers](https://kubernetes.io/docs/tasks/access-kubernetes-a
 | postDeleteJob.affinity | object | `{}` |  |
 | postDeleteJob.tolerations | array | `[]` |  |
 | restarter.replicas | integer | `2` |  |
-| restarter.image.repository | string | `"public.ecr.aws/v7x5q9o1/admiralty-remove-finalizers"` |  |
-| restarter.image.tag | string | `"0.16.0-alpha.0"` |  |
+| restarter.image.repository | string | `"public.ecr.aws/admiralty/admiralty-remove-finalizers"` |  |
+| restarter.image.tag | string | `"0.16.0"` |  |
 | restarter.image.pullPolicy | string | `"IfNotPresent"` |  |
 | restarter.resources | object | `{}` |  |
 | restarter.nodeSelector | object | `{}` |  |

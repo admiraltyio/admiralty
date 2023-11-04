@@ -20,6 +20,40 @@
 
 -->
 
+## v0.16.0
+
+This release adds support for Kubernetes 1.27 and 1.28, and drops support for 1.23 and older.
+Among the various new features and bug fixes, we'd like to call out several improvements around cross-cluster garbage collection.
+We also welcome 4 new contributors.
+
+### New Features
+
+- 3081591 add support for k8s 1.27 and 1.28
+- 0730b87 add support for webhook reinvocation policy in chart, thanks @kirillmakhonin-brt
+- 408855e label virtual nodes with `node.kubernetes.io/exclude-from-external-load-balancers` in addition to the deprecated `alpha.service-controller.kubernetes.io/exclude-balancer`, thanks @bcarlock-emerge
+- fa81d34 support different default priority in target cluster
+- 01688ea delete proxy pod when pod chaperon is deleted
+- 7116f41 recreate delegate pod if pod chaperon not deleted after a minute (if cluster connection lost)
+- 7116f41 webhook readiness, for high availability
+
+### Bugfixes
+
+- a2e557e fix cross-cluster garbage collection after parent deletion
+- ccc3899 fix use-constraints-from-spec-for-proxy-pod-scheduling when webhook is reinvocated
+
+### Breaking Changes
+
+- 3081591 drop support for k8s 1.23 and older
+
+### Internals
+
+- distribute container images and Helm chart (as OCI artifact) on ECR public registry
+- fixed flaky e2e tests
+- per-k8s-version e2e test failure cluster dump
+- bumping dependencies with dependabot, thanks @Rajpratik71
+- speed up GH Actions by not installing Docker because it's already installed
+- migrating away from deprecated functions in the `wait` package, thanks @Parthiba-Hazra
+
 ## v0.15.1
 
 ### Bugfixes

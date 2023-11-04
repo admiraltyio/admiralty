@@ -21,8 +21,8 @@ custom_edit_url: https://github.com/admiraltyio/admiralty/edit/master/docs/opera
 1.  Install the Admiralty agent with Helm v3:
 
     ```shell script
-    helm install admiralty oci://public.ecr.aws/v7x5q9o1/admiralty \
+    helm install admiralty oci://public.ecr.aws/admiralty/admiralty \
         --namespace admiralty --create-namespace \
-        --version 0.16.0-alpha.0 \
+        --version 0.16.0 \
         --wait
     ```
