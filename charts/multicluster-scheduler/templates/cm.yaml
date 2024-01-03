@@ -16,6 +16,8 @@ data:
       - schedulerName: admiralty-proxy
         plugins:
           multiPoint:
+            disabled:
+              - name: NodeResourcesFit
             enabled:
               - name: proxy
   candidate-scheduler-config: |
