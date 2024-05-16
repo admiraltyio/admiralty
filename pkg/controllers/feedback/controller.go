@@ -24,6 +24,7 @@ import (
 
 	"admiralty.io/multicluster-scheduler/pkg/config/agent"
 	"github.com/go-test/deep"
+
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -198,11 +199,11 @@ func (c *reconciler) Handle(obj interface{}) (requeueAfter *time.Duration, err e
 
 			// we can't group annotation and status updates into an update,
 			// because general update ignores status
-
-			needStatusUpdate := deep.Equal(proxyPod.Status, delegate.Status) != nil
+			filteredDelegateStatus := filterContainerStatus(&proxyPod.Spec, delegate.Status)
+			needStatusUpdate := deep.Equal(proxyPod.Status, filteredDelegateStatus) != nil
 			if needStatusUpdate {
 				podCopy := proxyPod.DeepCopy()
-				podCopy.Status = delegate.Status
+				podCopy.Status = filteredDelegateStatus
 
 				var err error
 				if proxyPod, err = c.kubeclientset.CoreV1().Pods(namespace).UpdateStatus(ctx, podCopy, metav1.UpdateOptions{}); err != nil {
@@ -227,6 +228,64 @@ func (c *reconciler) Handle(obj interface{}) (requeueAfter *time.Duration, err e
 	}
 
 	return nil, nil
+}
+
+// filterContainerStatus returns a shallow copy of delegateStatus with container / initContainer / ephemeralContainer
+// statuses filtered to containers which actually exist in proxyPodSpec.
+// Nothing in the original container status lists in delegateStatus is mutated.
+func filterContainerStatus(proxyPodSpec *corev1.PodSpec, delegateStatus corev1.PodStatus) corev1.PodStatus {
+	delegateStatus.ContainerStatuses = filterContainerStatuses(delegateStatus.ContainerStatuses, hasContainerName(proxyPodSpec.Containers))
+	delegateStatus.InitContainerStatuses = filterContainerStatuses(delegateStatus.InitContainerStatuses, hasContainerName(proxyPodSpec.InitContainers))
+	delegateStatus.EphemeralContainerStatuses = filterContainerStatuses(delegateStatus.EphemeralContainerStatuses, hasEphemeralContainerName(proxyPodSpec.EphemeralContainers))
+	return delegateStatus
+}
+
+// filterContainerStatuses returns a list of the container statuses for which hasName returns true.
+// If hasName returns true for all, statuses is returned as-is.
+// If hasName returns false for any, a filtered copy is returned.
+// statuses is never modified.
+func filterContainerStatuses(statuses []corev1.ContainerStatus, hasName func(name string) bool) []corev1.ContainerStatus {
+	copied := false
+	retval := statuses
+	for i, s := range statuses {
+		if hasName(s.Name) {
+			if copied {
+				// if we're working with a copy, append to our copy
+				retval = append(retval, s)
+			}
+			continue
+		}
+
+		if !copied {
+			// copy statuses up to i
+			retval = make([]corev1.ContainerStatus, i, len(statuses)-1)
+			copy(retval, statuses[0:i])
+			copied = true
+		}
+	}
+	return retval
+}
+
+func hasContainerName(containers []corev1.Container) func(name string) bool {
+	return func(name string) bool {
+		for _, c := range containers {
+			if c.Name == name {
+				return true
+			}
+		}
+		return false
+	}
+}
+
+func hasEphemeralContainerName(containers []corev1.EphemeralContainer) func(name string) bool {
+	return func(name string) bool {
+		for _, c := range containers {
+			if c.Name == name {
+				return true
+			}
+		}
+		return false
+	}
 }
 
 func (c *reconciler) removeFinalizer(ctx context.Context, pod *corev1.Pod, j int) (*corev1.Pod, error) {
