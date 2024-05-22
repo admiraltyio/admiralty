@@ -14,5 +14,5 @@ home: https://github.com/admiraltyio/multicluster-scheduler
 #    email: The maintainer's email (optional for each maintainer)
 #    url: A URL for the maintainer (optional for each maintainer)
 icon: https://admiralty.io/icons/icon-144x144.png
-appVersion: 0.14.1
+appVersion: dev-amd64
 #deprecated: Whether this chart is deprecated (optional, boolean)

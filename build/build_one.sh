@@ -34,6 +34,7 @@ VERSION="${VERSION:-dev}"
 LDFLAGS="${LDFLAGS:-}"
 DEBUG="${DEBUG:-false}"
 OUTPUT_TAR_GZ="${OUTPUT_TAR_GZ:-false}"
+CR="${CR:-docker.io/library}"
 
 extra_args=()
 if [ -n "$LDFLAGS" ]; then
@@ -74,7 +75,9 @@ EOF
 
   cat "$context_dir"/Dockerfile
 
-  docker build -t "$IMG:$VERSION-$ARCH" "$context_dir"
+  docker build -t "$CR/$IMG:$VERSION-SARCH" "$context_dir"
+  docker push "$CR/$IMG:$VERSION-$ARCH"
+
   if [ "$OUTPUT_TAR_GZ" = true ]; then
     mkdir -p images
     docker save "$IMG:$VERSION-$ARCH" | gzip > images/"$IMG"_"$VERSION-$ARCH".tar.gz

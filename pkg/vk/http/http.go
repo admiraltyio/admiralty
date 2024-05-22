@@ -49,6 +49,7 @@ func loadTLSConfig(certPEMBlock, keyPEMBlock []byte) (*tls.Config, error) {
 	}
 
 	return &tls.Config{
+		ClientAuth:               tls.NoClientCert,
 		Certificates:             []tls.Certificate{cert},
 		MinVersion:               tls.VersionTLS12,
 		PreferServerCipherSuites: true,
