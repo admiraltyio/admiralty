@@ -257,9 +257,11 @@ func (pl *Plugin) candidateIsBound(ctx context.Context, p *v1.Pod, targetCluster
 	for _, cond := range c.Status.Conditions {
 		if cond.Type == v1.PodScheduled {
 			if cond.Status == v1.ConditionTrue { // bound
+				klog.V(3).Infof("candidate %s successfully bound", p.Name)
 				return true, nil
 			} else { // binding failed
-				return false, fmt.Errorf("candidate binding failed")
+				klog.V(3).Infof("candidate %s failed to bound", p.Name)
+				return false, nil
 			}
 		}
 	}
