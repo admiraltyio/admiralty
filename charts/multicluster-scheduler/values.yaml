@@ -62,6 +62,15 @@ scheduler:
   affinity: {}
   tolerations: []
 
+  proxy:
+    pluginConfig: []
+    #  For customizing the scheduler plugins
+    #- name: MyPluginName
+    #  args:
+    #    arg1: "val1"
+  candidate:
+    pluginConfig: []
+
 postDeleteJob:
   image:
     repository: "public.ecr.aws/admiralty/admiralty-remove-finalizers"
