@@ -9,6 +9,7 @@ sourceController:
   enabled: true
 
 controllerManager:
+  logLevel: 2
   replicas: 2
   image:
     repository: "public.ecr.aws/admiralty/admiralty-agent"
@@ -63,12 +64,14 @@ scheduler:
   tolerations: []
 
   proxy:
+    logLevel: 2
     pluginConfig: []
     #  For customizing the scheduler plugins
     #- name: MyPluginName
     #  args:
     #    arg1: "val1"
   candidate:
+    logLevel: 2
     pluginConfig: []
 
 postDeleteJob:
