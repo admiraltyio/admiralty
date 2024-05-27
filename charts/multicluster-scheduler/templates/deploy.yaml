@@ -18,7 +18,9 @@ spec:
     spec:
       containers:
         - name: controller-manager
-          args: ["--leader-elect"]
+          args:
+          - --leader-elect
+          - --v={{.Values.controllerManager.logLevel}}
           env:
             - name: CLUSTER_NAME
               value: {{ .Values.clusterName }}
@@ -113,6 +115,7 @@ spec:
           args:
             - --config=/etc/admiralty/proxy-scheduler-config
             - --pod-max-in-unschedulable-pods-duration=60s
+            - --v={{.Values.scheduler.proxy.logLevel}}
           env:
             - name: CLUSTER_NAME
               value: {{ .Values.clusterName }}
@@ -180,7 +183,9 @@ spec:
       containers:
         - name: candidate-scheduler
           image: {{ .Values.scheduler.image.repository }}:{{ default .Chart.AppVersion .Values.scheduler.image.tag }}
-          args: ["--config", "/etc/admiralty/candidate-scheduler-config"]
+          args:
+          - --config=/etc/admiralty/candidate-scheduler-config
+          - --v={{.Values.scheduler.candidate.logLevel}}
           volumeMounts:
             - name: config
               mountPath: /etc/admiralty
