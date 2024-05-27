@@ -18,6 +18,7 @@ package candidate
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	v1 "k8s.io/api/core/v1"
@@ -28,8 +29,9 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
 	"k8s.io/kubernetes/pkg/scheduler/framework"
-	"sigs.k8s.io/controller-runtime/pkg/client/config"
+	crConfig "sigs.k8s.io/controller-runtime/pkg/client/config"
 
+	"admiralty.io/multicluster-scheduler/pkg/apis/config"
 	"admiralty.io/multicluster-scheduler/pkg/common"
 	"admiralty.io/multicluster-scheduler/pkg/generated/clientset/versioned"
 )
@@ -37,6 +39,8 @@ import (
 type Plugin struct {
 	handle framework.Handle
 	client versioned.Interface
+
+	preBindWaitDuration time.Duration
 }
 
 var _ framework.PreFilterPlugin = &Plugin{}
@@ -44,7 +48,7 @@ var _ framework.ReservePlugin = &Plugin{}
 var _ framework.PreBindPlugin = &Plugin{}
 
 // Name is the name of the plugin used in the plugin registry and configurations.
-const Name = "candidate"
+const Name = "Candidate"
 
 // Name returns name of the plugin. It is used in logs, etc.
 func (pl *Plugin) Name() string {
@@ -75,10 +79,8 @@ func (pl *Plugin) Reserve(ctx context.Context, state *framework.CycleState, p *v
 func (pl *Plugin) Unreserve(ctx context.Context, state *framework.CycleState, p *v1.Pod, nodeName string) {
 }
 
-const waitDuration = 30 * time.Second
-
 func (pl *Plugin) PreBind(ctx context.Context, state *framework.CycleState, p *v1.Pod, nodeName string) *framework.Status {
-	ctx, cancel := context.WithTimeout(ctx, waitDuration)
+	ctx, cancel := context.WithTimeout(ctx, pl.preBindWaitDuration)
 	defer cancel()
 
 	// wait until pod is allowed, if ever
@@ -111,9 +113,18 @@ func (pl *Plugin) isAllowed(ctx context.Context, p *v1.Pod) (bool, error) {
 }
 
 // New initializes a new plugin and returns it.
-func New(_ runtime.Object, h framework.Handle) (framework.Plugin, error) {
-	cfg := config.GetConfigOrDie()
+func New(obj runtime.Object, h framework.Handle) (framework.Plugin, error) {
+	args, ok := obj.(*config.CandidateArgs)
+	if !ok {
+		return nil, fmt.Errorf("expected args to be of type ProxyArgs, got %T", obj)
+	}
+
+	cfg := crConfig.GetConfigOrDie()
 	client, err := versioned.NewForConfig(cfg)
 	utilruntime.Must(err)
-	return &Plugin{handle: h, client: client}, nil
+	return &Plugin{
+		handle:              h,
+		client:              client,
+		preBindWaitDuration: time.Duration(args.PreBindWaitDurationSeconds) * time.Second,
+	}, nil
 }
