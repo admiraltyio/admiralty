@@ -15,6 +15,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
+# TODO: migrate to k8s.io/code-generator/kube_codegen.sh
 
 set -o errexit
 set -o nounset
@@ -35,6 +36,14 @@ CODEGEN_PKG=${CODEGEN_PKG:-$(
 GOPATH=$GOPATH bash "${CODEGEN_PKG}"/generate-groups.sh "deepcopy,client,informer,lister" \
   admiralty.io/multicluster-scheduler/pkg/generated admiralty.io/multicluster-scheduler/pkg/apis \
   multicluster:v1alpha1 \
+  --go-header-file "${SCRIPT_ROOT}"/hack/boilerplate.go.txt
+
+GOPATH=$GOPATH bash "${CODEGEN_PKG}"/generate-internal-groups.sh "deepcopy,conversion,defaulter" \
+  admiralty.io/multicluster-scheduler/pkg/generated \
+  admiralty.io/multicluster-scheduler/pkg/apis \
+  admiralty.io/multicluster-scheduler/pkg/apis \
+  "config:v1" \
+  --trim-path-prefix admiralty.io/multicluster-scheduler/ \
   --go-header-file "${SCRIPT_ROOT}"/hack/boilerplate.go.txt
 
 # To use your own boilerplate text append:
