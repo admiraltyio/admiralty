@@ -34,6 +34,8 @@ controllerManager:
   # runAsNonRoot: true
   affinity: {}
   tolerations: []
+  # SignerName for the virtual-kubelet certificate signing request
+  certificateSignerName: "kubernetes.io/kubelet-serving"
 
 scheduler:
   replicas: 2
