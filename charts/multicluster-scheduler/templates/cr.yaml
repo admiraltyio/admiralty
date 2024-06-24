@@ -190,7 +190,7 @@ rules:
     resources:
     - signers
     resourceNames:
-    - kubernetes.io/kubelet-serving
+    - {{ .Values.controllerManager.certificateSignerName }}
     verbs:
     - approve
 ---
