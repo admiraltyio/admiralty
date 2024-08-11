@@ -40,7 +40,7 @@ kind_setup() {
   CLUSTER=cluster$i
 
   if ! kind get clusters | grep $CLUSTER; then
-    kind create cluster --name $CLUSTER --wait 5m --image "${kind_images["$K8S_VERSION"]}"
+    kind create cluster --name $CLUSTER --wait 5m --image "${kind_images["$K8S_VERSION"]}" --config test/e2e/kind-config.yaml
   fi
   NODE_IP=$(docker inspect "${CLUSTER}-control-plane" --format "{{ .NetworkSettings.Networks.kind.IPAddress }}")
   kind get kubeconfig --name $CLUSTER --internal | \
