@@ -181,7 +181,7 @@ func (r reconciler) Handle(obj interface{}) (requeueAfter *time.Duration, err er
 			svcCopy.Annotations[common.AnnotationKeyOriginalSelector] = originalSelector
 		}
 		if r.serviceRerouteEnabled {
-			selector, changed := delegatepod.ChangeLabels(svcCopy.Spec.Selector)
+			selector, changed := delegatepod.ChangeLabels(svcCopy.Spec.Selector, svc.Annotations[common.AnnotationKeyDelegateLabelKeysToSkipPrefixing])
 			if changed {
 				needUpdateLocal = true
 				svcCopy.Spec.Selector = selector

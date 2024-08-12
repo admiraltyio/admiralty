@@ -17,6 +17,7 @@
 package delegatepod
 
 import (
+	"slices"
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
@@ -48,7 +49,7 @@ func MakeDelegatePod(proxyPod *corev1.Pod, clusterName string) (*v1alpha1.PodCha
 		}
 	}
 
-	labels, _ := ChangeLabels(srcPod.Labels)
+	labels, _ := ChangeLabels(srcPod.Labels, srcPod.Annotations[common.AnnotationKeyDelegateLabelKeysToSkipPrefixing])
 
 	delegatePod := &v1alpha1.PodChaperon{
 		ObjectMeta: metav1.ObjectMeta{
@@ -90,11 +91,17 @@ func MakeDelegatePod(proxyPod *corev1.Pod, clusterName string) (*v1alpha1.PodCha
 // The name segment is required and must be 63 characters or less"
 // https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#syntax-and-character-set
 // TODO: resolve conflict two keys have same name but different prefixes
-func ChangeLabels(labels map[string]string) (map[string]string, bool) {
+func ChangeLabels(labels map[string]string, labelKeysToSkipPrefixing string) (map[string]string, bool) {
 	changed := false
 	newLabels := make(map[string]string)
+	labelKeysToSkip := strings.Split(labelKeysToSkipPrefixing, ",")
+
 	for k, v := range labels {
 		keySplit := strings.Split(k, "/") // note: assume no empty key (enforced by Kubernetes)
+		if slices.Contains(labelKeysToSkip, k) {
+			newLabels[k] = v
+			continue
+		}
 		if len(keySplit) == 1 || keySplit[0] != common.KeyPrefix {
 			changed = true
 			newKey := common.KeyPrefix + keySplit[len(keySplit)-1]
