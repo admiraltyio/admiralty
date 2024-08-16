@@ -111,3 +111,10 @@ spec:
 If you don't use the Admiralty Cloud API, you can actually omit the `admiraltyReference` and specify `certificateAuthorityData` directly. It can actually be any CA, especially if the other cluster doesn't use Admiralty agent Identities (see above), i.e., if it runs its own public key infrastructure (PKI).
 
 The `prefix` field is important. It is combined with client certificate common names (over which this cluster has no control) to form Kubernetes user names, which are matched to RBAC rules. To avoid unwanted impersonation, it is recommended to use prefixes to isolate TrustedIdentityProviders by trust domain, typically one prefix by TrustedIdentityProvider. By convention (following the [SPIFFE](https://spiffe.io/) standard used by other mTLS projects like service meshes), trust domain prefixes usually start with `spiffe://` and end with a forward slash. Combined with Identity certificate common names (see above), Kubernetes user names look like `spiffe://source-cluster/ns/namespace-a/id/default`. Use them as subjects of RBAC rules to authorize requests. For multi-cluster scheduling, Admiralty generates the right RBAC rules from [Source and ClusterSource](scheduling.md#sources-and-cluster-sources) objects.
+
+
+## Virtual Kubelet certificate
+
+Some cloud control planes, such as [EKS](https://docs.aws.amazon.com/eks/latest/userguide/cert-signing.html) won't sign certificates for the virtual kubelet if they don't have the right CSR SignerName value, meaning that `kubernetes.io/kubelet-serving` would be rejected as a invalid SignerName.
+
+If that's the case, you can set `VKUBELET_CSR_SIGNER_NAME` env var in the `controller-manager` deployment, or set `controllerManager.certificateSignerName` value in the helm chart, which would use the correct SignerName to be signed by the control plane.
