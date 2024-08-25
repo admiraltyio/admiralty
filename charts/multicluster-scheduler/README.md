@@ -27,7 +27,7 @@ Admiralty uses [finalizers](https://kubernetes.io/docs/tasks/access-kubernetes-a
 | controllerManager.securityContext | object | `{}` |  |
 | controllerManager.affinity | object | `{}` |  |
 | controllerManager.tolerations | array | `[]` |  |
-| certificateSignerName | string | `"kubernetes.io/kubelet-serving"` | SignerName for the virtual-kubelet certificate signing request
+| controllerManager.certificateSignerName | string | `"kubernetes.io/kubelet-serving"` | SignerName for the virtual-kubelet certificate signing request
 | scheduler.replicas | integer | `2` |  |
 | scheduler.image.repository | string | `"public.ecr.aws/admiralty/admiralty-scheduler"` |  |
 | scheduler.image.tag | string | `"0.16.0"` |  |

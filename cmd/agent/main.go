@@ -58,8 +58,6 @@ import (
 	"k8s.io/sample-controller/pkg/signals"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
-	"sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
 // TODO standardize logging
@@ -360,7 +358,6 @@ func parseFlags() *options {
 }
 
 func setupLogging(ctx context.Context, o *options) {
-	log.SetLogger(zap.New(zap.UseDevMode(true)))
 	vklog.L = logruslogger.FromLogrus(logrus.NewEntry(logrus.StandardLogger()))
 	if o.logLevel != "" {
 		lvl, err := logrus.ParseLevel(o.logLevel)
