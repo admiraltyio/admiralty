@@ -12,45 +12,50 @@ Admiralty uses [finalizers](https://kubernetes.io/docs/tasks/access-kubernetes-a
 
 ## Parameters
 
-| Key | Type | Default | Comment |
-| --- | --- | --- | --- |
-| sourceController.enabled | boolean | `true` | disable to configure source RBAC yourself |
-| nameOverride | string | `""` | Override chart name in object names and labels |
-| fullnameOverride | string | `""` | Override chart and release names in object names |
-| imagePullSecretName | string | `""` |  |
-| controllerManager.replicas | integer | `2` |  |
-| controllerManager.image.repository | string | `"public.ecr.aws/admiralty/admiralty-agent"` |  |
-| controllerManager.image.tag | string | `"0.16.0"` |  |
-| controllerManager.image.pullPolicy | string | `"IfNotPresent"` |  |
-| controllerManager.resources | object | `{}` |  |
-| controllerManager.nodeSelector | object | `{}` |  |
-| controllerManager.securityContext | object | `{}` |  |
-| controllerManager.affinity | object | `{}` |  |
-| controllerManager.tolerations | array | `[]` |  |
-| scheduler.replicas | integer | `2` |  |
-| scheduler.image.repository | string | `"public.ecr.aws/admiralty/admiralty-scheduler"` |  |
-| scheduler.image.tag | string | `"0.16.0"` |  |
-| scheduler.image.pullPolicy | string | `"IfNotPresent"` |  |
-| scheduler.resources | object | `{}` |  |
-| scheduler.nodeSelector | object | `{}` |  |
-| scheduler.securityContext | object | `{}` |  |
-| scheduler.affinity | object | `{}` |  |
-| scheduler.tolerations | array | `[]` |  |
-| postDeleteJob.image.repository | string | `"public.ecr.aws/admiralty/admiralty-remove-finalizers"` |  |
-| postDeleteJob.image.tag | string | `"0.16.0"` |  |
-| postDeleteJob.image.pullPolicy | string | `"IfNotPresent"` |  |
-| postDeleteJob.resources | object | `{}` |  |
-| postDeleteJob.nodeSelector | object | `{}` |  |
-| postDeleteJob.securityContext | object | `{}` |  |
-| postDeleteJob.affinity | object | `{}` |  |
-| postDeleteJob.tolerations | array | `[]` |  |
-| restarter.replicas | integer | `2` |  |
-| restarter.image.repository | string | `"public.ecr.aws/admiralty/admiralty-remove-finalizers"` |  |
-| restarter.image.tag | string | `"0.16.0"` |  |
-| restarter.image.pullPolicy | string | `"IfNotPresent"` |  |
-| restarter.resources | object | `{}` |  |
-| restarter.nodeSelector | object | `{}` |  |
-| restarter.securityContext | object | `{}` |  |
-| restarter.affinity | object | `{}` |  |
-| restarter.tolerations | array | `[]` |  |
-| webhook.reinvocationPolicy | string | `"Never"` |  |
+| Key                                | Type    | Default                                                  | Comment                                          |
+|------------------------------------|---------|----------------------------------------------------------|--------------------------------------------------|
+| sourceController.enabled           | boolean | `true`                                                   | disable to configure source RBAC yourself        |
+| nameOverride                       | string  | `""`                                                     | Override chart name in object names and labels   |
+| fullnameOverride                   | string  | `""`                                                     | Override chart and release names in object names |
+| imagePullSecretName                | string  | `""`                                                     |                                                  |
+| controllerManager.logLevel         | integer | `2`                                                      | log verbosity level                              |
+| controllerManager.replicas         | integer | `2`                                                      |                                                  |
+| controllerManager.image.repository | string  | `"public.ecr.aws/admiralty/admiralty-agent"`             |                                                  |
+| controllerManager.image.tag        | string  | `"0.16.0"`                                               |                                                  |
+| controllerManager.image.pullPolicy | string  | `"IfNotPresent"`                                         |                                                  |
+| controllerManager.resources        | object  | `{}`                                                     |                                                  |
+| controllerManager.nodeSelector     | object  | `{}`                                                     |                                                  |
+| controllerManager.securityContext  | object  | `{}`                                                     |                                                  |
+| controllerManager.affinity         | object  | `{}`                                                     |                                                  |
+| controllerManager.tolerations      | array   | `[]`                                                     |                                                  |
+| scheduler.replicas                 | integer | `2`                                                      |                                                  |
+| scheduler.image.repository         | string  | `"public.ecr.aws/admiralty/admiralty-scheduler"`         |                                                  |
+| scheduler.image.tag                | string  | `"0.16.0"`                                               |                                                  |
+| scheduler.image.pullPolicy         | string  | `"IfNotPresent"`                                         |                                                  |
+| scheduler.resources                | object  | `{}`                                                     |                                                  |
+| scheduler.nodeSelector             | object  | `{}`                                                     |                                                  |
+| scheduler.securityContext          | object  | `{}`                                                     |                                                  |
+| scheduler.affinity                 | object  | `{}`                                                     |                                                  |
+| scheduler.tolerations              | array   | `[]`                                                     |                                                  |
+| scheduler.proxy.logLevel           | integer | `2`                                                      | log verbosity level                              |
+| scheduler.proxy.pluginConfig       | array   | `[]`                                                     | set of custom plugin arguments for each plugin   |
+| scheduler.candidate.logLevel       | integer | `2`                                                      | log verbosity level                              |
+| scheduler.proxy.pluginConfig       | array   | `[]`                                                     | set of custom plugin arguments for each plugin   |
+| postDeleteJob.image.repository     | string  | `"public.ecr.aws/admiralty/admiralty-remove-finalizers"` |                                                  |
+| postDeleteJob.image.tag            | string  | `"0.16.0"`                                               |                                                  |
+| postDeleteJob.image.pullPolicy     | string  | `"IfNotPresent"`                                         |                                                  |
+| postDeleteJob.resources            | object  | `{}`                                                     |                                                  |
+| postDeleteJob.nodeSelector         | object  | `{}`                                                     |                                                  |
+| postDeleteJob.securityContext      | object  | `{}`                                                     |                                                  |
+| postDeleteJob.affinity             | object  | `{}`                                                     |                                                  |
+| postDeleteJob.tolerations          | array   | `[]`                                                     |                                                  |
+| restarter.replicas                 | integer | `2`                                                      |                                                  |
+| restarter.image.repository         | string  | `"public.ecr.aws/admiralty/admiralty-remove-finalizers"` |                                                  |
+| restarter.image.tag                | string  | `"0.16.0"`                                               |                                                  |
+| restarter.image.pullPolicy         | string  | `"IfNotPresent"`                                         |                                                  |
+| restarter.resources                | object  | `{}`                                                     |                                                  |
+| restarter.nodeSelector             | object  | `{}`                                                     |                                                  |
+| restarter.securityContext          | object  | `{}`                                                     |                                                  |
+| restarter.affinity                 | object  | `{}`                                                     |                                                  |
+| restarter.tolerations              | array   | `[]`                                                     |                                                  |
+| webhook.reinvocationPolicy         | string  | `"Never"`                                                |                                                  |

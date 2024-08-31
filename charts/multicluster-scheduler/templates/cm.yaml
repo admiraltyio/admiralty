@@ -21,6 +21,9 @@ data:
           filter:
             enabled:
               - name: proxy
+        {{- if $.Values.scheduler.proxy.pluginConfig }}
+        pluginConfig: {{ toYaml $.Values.scheduler.proxy.pluginConfig | nindent 10 }}
+        {{- end }}
   candidate-scheduler-config: |
     apiVersion: kubescheduler.config.k8s.io/v1beta3
     kind: KubeSchedulerConfiguration
@@ -35,3 +38,6 @@ data:
           multiPoint:
             enabled:
               - name: candidate
+        {{- if $.Values.scheduler.candidate.pluginConfig }}
+        pluginConfig: {{ toYaml $.Values.scheduler.candidate.pluginConfig | nindent 10 }}
+        {{- end }}
