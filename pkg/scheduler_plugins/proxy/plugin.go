@@ -146,13 +146,7 @@ func (pl *Plugin) Filter(ctx context.Context, state *framework.CycleState, pod *
 			return false, nil
 		}
 		_, isReserved = c.Annotations[common.AnnotationKeyIsReserved]
-
-		for _, cond := range c.Status.Conditions {
-			if cond.Type == v1.PodScheduled && cond.Status == v1.ConditionFalse && cond.Reason == v1.PodReasonUnschedulable {
-				isUnschedulable = true
-				break
-			}
-		}
+		isUnschedulable = isCandidatePodUnschedulable(c)
 
 		klog.V(1).Infof("candidate %s is reserved? %v unschedulable? %v", c.Name, isReserved, isUnschedulable)
 
