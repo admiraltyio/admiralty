@@ -35,6 +35,8 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: status.podIP
+            - name: VKUBELET_CSR_SIGNER_NAME
+              value: {{ .Values.controllerManager.certificateSignerName }}
           image: {{ .Values.controllerManager.image.repository }}:{{ default .Chart.AppVersion .Values.controllerManager.image.tag }}
           ports:
               - containerPort: 9443

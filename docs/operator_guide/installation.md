@@ -26,3 +26,11 @@ custom_edit_url: https://github.com/admiraltyio/admiralty/edit/master/docs/opera
         --version 0.16.0 \
         --wait
     ```
+
+## Virtual Kubelet certificate
+
+Some cloud control planes, such as [EKS](https://docs.aws.amazon.com/eks/latest/userguide/cert-signing.html) won't sign certificates for the virtual kubelet if they don't have the right CSR SignerName value, meaning that `kubernetes.io/kubelet-serving` would be rejected as a invalid SignerName.
+
+If that's the case, you can set `VKUBELET_CSR_SIGNER_NAME` env var in the `controller-manager` deployment, or set `controllerManager.certificateSignerName` value in the helm chart, which would use the correct SignerName to be signed by the control plane.
+
+In particular, on EKS, use `beta.eks.amazonaws.com/app-serving`.
