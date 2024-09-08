@@ -36,7 +36,7 @@ jobs:
         run: VERSION=$GITHUB_SHA OUTPUT_TAR_GZ=true ./build/build.sh
 
       - name: Upload images as artifact
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: images
           path: images
@@ -65,7 +65,7 @@ jobs:
         uses: actions/checkout@v2
 
       - name: Download image artifacts
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: images
           path: images
@@ -82,7 +82,7 @@ jobs:
 
       - name: Archive cluster dump
         if: ${{ failure() }}
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: cluster-dump-${{ matrix.k8s_version }}
           path: cluster-dump
