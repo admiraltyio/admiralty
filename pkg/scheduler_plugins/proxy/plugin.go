@@ -281,7 +281,7 @@ func (pl *Plugin) PostBind(ctx context.Context, state *framework.CycleState, p *
 }
 
 // New initializes a new plugin and returns it.
-func New(_ runtime.Object, h framework.Handle) (framework.Plugin, error) {
+func New(ctx context.Context, _ runtime.Object, h framework.Handle) (framework.Plugin, error) {
 	agentCfg := agentconfig.NewFromCRD(context.Background())
 	n := len(agentCfg.Targets)
 	targets := make(map[string]*versioned.Clientset, n)

@@ -58,6 +58,7 @@ import (
 	"k8s.io/sample-controller/pkg/signals"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
+	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 )
 
 // TODO standardize logging
@@ -280,7 +281,9 @@ func addClusterScopedFactoriesAndControllers(
 
 func startWebhook(ctx context.Context, cfg *rest.Config, agentCfg agentconfig.Config) {
 	mgr, err := manager.New(cfg, manager.Options{
-		MetricsBindAddress:     "0",
+		Metrics: metricsserver.Options{
+			BindAddress: "0",
+		},
 		HealthProbeBindAddress: ":8080",
 	})
 	utilruntime.Must(err)
