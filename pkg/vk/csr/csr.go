@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 The Multicluster-Scheduler Authors.
+ * Copyright 2023 The Multicluster-Scheduler Authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -105,9 +105,7 @@ func GetCertificateFromKubernetesAPIServer(ctx context.Context, k kubernetes.Int
 
 	csrName := csrK8s.Name
 
-	pollCtx, cancelPoll := context.WithTimeout(ctx, 30*time.Second)
-	defer cancelPoll()
-	err = wait.PollImmediateUntil(time.Second, func() (done bool, err error) {
+	err = wait.PollUntilContextTimeout(ctx, time.Second, 30*time.Second, true, func(ctx context.Context) (done bool, err error) {
 		csrK8s, err = k.CertificatesV1().CertificateSigningRequests().Get(ctx, csrName, metav1.GetOptions{})
 		if err != nil {
 			// TODO log if retriable; fail otherwise
@@ -118,7 +116,7 @@ func GetCertificateFromKubernetesAPIServer(ctx context.Context, k kubernetes.Int
 			return true, nil
 		}
 		return false, nil
-	}, pollCtx.Done())
+	})
 	if err != nil {
 		return nil, nil, err
 	}

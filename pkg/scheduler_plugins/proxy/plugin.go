@@ -29,7 +29,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/klog/v2"
 	"k8s.io/kubernetes/pkg/scheduler/framework"
 
 	"admiralty.io/multicluster-scheduler/pkg/apis/multicluster/v1alpha1"
@@ -147,8 +146,6 @@ func (pl *Plugin) Filter(ctx context.Context, state *framework.CycleState, pod *
 		}
 		_, isReserved = c.Annotations[common.AnnotationKeyIsReserved]
 		isUnschedulable = isCandidatePodUnschedulable(c)
-
-		klog.V(1).Infof("candidate %s is reserved? %v unschedulable? %v", c.Name, isReserved, isUnschedulable)
 
 		return isReserved || isUnschedulable, nil
 	}, ctx.Done()); err != nil {

@@ -22,7 +22,15 @@ import (
 	"reflect"
 	"time"
 
+	multiclusterv1alpha1 "admiralty.io/multicluster-scheduler/pkg/apis/multicluster/v1alpha1"
+	"admiralty.io/multicluster-scheduler/pkg/common"
 	"admiralty.io/multicluster-scheduler/pkg/config/agent"
+	"admiralty.io/multicluster-scheduler/pkg/controller"
+	clientset "admiralty.io/multicluster-scheduler/pkg/generated/clientset/versioned"
+	customscheme "admiralty.io/multicluster-scheduler/pkg/generated/clientset/versioned/scheme"
+	informers "admiralty.io/multicluster-scheduler/pkg/generated/informers/externalversions/multicluster/v1alpha1"
+	listers "admiralty.io/multicluster-scheduler/pkg/generated/listers/multicluster/v1alpha1"
+	"admiralty.io/multicluster-scheduler/pkg/model/proxypod"
 	"github.com/go-test/deep"
 
 	corev1 "k8s.io/api/core/v1"
@@ -33,20 +41,8 @@ import (
 	coreinformers "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
-	typedcorev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
-	"k8s.io/client-go/tools/record"
-	"k8s.io/klog/v2"
-
-	multiclusterv1alpha1 "admiralty.io/multicluster-scheduler/pkg/apis/multicluster/v1alpha1"
-	"admiralty.io/multicluster-scheduler/pkg/common"
-	"admiralty.io/multicluster-scheduler/pkg/controller"
-	clientset "admiralty.io/multicluster-scheduler/pkg/generated/clientset/versioned"
-	customscheme "admiralty.io/multicluster-scheduler/pkg/generated/clientset/versioned/scheme"
-	informers "admiralty.io/multicluster-scheduler/pkg/generated/informers/externalversions/multicluster/v1alpha1"
-	listers "admiralty.io/multicluster-scheduler/pkg/generated/listers/multicluster/v1alpha1"
-	"admiralty.io/multicluster-scheduler/pkg/model/proxypod"
 )
 
 // this file is modified from k8s.io/sample-controller
@@ -76,10 +72,6 @@ func NewController(
 	podChaperonInformer informers.PodChaperonInformer) *controller.Controller {
 
 	utilruntime.Must(customscheme.AddToScheme(scheme.Scheme))
-	klog.V(4).Info("Creating event broadcaster")
-	eventBroadcaster := record.NewBroadcaster()
-	eventBroadcaster.StartLogging(klog.Infof)
-	eventBroadcaster.StartRecordingToSink(&typedcorev1.EventSinkImpl{Interface: kubeclientset.CoreV1().Events("")})
 
 	r := &reconciler{
 		clusterName: clusterName,
