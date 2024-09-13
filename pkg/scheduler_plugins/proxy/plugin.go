@@ -32,6 +32,7 @@ import (
 	"k8s.io/klog/v2"
 	"k8s.io/kubernetes/pkg/scheduler/framework"
 
+	"admiralty.io/multicluster-scheduler/pkg/apis/config"
 	"admiralty.io/multicluster-scheduler/pkg/apis/multicluster/v1alpha1"
 	"admiralty.io/multicluster-scheduler/pkg/common"
 	agentconfig "admiralty.io/multicluster-scheduler/pkg/config/agent"
@@ -45,6 +46,8 @@ type Plugin struct {
 	targets          map[string]*versioned.Clientset
 	targetNamespaces map[string]string
 
+	filterWaitDuration time.Duration
+
 	failedNodeNamesByPodUID map[types.UID]map[string]bool
 	mx                      sync.RWMutex
 }
@@ -56,7 +59,7 @@ var _ framework.PreBindPlugin = &Plugin{}
 var _ framework.PostBindPlugin = &Plugin{}
 
 // Name is the name of the plugin used in the plugin registry and configurations.
-const Name = "proxy"
+const Name = "Proxy"
 
 // Name returns name of the plugin. It is used in logs, etc.
 func (pl *Plugin) Name() string {
@@ -95,8 +98,6 @@ func (pl *Plugin) allowCandidate(ctx context.Context, c *v1alpha1.PodChaperon, c
 	return err
 }
 
-const filterWaitDuration = 30 * time.Second // TODO configure
-
 func (pl *Plugin) Filter(ctx context.Context, state *framework.CycleState, pod *v1.Pod, nodeInfo *framework.NodeInfo) *framework.Status {
 	if nodeInfo.Node().Labels[common.LabelAndTaintKeyVirtualKubeletProvider] != common.VirtualKubeletProviderName {
 		return framework.NewStatus(framework.UnschedulableAndUnresolvable, "")
@@ -117,7 +118,7 @@ func (pl *Plugin) Filter(ctx context.Context, state *framework.CycleState, pod *
 
 	targetClusterName := virtualNodeNameToClusterName(nodeInfo.Node().Name)
 
-	ctx, cancel := context.WithTimeout(ctx, filterWaitDuration)
+	ctx, cancel := context.WithTimeout(ctx, pl.filterWaitDuration)
 	defer cancel()
 
 	var isReserved, isUnschedulable bool
@@ -281,7 +282,12 @@ func (pl *Plugin) PostBind(ctx context.Context, state *framework.CycleState, p *
 }
 
 // New initializes a new plugin and returns it.
-func New(_ runtime.Object, h framework.Handle) (framework.Plugin, error) {
+func New(obj runtime.Object, h framework.Handle) (framework.Plugin, error) {
+	args, ok := obj.(*config.ProxyArgs)
+	if !ok {
+		return nil, fmt.Errorf("expected args to be of type ProxyArgs, got %T", obj)
+	}
+
 	agentCfg := agentconfig.NewFromCRD(context.Background())
 	n := len(agentCfg.Targets)
 	targets := make(map[string]*versioned.Clientset, n)
@@ -299,6 +305,7 @@ func New(_ runtime.Object, h framework.Handle) (framework.Plugin, error) {
 		clusterName:             os.Getenv("CLUSTER_NAME"),
 		targets:                 targets,
 		targetNamespaces:        targetNamespaces,
+		filterWaitDuration:      time.Duration(args.FilterWaitDurationSeconds) * time.Second,
 		failedNodeNamesByPodUID: map[types.UID]map[string]bool{},
 	}, nil
 }

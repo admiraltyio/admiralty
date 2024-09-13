@@ -19,6 +19,7 @@ package main
 import (
 	"os"
 
+	_ "admiralty.io/multicluster-scheduler/pkg/apis/config/scheme" // for plugin config
 	"admiralty.io/multicluster-scheduler/pkg/scheduler_plugins/candidate"
 	"admiralty.io/multicluster-scheduler/pkg/scheduler_plugins/proxy"
 	"k8s.io/component-base/cli"
