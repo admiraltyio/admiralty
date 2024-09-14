@@ -49,7 +49,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        k8s_version: [ "1.24", "1.25", "1.26", "1.27", "1.28" ]
+        k8s_version: [ "1.27", "1.28", "1.29", "1.30" ]
         experimental: [ false ]
         # workflow succeeds even if experimental job fails,
         # but commit/PR check/status still appears as failure overall,
