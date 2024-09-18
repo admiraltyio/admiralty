@@ -23,6 +23,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 
 	"admiralty.io/multicluster-scheduler/pkg/apis/multicluster/v1alpha1"
+	"admiralty.io/multicluster-scheduler/pkg/common"
 )
 
 func TestIsPodUnschedulable(t *testing.T) {
@@ -34,6 +35,11 @@ func TestIsPodUnschedulable(t *testing.T) {
 		{
 			name:            "reason pod unschedulable",
 			conditionStatus: []v1.PodCondition{{Status: v1.ConditionFalse, Type: v1.PodScheduled, Reason: v1.PodReasonUnschedulable}},
+			want:            true,
+		},
+		{
+			name:            "reason pod failed to create",
+			conditionStatus: []v1.PodCondition{{Status: v1.ConditionFalse, Type: v1.PodScheduled, Reason: common.PodReasonFailedCreate}},
 			want:            true,
 		},
 		{

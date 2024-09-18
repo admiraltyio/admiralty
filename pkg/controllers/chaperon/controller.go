@@ -45,6 +45,7 @@ import (
 
 // TODO: configurable
 var PodRecreatedIfPodChaperonNotDeletedAfter = time.Minute
+var failedCreateRequeue = 30 * time.Second
 
 type reconciler struct {
 	kubeclientset   kubernetes.Interface
@@ -113,13 +114,23 @@ func (c *reconciler) Handle(obj interface{}) (requeueAfter *time.Duration, err e
 		if !errors.IsNotFound(err) {
 			return nil, err
 		}
-
-		podNeverExisted := podChaperon.Status.Phase == ""
+		podNeverExisted := podNeverExisted(podChaperon)
 		if podNeverExisted || podMissing && time.Since(podMissingSince) > PodRecreatedIfPodChaperonNotDeletedAfter && podChaperon.Spec.RestartPolicy == corev1.RestartPolicyAlways {
 			var err error
 			pod, err = c.kubeclientset.CoreV1().Pods(podChaperon.Namespace).Create(ctx, newPod(podChaperon), metav1.CreateOptions{})
 			if err != nil {
-				return nil, fmt.Errorf("cannot create pod for pod chaperon %v", err)
+				// conditions will be updated with pod conditions upon successful creation
+				podChaperon.Status.Conditions = []corev1.PodCondition{
+					{
+						Type:               corev1.PodScheduled,
+						Status:             corev1.ConditionFalse,
+						Reason:             common.PodReasonFailedCreate,
+						LastTransitionTime: metav1.Now(),
+						Message:            err.Error(),
+					},
+				}
+				podChaperon, _ = c.customclientset.MulticlusterV1alpha1().PodChaperons(podChaperon.Namespace).UpdateStatus(ctx, podChaperon, metav1.UpdateOptions{})
+				return &failedCreateRequeue, fmt.Errorf("cannot create pod for pod chaperon: %v", err)
 			}
 		} else if !podMissing {
 			patch := []byte(`{"metadata":{"annotations":{"` + common.AnnotationKeyPodMissingSince + `":"` + time.Now().Format(time.RFC3339) + `"}}}`)
@@ -213,4 +224,16 @@ func newPod(podChaperon *multiclusterv1alpha1.PodChaperon) *corev1.Pod {
 	}
 	podChaperon.Spec.DeepCopyInto(&pod.Spec)
 	return pod
+}
+
+func podNeverExisted(podChaperon *multiclusterv1alpha1.PodChaperon) bool {
+	if podChaperon.Status.Phase == "" {
+		return true
+	}
+	for _, condition := range podChaperon.Status.Conditions {
+		if condition.Type == corev1.PodScheduled && condition.Status == corev1.ConditionFalse && condition.Reason == common.PodReasonFailedCreate {
+			return true
+		}
+	}
+	return false
 }

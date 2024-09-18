@@ -20,11 +20,13 @@ import (
 	v1 "k8s.io/api/core/v1"
 
 	"admiralty.io/multicluster-scheduler/pkg/apis/multicluster/v1alpha1"
+	"admiralty.io/multicluster-scheduler/pkg/common"
 )
 
 func isCandidatePodUnschedulable(c *v1alpha1.PodChaperon) bool {
 	for _, cond := range c.Status.Conditions {
-		if cond.Type == v1.PodScheduled && cond.Status == v1.ConditionFalse && (cond.Reason == v1.PodReasonUnschedulable || cond.Reason == v1.PodReasonSchedulingGated) {
+		if cond.Type == v1.PodScheduled && cond.Status == v1.ConditionFalse &&
+			(cond.Reason == v1.PodReasonUnschedulable || cond.Reason == v1.PodReasonSchedulingGated || cond.Reason == common.PodReasonFailedCreate) {
 			return true
 		}
 	}
