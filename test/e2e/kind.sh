@@ -30,7 +30,7 @@ kind_images[1.28]="kindest/node:v1.28.13@sha256:45d319897776e11167e4698f6b14938e
 kind_images[1.27]="kindest/node:v1.27.16@sha256:3fd82731af34efe19cd54ea5c25e882985bafa2c9baefe14f8deab1737d9fabe"
 
 
-K8S_VERSION="${K8S_VERSION:-"1.29"}"
+K8S_VERSION="${K8S_VERSION:-"1.30"}"
 
 kind_setup() {
   i=$1
