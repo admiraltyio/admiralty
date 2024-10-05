@@ -181,7 +181,10 @@ func (r reconciler) Handle(obj interface{}) (requeueAfter *time.Duration, err er
 			svcCopy.Annotations[common.AnnotationKeyOriginalSelector] = originalSelector
 		}
 		if r.serviceRerouteEnabled {
-			selector, changed := delegatepod.ChangeLabels(svcCopy.Spec.Selector)
+			selector, changed, err := delegatepod.ChangeLabels(svcCopy.Spec.Selector, svc.Annotations[common.AnnotationNoPrefixLabelRegexp])
+			if err != nil {
+				return nil, fmt.Errorf("failed to change labels for mirrored service %s: %v", svcCopy.Name, err)
+			}
 			if changed {
 				needUpdateLocal = true
 				svcCopy.Spec.Selector = selector

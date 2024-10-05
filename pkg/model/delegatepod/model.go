@@ -17,6 +17,8 @@
 package delegatepod
 
 import (
+	"fmt"
+	"regexp"
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
@@ -48,8 +50,10 @@ func MakeDelegatePod(proxyPod *corev1.Pod, clusterName string) (*v1alpha1.PodCha
 		}
 	}
 
-	labels, _ := ChangeLabels(srcPod.Labels)
-
+	labels, _, err := ChangeLabels(srcPod.Labels, srcPod.Annotations[common.AnnotationNoPrefixLabelRegexp])
+	if err != nil {
+		return nil, fmt.Errorf("failed to change labels for proxy pod %s: %v", proxyPod.Name, err)
+	}
 	delegatePod := &v1alpha1.PodChaperon{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace:    proxyPod.Namespace, // already defaults to "default" (vs. could be empty in srcPod)
@@ -90,11 +94,20 @@ func MakeDelegatePod(proxyPod *corev1.Pod, clusterName string) (*v1alpha1.PodCha
 // The name segment is required and must be 63 characters or less"
 // https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/#syntax-and-character-set
 // TODO: resolve conflict two keys have same name but different prefixes
-func ChangeLabels(labels map[string]string) (map[string]string, bool) {
+func ChangeLabels(labels map[string]string, noPrefixLabelRegex string) (map[string]string, bool, error) {
 	changed := false
 	newLabels := make(map[string]string)
+	re, err := regexp.Compile(noPrefixLabelRegex)
+	if err != nil {
+		return nil, false, fmt.Errorf("failed to complie regexp %s: %v", noPrefixLabelRegex, err)
+	}
+
 	for k, v := range labels {
 		keySplit := strings.Split(k, "/") // note: assume no empty key (enforced by Kubernetes)
+		if len(noPrefixLabelRegex) > 0 && re.MatchString(fmt.Sprintf("%s=%s", k, v)) {
+			newLabels[k] = v
+			continue
+		}
 		if len(keySplit) == 1 || keySplit[0] != common.KeyPrefix {
 			changed = true
 			newKey := common.KeyPrefix + keySplit[len(keySplit)-1]
@@ -103,7 +116,7 @@ func ChangeLabels(labels map[string]string) (map[string]string, bool) {
 			newLabels[k] = v
 		}
 	}
-	return newLabels, changed
+	return newLabels, changed, nil
 }
 
 func removeServiceAccount(podSpec *corev1.PodSpec) {

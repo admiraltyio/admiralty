@@ -40,6 +40,10 @@ var (
 
 	AnnotationKeyUseConstraintsFromSpecForProxyPodScheduling = KeyPrefix + "use-constraints-from-spec-for-proxy-pod-scheduling"
 
+	// AnnotationNoPrefixLabelRegexp defines a regex that when matched on labels, the label
+	// gets copied as-is to the delegate pod without appending KeyPrefix prefix
+	AnnotationNoPrefixLabelRegexp = KeyPrefix + "no-prefix-label-regexp"
+
 	// annotations on proxy pods (by mutating admission webhook)
 
 	KeyPrefixSourcePod = KeyPrefix + "sourcepod-"
