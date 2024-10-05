@@ -8,7 +8,7 @@ require (
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/pkg/errors v0.9.1
 	github.com/sirupsen/logrus v1.9.3
-	github.com/stretchr/testify v1.8.4
+	github.com/stretchr/testify v1.9.0
 	github.com/virtual-kubelet/virtual-kubelet v1.11.0
 	k8s.io/api v0.30.5
 	k8s.io/apimachinery v0.30.5
