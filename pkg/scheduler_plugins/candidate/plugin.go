@@ -111,7 +111,7 @@ func (pl *Plugin) isAllowed(ctx context.Context, p *v1.Pod) (bool, error) {
 }
 
 // New initializes a new plugin and returns it.
-func New(_ runtime.Object, h framework.Handle) (framework.Plugin, error) {
+func New(ctx context.Context, _ runtime.Object, h framework.Handle) (framework.Plugin, error) {
 	cfg := config.GetConfigOrDie()
 	client, err := versioned.NewForConfig(cfg)
 	utilruntime.Must(err)

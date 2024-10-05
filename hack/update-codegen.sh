@@ -25,17 +25,19 @@ GOPATH="${GOPATH:-"$HOME/go"}"
 SCRIPT_ROOT=$(dirname "${BASH_SOURCE[0]}")/..
 CODEGEN_PKG=${CODEGEN_PKG:-$(
   cd "${SCRIPT_ROOT}"
-  ls -d -1 $GOPATH/pkg/mod/k8s.io/code-generator@v0.27.4 2>/dev/null || echo ../code-generator
+  ls -d -1 $GOPATH/pkg/mod/k8s.io/code-generator@v0.30.5 2>/dev/null || echo ../code-generator
 )}
 
-# generate the code with:
-# --output-base    because this script should also be able to run inside the vendor dir of
-#                  k8s.io/kubernetes. The output-base is needed for the generators to output into the vendor dir
-#                  instead of the $GOPATH directly. For normal projects this can be dropped.
-GOPATH=$GOPATH bash "${CODEGEN_PKG}"/generate-groups.sh "deepcopy,client,informer,lister" \
-  admiralty.io/multicluster-scheduler/pkg/generated admiralty.io/multicluster-scheduler/pkg/apis \
-  multicluster:v1alpha1 \
-  --go-header-file "${SCRIPT_ROOT}"/hack/boilerplate.go.txt
+source "${CODEGEN_PKG}/kube_codegen.sh"
 
-# To use your own boilerplate text append:
-#   --go-header-file "${SCRIPT_ROOT}"/hack/custom-boilerplate.go.txt
+kube::codegen::gen_helpers \
+    --boilerplate "${SCRIPT_ROOT}"/hack/boilerplate.go.txt \
+    "${SCRIPT_ROOT}/pkg/apis"
+
+
+kube::codegen::gen_client \
+    --with-watch \
+    --output-dir "${SCRIPT_ROOT}/pkg/generated" \
+    --output-pkg admiralty.io/multicluster-scheduler/pkg/generated \
+    --boilerplate "${SCRIPT_ROOT}"/hack/boilerplate.go.txt \
+    "${SCRIPT_ROOT}/pkg/apis"
