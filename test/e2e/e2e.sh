@@ -33,6 +33,7 @@ source test/e2e/webhook_ready.sh
 source test/e2e/no-rogue-finalizer/test.sh
 source test/e2e/delete-chaperon/test.sh
 source test/e2e/delete-delegate/test.sh
+source test/e2e/chaperon-terminal-status/test.sh
 
 argo_setup_once
 cert_manager_setup_once
@@ -79,6 +80,7 @@ virtual-node-labels_test 1 2
 cleanup_test 1
 delete-chaperon_test 1
 delete-delegate_test 1 2
+chaperon-terminal-status_test 1 2
 no-reservation_test
 
 no-rogue-finalizer_test

@@ -84,4 +84,8 @@ var (
 	LabelKeyTargetNamespace   = KeyPrefix + "target-namespace"
 	LabelKeyTargetName        = KeyPrefix + "target-name"
 	LabelKeyClusterTargetName = KeyPrefix + "cluster-target-name"
+
+	// PodReasonFailedCreate is the reason for the PodScheduled condition set on the pod chaperon
+	// when the pod fails to create
+	PodReasonFailedCreate = "PodFailedCreate"
 )
