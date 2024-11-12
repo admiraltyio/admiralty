@@ -20,6 +20,35 @@
 
 -->
 
+## v0.17.0
+
+This release makes Admiralty compatible with [Kueue](https://kueue.sigs.k8s.io/),
+without needing [MultiKueue](https://kueue.sigs.k8s.io/docs/concepts/multikueue/), and fixes logs/exec on EKS.
+We welcome 3 new contributors.
+
+### Kubernetes Features Support
+
+_Admiralty aims to transparently support most Kubernetes features.
+We are aware of some unsupported ones, and sometimes discover some more.
+Each release fills some of the gaps._
+
+- b704bb7 node resource (e.g., GPU) scaling from zero
+- b856e0c candidate pod scheduling gates, esp. for compatibility with Kueue
+- 6882784 custom CSR signer name, esp. for logs/exec on EKS
+- 30c40d2 delegate pod ephemeral containers (don't report status to proxy pod)
+
+### New Admiralty Features
+
+- f98c59d new `multicluster.admiralty.io/no-prefix-label-regexp` proxy pod annotation
+
+### Breaking Changes
+
+- fa8a3a4 drop support for K8s 1.26 and below
+
+### Internals
+
+- fa8a3a4 e2e tests for K8s 1.29 through 1.31
+
 ## v0.16.0
 
 This release adds support for Kubernetes 1.27 and 1.28, and drops support for 1.23 and older.

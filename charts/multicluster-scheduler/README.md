@@ -20,7 +20,7 @@ Admiralty uses [finalizers](https://kubernetes.io/docs/tasks/access-kubernetes-a
 | imagePullSecretName | string | `""` |  |
 | controllerManager.replicas | integer | `2` |  |
 | controllerManager.image.repository | string | `"public.ecr.aws/admiralty/admiralty-agent"` |  |
-| controllerManager.image.tag | string | `"0.16.0"` |  |
+| controllerManager.image.tag | string | `"0.17.0"` |  |
 | controllerManager.image.pullPolicy | string | `"IfNotPresent"` |  |
 | controllerManager.resources | object | `{}` |  |
 | controllerManager.nodeSelector | object | `{}` |  |
@@ -30,7 +30,7 @@ Admiralty uses [finalizers](https://kubernetes.io/docs/tasks/access-kubernetes-a
 | controllerManager.certificateSignerName | string | `"kubernetes.io/kubelet-serving"` | SignerName for the virtual-kubelet certificate signing request
 | scheduler.replicas | integer | `2` |  |
 | scheduler.image.repository | string | `"public.ecr.aws/admiralty/admiralty-scheduler"` |  |
-| scheduler.image.tag | string | `"0.16.0"` |  |
+| scheduler.image.tag | string | `"0.17.0"` |  |
 | scheduler.image.pullPolicy | string | `"IfNotPresent"` |  |
 | scheduler.resources | object | `{}` |  |
 | scheduler.nodeSelector | object | `{}` |  |
@@ -38,7 +38,7 @@ Admiralty uses [finalizers](https://kubernetes.io/docs/tasks/access-kubernetes-a
 | scheduler.affinity | object | `{}` |  |
 | scheduler.tolerations | array | `[]` |  |
 | postDeleteJob.image.repository | string | `"public.ecr.aws/admiralty/admiralty-remove-finalizers"` |  |
-| postDeleteJob.image.tag | string | `"0.16.0"` |  |
+| postDeleteJob.image.tag | string | `"0.17.0"` |  |
 | postDeleteJob.image.pullPolicy | string | `"IfNotPresent"` |  |
 | postDeleteJob.resources | object | `{}` |  |
 | postDeleteJob.nodeSelector | object | `{}` |  |
@@ -47,7 +47,7 @@ Admiralty uses [finalizers](https://kubernetes.io/docs/tasks/access-kubernetes-a
 | postDeleteJob.tolerations | array | `[]` |  |
 | restarter.replicas | integer | `2` |  |
 | restarter.image.repository | string | `"public.ecr.aws/admiralty/admiralty-remove-finalizers"` |  |
-| restarter.image.tag | string | `"0.16.0"` |  |
+| restarter.image.tag | string | `"0.17.0"` |  |
 | restarter.image.pullPolicy | string | `"IfNotPresent"` |  |
 | restarter.resources | object | `{}` |  |
 | restarter.nodeSelector | object | `{}` |  |

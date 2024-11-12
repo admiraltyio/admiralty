@@ -23,7 +23,7 @@ custom_edit_url: https://github.com/admiraltyio/admiralty/edit/master/docs/opera
     ```shell script
     helm install admiralty oci://public.ecr.aws/admiralty/admiralty \
         --namespace admiralty --create-namespace \
-        --version 0.16.0 \
+        --version 0.17.0 \
         --wait
     ```
 
