@@ -41,6 +41,7 @@ import (
 	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
+	"k8s.io/klog/v2"
 )
 
 // TODO: configurable
@@ -113,13 +114,27 @@ func (c *reconciler) Handle(obj interface{}) (requeueAfter *time.Duration, err e
 		if !errors.IsNotFound(err) {
 			return nil, err
 		}
-
-		podNeverExisted := podChaperon.Status.Phase == ""
+		podNeverExisted := podNeverExisted(podChaperon)
 		if podNeverExisted || podMissing && time.Since(podMissingSince) > PodRecreatedIfPodChaperonNotDeletedAfter && podChaperon.Spec.RestartPolicy == corev1.RestartPolicyAlways {
-			var err error
-			pod, err = c.kubeclientset.CoreV1().Pods(podChaperon.Namespace).Create(ctx, newPod(podChaperon), metav1.CreateOptions{})
-			if err != nil {
-				return nil, fmt.Errorf("cannot create pod for pod chaperon %v", err)
+			var createError error
+			pod, createError = c.kubeclientset.CoreV1().Pods(podChaperon.Namespace).Create(ctx, newPod(podChaperon), metav1.CreateOptions{})
+			if createError != nil {
+				// conditions will be updated with pod conditions upon successful creation
+				podChaperon.Status.Phase = corev1.PodPending
+				podChaperon.Status.Conditions = []corev1.PodCondition{
+					{
+						Type:               corev1.PodScheduled,
+						Status:             corev1.ConditionFalse,
+						Reason:             common.PodReasonFailedCreate,
+						LastTransitionTime: metav1.Now(),
+						Message:            createError.Error(),
+					},
+				}
+				podChaperon, err = c.customclientset.MulticlusterV1alpha1().PodChaperons(podChaperon.Namespace).UpdateStatus(ctx, podChaperon, metav1.UpdateOptions{})
+				if err != nil {
+					klog.Infof("cannot patch pod chaperon status: %v", err)
+				}
+				return nil, fmt.Errorf("cannot create pod for pod chaperon: %v", createError)
 			}
 		} else if !podMissing {
 			patch := []byte(`{"metadata":{"annotations":{"` + common.AnnotationKeyPodMissingSince + `":"` + time.Now().Format(time.RFC3339) + `"}}}`)
@@ -213,4 +228,16 @@ func newPod(podChaperon *multiclusterv1alpha1.PodChaperon) *corev1.Pod {
 	}
 	podChaperon.Spec.DeepCopyInto(&pod.Spec)
 	return pod
+}
+
+func podNeverExisted(podChaperon *multiclusterv1alpha1.PodChaperon) bool {
+	if podChaperon.Status.Phase == "" {
+		return true
+	}
+	for _, condition := range podChaperon.Status.Conditions {
+		if condition.Type == corev1.PodScheduled && condition.Status == corev1.ConditionFalse && condition.Reason == common.PodReasonFailedCreate {
+			return true
+		}
+	}
+	return false
 }
