@@ -5,6 +5,16 @@ controllerManager:
 scheduler:
   securityContext:
     runAsUser: 1000
+  # Scoring config favors the node with the highest cpu
+  candidate:
+    pluginConfig:
+      - name: NodeResourcesFit
+        args:
+          scoringStrategy:
+            resources:
+            - name: cpu
+              weight: 10
+            type: MostAllocated
 
 postDeleteJob:
   securityContext:
