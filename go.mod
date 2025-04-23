@@ -198,3 +198,5 @@ replace k8s.io/controller-manager => k8s.io/controller-manager v0.30.5
 replace k8s.io/mount-utils => k8s.io/mount-utils v0.30.5
 
 replace k8s.io/pod-security-admission => k8s.io/pod-security-admission v0.30.5
+
+replace k8s.io/endpointslice => k8s.io/endpointslice v0.30.5
