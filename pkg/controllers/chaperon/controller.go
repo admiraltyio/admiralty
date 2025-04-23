@@ -22,13 +22,6 @@ import (
 	"reflect"
 	"time"
 
-	multiclusterv1alpha1 "admiralty.io/multicluster-scheduler/pkg/apis/multicluster/v1alpha1"
-	"admiralty.io/multicluster-scheduler/pkg/common"
-	"admiralty.io/multicluster-scheduler/pkg/controller"
-	clientset "admiralty.io/multicluster-scheduler/pkg/generated/clientset/versioned"
-	customscheme "admiralty.io/multicluster-scheduler/pkg/generated/clientset/versioned/scheme"
-	informers "admiralty.io/multicluster-scheduler/pkg/generated/informers/externalversions/multicluster/v1alpha1"
-	listers "admiralty.io/multicluster-scheduler/pkg/generated/listers/multicluster/v1alpha1"
 	"github.com/go-test/deep"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -41,6 +34,14 @@ import (
 	corelisters "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
+
+	multiclusterv1alpha1 "admiralty.io/multicluster-scheduler/pkg/apis/multicluster/v1alpha1"
+	"admiralty.io/multicluster-scheduler/pkg/common"
+	"admiralty.io/multicluster-scheduler/pkg/controller"
+	clientset "admiralty.io/multicluster-scheduler/pkg/generated/clientset/versioned"
+	customscheme "admiralty.io/multicluster-scheduler/pkg/generated/clientset/versioned/scheme"
+	informers "admiralty.io/multicluster-scheduler/pkg/generated/informers/externalversions/multicluster/v1alpha1"
+	listers "admiralty.io/multicluster-scheduler/pkg/generated/listers/multicluster/v1alpha1"
 )
 
 // TODO: configurable
@@ -119,12 +120,27 @@ func (c *reconciler) Handle(obj interface{}) (requeueAfter *time.Duration, err e
 			var err error
 			pod, err = c.kubeclientset.CoreV1().Pods(podChaperon.Namespace).Create(ctx, newPod(podChaperon), metav1.CreateOptions{})
 			if err != nil {
-				return nil, fmt.Errorf("cannot create pod for pod chaperon %v", err)
+				switch {
+				case errors.IsForbidden(err), errors.IsInvalid(err), errors.IsConflict(err):
+					podChaperon.Status.Conditions = append(podChaperon.Status.Conditions,
+						corev1.PodCondition{
+							Type:               corev1.PodScheduled,
+							Status:             corev1.ConditionFalse,
+							LastProbeTime:      metav1.Now(),
+							LastTransitionTime: metav1.Now(),
+							Reason:             corev1.PodReasonUnschedulable,
+							Message:            "PodChaperon is not able to create a pod: " + err.Error(),
+						},
+					)
+					_, err = c.customclientset.MulticlusterV1alpha1().PodChaperons(podChaperon.Namespace).UpdateStatus(ctx, podChaperon, metav1.UpdateOptions{})
+					utilruntime.HandleError(fmt.Errorf("failed to update status condition of pod chaperon during error handling: %w", err))
+				}
+				return nil, fmt.Errorf("cannot create pod for pod chaperon %w", err)
 			}
 		} else if !podMissing {
 			patch := []byte(`{"metadata":{"annotations":{"` + common.AnnotationKeyPodMissingSince + `":"` + time.Now().Format(time.RFC3339) + `"}}}`)
 			if _, err := c.customclientset.MulticlusterV1alpha1().PodChaperons(namespace).Patch(ctx, name, types.MergePatchType, patch, metav1.PatchOptions{}); err != nil {
-				return nil, fmt.Errorf("cannot patch pod chaperon: %v", err)
+				return nil, fmt.Errorf("cannot patch pod chaperon: %w", err)
 			}
 			return nil, nil
 		} else {
@@ -140,7 +156,7 @@ func (c *reconciler) Handle(obj interface{}) (requeueAfter *time.Duration, err e
 		patch := []byte(`{"metadata":{"annotations":{"` + common.AnnotationKeyPodMissingSince + `":null}}}`)
 		_, err := c.customclientset.MulticlusterV1alpha1().PodChaperons(namespace).Patch(ctx, name, types.MergePatchType, patch, metav1.PatchOptions{})
 		if err != nil {
-			return nil, fmt.Errorf("cannot patch pod chaperon: %v", err)
+			return nil, fmt.Errorf("cannot patch pod chaperon: %w", err)
 		}
 	}
 
